@@ -1750,6 +1750,7 @@ function renderSalaryHistory(tId){
     document.getElementById('salaryContent').innerHTML='<div class="empty-state"><div class="empty-icon">🕘</div><p>Жалақы төлемдері әлі жоқ</p></div>';
     return;
   }
+  const canPayout = currentUser?.role==='director'||currentUser?.role==='admin';
   const rows=logs.map(l=>{
     const dt=l.created_at?new Date(l.created_at):null;
     const dateStr=dt?dt.toLocaleDateString('kk-KZ'):(l.date||'—');
@@ -1762,12 +1763,32 @@ function renderSalaryHistory(tId){
       <td>${isAdjust?'<span class="badge badge-yellow">Түзету</span>':'<span class="badge badge-green">Төлем</span>'}</td>
       <td class="font-bold" style="color:${amt<0?'var(--red)':'var(--green)'}">${amt>0?'+':''}${fmt(amt)}₸</td>
       <td class="text-muted text-sm">${isAdjust?(l.note.replace('adjustment: ','').replace('adjustment','')||'—'):''}</td>
+      <td>${canPayout?`<button class="btn btn-red btn-sm" onclick="voidSalaryHistoryEntry('${l.id}','${tId}')" title="Бұл жазбаны күшінен жойып, балансты қалпына келтіру">🗑️</button>`:''}</td>
     </tr>`;
   }).join('');
   document.getElementById('salaryContent').innerHTML=`<div class="table-wrap"><table>
-    <thead><tr><th>Күні</th><th>Уақыты</th><th>Түрі</th><th>Сомасы</th><th>Ескертпе</th></tr></thead>
+    <thead><tr><th>Күні</th><th>Уақыты</th><th>Түрі</th><th>Сомасы</th><th>Ескертпе</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+
+// Қате/артық жазылған төлем немесе түзетуді директор өзі жоя алады —
+// баланс сол жазбаның сомасына қарай автоматты қалпына келеді.
+async function voidSalaryHistoryEntry(id, tId){
+  const log=DATA.salary_logs.find(sl=>sl.id===id); if(!log) return;
+  if(!confirm(`Бұл жазбаны (${fmt(Math.abs(Number(log.amount||0)))}₸) өшіресіз бе? Баланс сол сомаға қайта есептеледі.`)) return;
+  await sb.from('salary_logs').delete().eq('id',id);
+  const t=DATA.teachers.find(t=>t.id===tId);
+  if(t){
+    const nb=Math.max(0, Math.round(Number(t.balance||0) - Number(log.amount||0)));
+    await sb.from('teachers').update({balance:nb}).eq('id',tId);
+    t.balance=nb;
+  }
+  try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
+  if(t) renderSalaryHeader(t);
+  renderSalaryHistory(tId);
+  renderTeachers();
+  toast('✅ Жазба өшірілді, баланс жаңартылды','success');
 }
 
 function getDatesInMonth(year,month,dayOfWeek){
