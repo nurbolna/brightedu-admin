@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="kk" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Академия Басқару Жүйесі</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ===================== DARK THEME (default) ===================== */
+:root {
+  --bg:#0f1117; --surface:#1a1d27; --surface2:#22263a; --border:#2e3350;
+  --accent:#4f8ef7; --accent2:#a78bfa; --green:#34d399; --red:#f87171;
+  --yellow:#fbbf24; --orange:#fb923c;
+  --text:#e8eaf6; --text2:#8b90b0; --text3:#5a5f80;
+  --radius:14px; --shadow:0 4px 24px rgba(0,0,0,0.4);
+  --login-bg: radial-gradient(ellipse at 30% 50%,#1a2a4a,#0f1117);
+  --wallet-bg: linear-gradient(135deg,#1e3a5f,#1a2d4a);
+  --wallet-border: rgba(79,142,247,0.3);
+}
+/* ===================== LIGHT THEME ===================== */
+[data-theme="light"] {
+  --bg:#f4f6fa; --surface:#ffffff; --surface2:#eaeef6; --border:#dbe1eb;
+  --accent:#2563eb; --accent2:#7c3aed; --green:#10b981; --red:#ef4444;
+  --yellow:#d97706; --orange:#ea580c;
+  --text:#1e2235; --text2:#626983; --text3:#949cb3;
+  --shadow:0 4px 24px rgba(0,0,0,0.08);
+  --login-bg: radial-gradient(ellipse at 30% 50%,#dbeafe,#f4f6fa);
+  --wallet-bg: linear-gradient(135deg,#dbeafe,#eff6ff);
+  --wallet-border: rgba(37,99,235,0.3);
+}
+[data-theme="light"] tr:hover td { background:rgba(0,0,0,0.02); }
+[data-theme="light"] .badge-green{background:rgba(16,185,129,0.12);}
+[data-theme="light"] .badge-red{background:rgba(239,68,68,0.12);}
+[data-theme="light"] .badge-yellow{background:rgba(217,119,6,0.12);}
+[data-theme="light"] .badge-blue{background:rgba(37,99,235,0.12);}
+[data-theme="light"] .badge-purple{background:rgba(124,58,237,0.12);}
+[data-theme="light"] .alert-item.warning{background:rgba(217,119,6,0.08);border-color:rgba(217,119,6,0.2);}
+[data-theme="light"] .alert-item.danger{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);}
+[data-theme="light"] .alert-item.info{background:rgba(37,99,235,0.08);border-color:rgba(37,99,235,0.2);}
+[data-theme="light"] .fin-card.income{background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2);}
+[data-theme="light"] .fin-card.expense{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);}
+[data-theme="light"] .fin-card.profit{background:rgba(37,99,235,0.08);border-color:rgba(37,99,235,0.2);}
+[data-theme="light"] .quick-pay-item.overdue{background:rgba(239,68,68,0.05);}
+[data-theme="light"] .quick-pay-item.pending{background:rgba(217,119,6,0.05);}
+[data-theme="light"] .modal-overlay{background:rgba(0,0,0,0.3);}
+[data-theme="light"] .wallet-card{border-color:var(--wallet-border);}
+[data-theme="light"] .spinner{border-color:var(--border);border-top-color:var(--accent);}
+
+*{margin:0;padding:0;box-sizing:border-box;transition:background-color .2s,border-color .2s,color .1s;}
+body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* ===================== LOGIN ===================== */
+#loginPage{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--login-bg);}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:48px;width:420px;box-shadow:var(--shadow);}
+.login-logo{font-family:'Playfair Display',serif;font-size:28px;color:var(--accent);margin-bottom:8px;}
+.login-sub{color:var(--text2);font-size:14px;margin-bottom:32px;}
+.btn-primary{width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:'Manrope',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s;}
+.btn-primary:hover{opacity:.85;}
+.login-error{color:var(--red);font-size:13px;margin-top:10px;text-align:center;display:none;}
+
+/* ===================== FORMS ===================== */
+.form-group{margin-bottom:16px;}
+.form-group label{display:block;font-size:13px;color:var(--text2);margin-bottom:7px;font-weight:500;}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:11px 15px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;transition:border .2s;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+
+/* ===================== BUTTONS ===================== */
+.btn{padding:9px 18px;border-radius:10px;border:none;font-family:'Manrope',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:7px;}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:8px;}
+.btn-blue{background:var(--accent);color:#fff;} .btn-blue:hover{opacity:.85;}
+.btn-green{background:var(--green);color:#fff;} .btn-green:hover{opacity:.85;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.btn-yellow{background:var(--yellow);color:#fff;}
+.btn-orange{background:var(--orange);color:#fff;}
+
+/* ===================== THEME TOGGLE ===================== */
+.theme-toggle{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:6px 14px;cursor:pointer;font-size:18px;display:flex;align-items:center;gap:6px;color:var(--text2);font-family:'Manrope',sans-serif;font-size:12px;font-weight:600;transition:all .2s;}
+.theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ===================== APP LAYOUT ===================== */
+#app{display:none;min-height:100vh;}
+.layout{display:flex;min-height:100vh;}
+
+/* ===================== SIDEBAR ===================== */
+.sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;transition:transform .3s;}
+.sidebar-logo{padding:20px;font-family:'Playfair Display',serif;font-size:17px;color:var(--accent);border-bottom:1px solid var(--border);}
+.sidebar-logo span{display:block;font-family:'Manrope',sans-serif;font-size:11px;color:var(--text3);font-weight:500;margin-top:2px;}
+.nav-section{padding:14px 20px 6px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;}
+.nav-item{display:flex;align-items:center;gap:11px;padding:11px 20px;cursor:pointer;color:var(--text2);font-size:14px;font-weight:500;transition:all .2s;border-left:3px solid transparent;position:relative;}
+.nav-item:hover{color:var(--text);background:var(--surface2);}
+.nav-item.active{color:var(--accent);background:rgba(79,142,247,0.08);border-left-color:var(--accent);}
+.nav-badge{position:absolute;right:16px;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;}
+.sidebar-bottom{padding:14px 20px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;margin-top:auto;}
+.sidebar-user{display:flex;align-items:center;gap:10px;}
+.user-avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;color:#fff;}
+.user-info .user-name{font-size:13px;font-weight:600;}
+.user-info .user-role{font-size:11px;color:var(--text2);}
+.logout-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:17px;margin-left:auto;}
+
+/* ===================== MOBILE ===================== */
+.mobile-header{display:none;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:99;}
+.hamburger{background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;}
+.mobile-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99;}
+
+/* ===================== MAIN ===================== */
+.main{margin-left:240px;flex:1;padding:24px 28px;min-width:0;}
+.page{display:none;} .page.active{display:block;}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px;}
+.page-title{font-family:'Playfair Display',serif;font-size:24px;}
+.page-subtitle{color:var(--text2);font-size:13px;margin-top:4px;}
+
+/* ===================== CARDS ===================== */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+.card-title{font-size:15px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+
+/* ===================== STATS ===================== */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;position:relative;overflow:hidden;}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.stat-card.blue::before{background:var(--accent);}
+.stat-card.purple::before{background:var(--accent2);}
+.stat-card.green::before{background:var(--green);}
+.stat-card.yellow::before{background:var(--yellow);}
+.stat-card.red::before{background:var(--red);}
+.stat-icon{font-size:24px;margin-bottom:8px;}
+.stat-value{font-size:24px;font-weight:800;margin-bottom:2px;}
+.stat-label{font-size:12px;color:var(--text2);}
+
+/* ===================== TABLE ===================== */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;}
+thead{background:var(--surface2);}
+th{padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;}
+td{padding:11px 14px;font-size:13px;border-top:1px solid var(--border);}
+tr:hover td{background:rgba(255,255,255,0.02);}
+
+/* ===================== BADGES ===================== */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;}
+.badge-green{background:rgba(52,211,153,0.15);color:var(--green);}
+.badge-red{background:rgba(248,113,113,0.15);color:var(--red);}
+.badge-yellow{background:rgba(251,191,36,0.15);color:var(--yellow);}
+.badge-blue{background:rgba(79,142,247,0.15);color:var(--accent);}
+.badge-purple{background:rgba(167,139,250,0.15);color:var(--accent2);}
+.badge-orange{background:rgba(251,146,60,0.15);color:var(--orange);}
+
+/* ===================== MODAL ===================== */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:26px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow);animation:modalIn .2s ease;}
+.modal-lg{max-width:640px;}
+@keyframes modalIn{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:18px;}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;}
+
+/* ===================== QUICK PAY ===================== */
+.quick-pay-item{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .2s;border:1px solid transparent;}
+.quick-pay-item:hover{background:var(--surface2);border-color:var(--border);}
+.quick-pay-item.overdue{border-color:rgba(248,113,113,0.3);background:rgba(248,113,113,0.05);}
+.quick-pay-item.pending{border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.05);}
+.quick-pay-item.active{border-color:rgba(52,211,153,0.2);background:rgba(52,211,153,0.03);}
+.qp-name{font-weight:600;font-size:14px;}
+.qp-info{font-size:12px;color:var(--text2);margin-top:2px;}
+
+/* ===================== SALARY CALENDAR ===================== */
+.sal-cal{display:grid;gap:6px;}
+.sal-day{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);}
+.sal-day-info{font-size:13px;}
+.sal-day-amount{font-weight:700;color:var(--green);font-size:13px;}
+
+/* ===================== ATTEND ROW ===================== */
+.attend-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+.attend-name{font-weight:600;font-size:14px;}
+.attend-info{font-size:12px;color:var(--text2);}
+.att-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:15px;cursor:pointer;transition:all .2s;}
+.att-btn.present{background:var(--green);border-color:var(--green);color:#fff;}
+.att-btn.absent{background:var(--red);border-color:var(--red);color:#fff;}
+.att-btn.excused{background:var(--yellow);border-color:var(--yellow);color:#fff;}
+
+/* ===================== FINANCE ===================== */
+.finance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;}
+.fin-card{border-radius:var(--radius);padding:20px;text-align:center;}
+.fin-card.income{background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);}
+.fin-card.expense{background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);}
+.fin-card.profit{background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.2);}
+.fin-value{font-size:24px;font-weight:800;margin-bottom:3px;}
+.fin-label{font-size:12px;color:var(--text2);}
+.fin-card.income .fin-value{color:var(--green);}
+.fin-card.expense .fin-value{color:var(--red);}
+.fin-card.profit .fin-value{color:var(--accent);}
+
+/* ===================== EXPENSE CHART ===================== */
+.expense-bar{margin-bottom:12px;}
+.expense-bar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;}
+.expense-bar-track{background:var(--surface2);border-radius:20px;height:8px;overflow:hidden;}
+.expense-bar-fill{height:100%;border-radius:20px;transition:width .6s ease;}
+
+/* ===================== WALLET ===================== */
+.wallet-card{background:var(--wallet-bg);border:1px solid var(--wallet-border);border-radius:16px;padding:20px;margin-bottom:14px;}
+.wallet-amount{font-size:32px;font-weight:800;color:var(--green);margin:8px 0;}
+.wallet-label{font-size:12px;color:var(--text2);}
+
+/* ===================== ALERTS ===================== */
+.alert-item{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:10px;font-size:13px;margin-bottom:8px;}
+.alert-item.warning{background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);color:var(--yellow);}
+.alert-item.danger{background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);color:var(--red);}
+.alert-item.info{background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.2);color:var(--accent);}
+
+/* ===================== SCHEDULE ===================== */
+.schedule-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+.schedule-table th{background:var(--surface2);padding:10px 6px;font-size:11px;font-weight:700;color:var(--text2);text-align:center;border:1px solid var(--border);}
+.schedule-table th.time-col{width:60px;}
+.schedule-table td{border:1px solid var(--border);padding:3px;min-height:44px;height:44px;vertical-align:top;background:var(--surface);}
+.schedule-table td.time-cell{background:var(--surface2);text-align:center;font-size:11px;color:var(--text2);vertical-align:middle;font-weight:600;}
+.lesson-block{border-radius:6px;padding:5px 7px;font-size:11px;margin-bottom:2px;cursor:pointer;transition:opacity .2s;display:block;}
+.lesson-block:hover{opacity:.75;}
+
+/* ===================== GRADES ===================== */
+.grade-score-input{width:50px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;text-align:center;outline:none;}
+.grade-score-input:focus{border-color:var(--accent);}
+.progress-bar{background:var(--surface2);border-radius:20px;height:6px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:20px;background:var(--accent);transition:width .4s;}
+
+/* ===================== TOAST ===================== */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 18px;font-size:13px;box-shadow:var(--shadow);z-index:9999;animation:toastIn .3s ease;display:flex;align-items:center;gap:8px;max-width:300px;}
+.toast.success{border-color:var(--green);color:var(--green);}
+.toast.error{border-color:var(--red);color:var(--red);}
+@keyframes toastIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* ===================== EMPTY & LOADING ===================== */
+.empty-state{text-align:center;padding:40px 20px;color:var(--text2);}
+.empty-icon{font-size:40px;margin-bottom:8px;}
+.loading{display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text2);gap:10px;}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===================== ROLE-BASED HIDING ===================== */
+.dir-only{} /* shown by default, hidden for admin/teacher */
+.admin-hidden{} /* hidden for admin */
+.teacher-only{display:none;} /* shown only for teacher */
+
+/* ===================== RESPONSIVE ===================== */
+@media(max-width:768px){
+  .mobile-header{display:flex;}
+  .sidebar{transform:translateX(-100%);}
+  .sidebar.open{transform:translateX(0);}
+  .mobile-overlay.open{display:block;}
+  .main{margin-left:0;padding:16px;}
+  .stats-grid{grid-template-columns:repeat(2,1fr);}
+  .finance-summary{grid-template-columns:1fr;}
+  .form-row{grid-template-columns:1fr;}
+  .page-header{flex-direction:column;}
+}
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.hidden{display:none!important;}
+.font-bold{font-weight:700;} .text-sm{font-size:13px;} .text-muted{color:var(--text2);}
+.mt-2{margin-top:8px;} .mt-3{margin-top:12px;}
+@media print{.sidebar,.mobile-header{display:none!important;}.main{margin-left:0;}}
+</style>
+</head>
+<body>
+
+<!-- ==================== LOGIN ==================== -->
+<div id="loginPage">
+  <div class="login-box">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div class="login-logo">🎓 Академия</div>
+      <button class="theme-toggle" onclick="toggleTheme()" id="loginThemeBtn">☀️ Күндіз</button>
+    </div>
+    <div class="login-sub">Логин мен паролді енгізіңіз</div>
+    <div class="form-group"><label>Логин</label><input type="text" id="loginInput" placeholder="логин" /></div>
+    <div class="form-group"><label>Пароль</label><input type="password" id="passInput" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+    <button class="btn-primary" onclick="doLogin()">Кіру →</button>
+    <div class="login-error" id="loginError">Логин немесе пароль қате!</div>
+  </div>
+</div>
+
+<!-- ==================== APP ==================== -->
+<div id="app">
+  <div class="mobile-header">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <span style="font-family:'Playfair Display',serif;color:var(--accent)">🎓 Академия</span>
+    <button class="theme-toggle" onclick="toggleTheme()" id="mobileThemeBtn">☀️</button>
+  </div>
+  <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebar()"></div>
+
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-logo">🎓 Академия<span id="sidebarRole">Жүйе</span></div>
+      <nav>
+        <div class="nav-section">Негізгі</div>
+        <div class="nav-item active" onclick="showPage('dashboard',this)">📊 Дашборд<span class="nav-badge hidden" id="badgeDash">0</span></div>
+        <div class="nav-section">Оқу</div>
+        <div class="nav-item dir-admin" onclick="showPage('courses',this)">📚 Курстар</div>
+        <div class="nav-item dir-admin" onclick="showPage('groups',this)">👥 Группалар</div>
+        <div class="nav-item" onclick="showPage('schedule',this)">📅 Кесте</div>
+        <div class="nav-section">Адамдар</div>
+        <div class="nav-item" onclick="showPage('students',this)">👩‍🎓 Оқушылар</div>
+        <div class="nav-item dir-only" onclick="showPage('teachers',this)">👨‍🏫 Мұғалімдер</div>
+        <div class="nav-section">Қаржы</div>
+        <div class="nav-item dir-only" onclick="showPage('payments',this)">💳 Төлемдер<span class="nav-badge hidden" id="badgePay">0</span></div>
+        <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
+        <div class="nav-section">Журнал</div>
+        <div class="nav-item" onclick="showPage('attendance',this)">✅ Қатысу</div>
+        <div class="nav-item" onclick="showPage('grades',this)">📝 Бағалар</div>
+        <div class="nav-item dir-admin" onclick="showPage('holidays',this)">🎉 Демалыс</div>
+        <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Есептер</div>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="theme-toggle" onclick="toggleTheme()" id="sidebarThemeBtn" style="width:100%;justify-content:center">☀️ Күндіз режимі</button>
+        <div class="sidebar-user">
+          <div class="user-avatar" id="uAvatar">Д</div>
+          <div class="user-info"><div class="user-name" id="uName">—</div><div class="user-role" id="uRole">—</div></div>
+          <button class="logout-btn" onclick="logout()" title="Шығу">⏻</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+
+      <!-- ========== DASHBOARD ========== -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header">
+          <div><div class="page-title">Дашборд</div><div class="page-subtitle" id="dashDate"></div></div>
+          <button class="btn btn-ghost btn-sm" onclick="loadAll()">🔄 Жаңарту</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card blue"><div class="stat-icon">👩‍🎓</div><div class="stat-value" id="statStudents">—</div><div class="stat-label">Оқушылар</div></div>
+          <div class="stat-card red dir-only"><div class="stat-icon">❌</div><div class="stat-value" id="statOverdue">—</div><div class="stat-label">Мерзімі өткен</div></div>
+          <div class="stat-card yellow dir-only"><div class="stat-icon">⏳</div><div class="stat-value" id="statPending">—</div><div class="stat-label">Төлем күтуде</div></div>
+          <div class="stat-card green dir-only"><div class="stat-icon">💰</div><div class="stat-value" id="statMonthIncome">—</div><div class="stat-label">Айлық кіріс</div></div>
+          <div class="stat-card purple"><div class="stat-icon">👨‍🏫</div><div class="stat-value" id="statTeachers">—</div><div class="stat-label">Мұғалімдер</div></div>
+          <div class="stat-card blue"><div class="stat-icon">👥</div><div class="stat-value" id="statGroups">—</div><div class="stat-label">Группалар</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card dir-only">
+            <div class="card-title">⚡ Жылдам төлем</div>
+            <div id="quickPayList"><div class="loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📅 Бүгінгі сабақтар</div>
+            <div id="dashToday"><div class="loading"><div class="spinner"></div></div></div>
+          </div>
+        </div>
+        <div class="card dir-only">
+          <div class="card-title">⚠️ Ескертулер</div>
+          <div id="dashAlerts"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
+      </div>
+
+      <!-- ========== COURSES ========== -->
+      <div class="page" id="page-courses">
+        <div class="page-header">
+          <div><div class="page-title">Курстар</div><div class="page-subtitle">Оқу бағдарламалары</div></div>
+          <button class="btn btn-blue dir-only" onclick="openCourseModal()">+ Курс қосу</button>
+        </div>
+        <div id="coursesList"></div>
+      </div>
+
+      <!-- ========== GROUPS ========== -->
+      <div class="page" id="page-groups">
+        <div class="page-header">
+          <div><div class="page-title">Группалар</div><div class="page-subtitle">Барлық оқу топтары</div></div>
+          <button class="btn btn-blue dir-only" onclick="openGroupModal()">+ Группа қосу</button>
+        </div>
+        <div id="groupsList"></div>
+      </div>
+
+      <!-- ========== SCHEDULE ========== -->
+      <div class="page" id="page-schedule">
+        <div class="page-header">
+          <div><div class="page-title">Сабақ Кестесі</div><div class="page-subtitle">Апталық кесте — сабаққа басыңыз</div></div>
+          <button class="btn btn-blue dir-admin" onclick="openLessonModal()">+ Сабақ қосу</button>
+        </div>
+        <div class="card" style="overflow-x:auto;padding:12px"><table class="schedule-table" id="scheduleGrid"></table></div>
+        <div class="card dir-admin"><div class="card-title">📋 Сабақтар тізімі</div><div id="lessonsList"></div></div>
+      </div>
+
+      <!-- ========== STUDENTS ========== -->
+      <div class="page" id="page-students">
+        <div class="page-header">
+          <div><div class="page-title">Оқушылар</div><div class="page-subtitle">Толық тізім</div></div>
+          <button class="btn btn-blue dir-admin" onclick="openStudentModal()">+ Оқушы қосу</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+          <input type="text" placeholder="🔍 Іздеу..." oninput="filterStudents(this.value)" style="flex:1;min-width:180px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+          <select id="studentGroupFilter" onchange="renderStudents()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+            <option value="">👥 Барлық топ</option>
+          </select>
+          <select id="studentStatusFilter" onchange="renderStudents()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+            <option value="">💳 Барлық статус</option>
+            <option value="overdue">❌ Мерзімі өткен</option>
+            <option value="pending">⏳ Күтуде</option>
+            <option value="active">✅ Төленді</option>
+            <option value="none">📅 Күн қойылмаған</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Аты-жөні</th><th>Группа</th><th>Мұғалім</th>
+                <th class="admin-hidden">Төлем мерзімі</th>
+                <th>Үлгерім</th>
+                <th class="admin-hidden">Статус</th>
+                <th>Ата-ана</th><th>Әрекет</th>
+              </tr>
+            </thead>
+            <tbody id="studentsTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== TEACHERS ========== -->
+      <div class="page dir-only" id="page-teachers">
+        <div class="page-header">
+          <div><div class="page-title">Мұғалімдер</div><div class="page-subtitle">Тізім және жалақы</div></div>
+          <button class="btn btn-blue" onclick="openTeacherModal()">+ Мұғалім қосу</button>
+        </div>
+        <div id="teachersList"></div>
+      </div>
+
+      <!-- ========== PAYMENTS ========== -->
+      <div class="page dir-only" id="page-payments">
+        <div class="page-header">
+          <div><div class="page-title">Төлемдер</div><div class="page-subtitle">Оқушы төлемдері тарихы</div></div>
+          <button class="btn btn-blue" onclick="openPaymentModal()">+ Төлем қосу</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+          <input type="text" placeholder="🔍 Іздеу..." oninput="filterPayments(this.value)" style="flex:1;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>Оқушы</th><th>Сомасы</th><th>Қай айға</th><th>Төлеген күні</th><th>Келесі төлем</th><th>Түрі</th><th>Ескертпе</th><th>Әрекет</th></tr></thead><tbody id="paymentsTable"></tbody></table></div>
+      </div>
+
+      <!-- ========== FINANCE ========== -->
+      <div class="page dir-only" id="page-finance">
+        <div class="page-header">
+          <div><div class="page-title">Қаржы</div><div class="page-subtitle">Кіріс, шығыс, пайда</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="finMonth" onchange="renderFinance();renderFinancePayments()" style="padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:13px;outline:none;"></select>
+            <button class="btn btn-blue btn-sm" onclick="openExpenseModal()">+ Шығыс қосу</button>
+            <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Басып шығару</button>
+          </div>
+        </div>
+        <div class="finance-summary">
+          <div class="fin-card income"><div class="fin-value" id="finIncome">0₸</div><div class="fin-label">Жалпы кіріс</div></div>
+          <div class="fin-card expense"><div class="fin-value" id="finExpense">0₸</div><div class="fin-label">Жалпы шығыс</div></div>
+          <div class="fin-card profit"><div class="fin-value" id="finProfit">0₸</div><div class="fin-label">Таза пайда</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card"><div class="card-title">👨‍🏫 Мұғалім жалақылары</div><div id="finTeachers"></div></div>
+          <div class="card"><div class="card-title">💳 Оқушы төлемдері</div><div id="finStudents"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📊 Шығыстар диаграммасы</div>
+          <div id="expenseChart"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🧾 Шығыстар журналы</div>
+          <div class="table-wrap"><table><thead><tr><th>Күні</th><th>Категория</th><th>Сомасы</th><th>Ескертпе</th><th>Әрекет</th></tr></thead><tbody id="expensesTable"></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="justify-content:space-between">
+            <span>💳 Кірістер журналы</span>
+            <button class="btn btn-blue btn-sm" onclick="openPaymentModal()">+ Төлем қосу</button>
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+            <input type="text" id="finPayFilter" placeholder="🔍 Оқушы іздеу..." oninput="renderFinancePayments()" style="flex:1;min-width:160px;padding:8px 13px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Manrope,sans-serif;font-size:13px;outline:none;" />
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Оқушы</th><th>Топ</th><th>Қай айға</th><th>Сомасы</th><th>Төлеген күні</th><th>Түрі</th><th>Ескертпе</th><th>Әрекет</th></tr></thead>
+              <tbody id="finPaymentsTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card"><div class="card-title">📤 Жалақы тарихы</div><div id="salaryHistory"></div></div>
+      </div>
+
+      <!-- ========== ATTENDANCE ========== -->
+      <div class="page" id="page-attendance">
+        <div class="page-header"><div><div class="page-title">Қатысу журналы</div><div class="page-subtitle">Сабаққа қатысуды белгілеу</div></div></div>
+        <div class="card">
+          <div class="form-row" style="margin-bottom:14px">
+            <div class="form-group" style="margin:0"><label>Күн</label><input type="date" id="attendDate" onchange="renderAttendance()" /></div>
+            <div class="form-group" style="margin:0"><label>Группа</label><select id="attendGroup" onchange="renderAttendance()"><option value="">— Таңдаңыз —</option></select></div>
+          </div>
+          <div id="attendanceList"><div class="empty-state"><div class="empty-icon">👥</div><p>Группа таңдаңыз</p></div></div>
+        </div>
+      </div>
+
+      <!-- ========== GRADES ========== -->
+      <div class="page" id="page-grades">
+        <div class="page-header">
+          <div><div class="page-title">Бағалар журналы</div><div class="page-subtitle">Үй тапсырмасы, белсенділік, емтихан</div></div>
+          <button class="btn btn-blue" onclick="openGradeModal()">+ Баға қою</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+          <select id="gradeGroupFilter" onchange="renderGrades()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">— Барлық группа —</option></select>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Оқушы</th><th>Топ</th><th>Күні</th><th>Үй тапс. (0-5)</th><th>Белсенділік (0-5)</th><th>Емтихан</th><th>Үлгерім %</th><th>Заметка</th><th>Әрекет</th></tr></thead><tbody id="gradesTable"></tbody></table></div>
+      </div>
+
+      <!-- ========== HOLIDAYS ========== -->
+      <div class="page" id="page-holidays">
+        <div class="page-header">
+          <div><div class="page-title">Демалыс & Каникул</div></div>
+          <button class="btn btn-blue dir-only" onclick="openHolidayModal()">+ Демалыс қосу</button>
+        </div>
+        <div id="holidaysList"></div>
+      </div>
+
+      <!-- ========== REPORTS ========== -->
+      <div class="page dir-only" id="page-reports">
+        <div class="page-header"><div><div class="page-title">Есептер</div><div class="page-subtitle">Статистика және аналитика</div></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card"><div class="card-title">🏆 Үздік оқушылар</div><div id="topStudents"></div></div>
+          <div class="card"><div class="card-title">👨‍🏫 Мұғалім белсенділігі</div><div id="teacherActivity"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🎯 Марапаттар</div>
+          <button class="btn btn-blue btn-sm" onclick="openAchieveModal()" style="margin-bottom:14px">+ Марапат беру</button>
+          <div id="achievementList"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">💾 Деректерді басқару</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-ghost" onclick="exportData()">📥 JSON экспорт</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">📤 JSON импорт</button>
+            <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)" />
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main -->
+  </div>
+</div>
+
+<!-- ==================== MODALS ==================== -->
+
+<!-- QUICK PAY -->
+<div class="modal-overlay" id="quickPayModal">
+  <div class="modal">
+    <div class="modal-title">⚡ Жылдам төлем</div>
+    <div id="quickPayModalContent"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('quickPayModal')">Бас тарту</button>
+      <button class="btn btn-green" onclick="confirmQuickPay()">✅ Растау</button>
+    </div>
+  </div>
+</div>
+
+<!-- COURSE -->
+<div class="modal-overlay" id="courseModal">
+  <div class="modal">
+    <div class="modal-title">📚 Курс</div>
+    <input type="hidden" id="courseId" />
+    <div class="form-group"><label>Курс атауы</label><input type="text" id="courseName" /></div>
+    <div class="form-group"><label>Сипаттама</label><textarea id="courseDesc" rows="2"></textarea></div>
+    <div class="form-group"><label>Түсі</label>
+      <select id="courseColor"><option value="blue">🔵 Көк</option><option value="purple">🟣 Күлгін</option><option value="green">🟢 Жасыл</option><option value="yellow">🟡 Сары</option><option value="red">🔴 Қызыл</option></select>
+    </div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">Деңгейлер</div>
+    <div id="levelsList"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addLevel()" style="margin-bottom:14px">+ Деңгей қосу</button>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('courseModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveCourse()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP -->
+<div class="modal-overlay" id="groupModal">
+  <div class="modal">
+    <div class="modal-title">👥 Группа</div>
+    <input type="hidden" id="groupId" />
+    <div class="form-group"><label>Группа атауы</label><input type="text" id="groupName" /></div>
+    <div class="form-row">
+      <div class="form-group"><label>Курс</label><select id="groupCourse" onchange="updateGroupLevels()"><option value="">—</option></select></div>
+      <div class="form-group"><label>Деңгей</label><select id="groupLevel"><option value="">—</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Мұғалім</label><select id="groupTeacher"><option value="">—</option></select></div>
+      <div class="form-group"><label>Бөлме</label><input type="text" id="groupRoom" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Айлық төлем (₸)</label><input type="number" id="groupFee" /></div>
+      <div class="form-group"><label>Макс. оқушы</label><input type="number" id="groupMax" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('groupModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveGroup()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- TEACHER -->
+<div class="modal-overlay" id="teacherModal">
+  <div class="modal">
+    <div class="modal-title">👨‍🏫 Мұғалім</div>
+    <input type="hidden" id="teacherId" />
+    <div class="form-row">
+      <div class="form-group"><label>Аты</label><input type="text" id="teacherName" /></div>
+      <div class="form-group"><label>Тегі</label><input type="text" id="teacherSurname" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Телефон</label><input type="text" id="teacherPhone" /></div>
+      <div class="form-group"><label>Пән</label><input type="text" id="teacherSubject" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Сағаттық ставка (₸)</label><input type="number" id="teacherRate" /></div>
+      <div class="form-group"><label>Логин</label><input type="text" id="teacherEmail" placeholder="мысалы: madi" /></div>
+    </div>
+    <div class="form-group"><label>Пароль</label><input type="text" id="teacherPass" placeholder="мысалы: 1234" /></div>
+    <div class="form-group"><label>Ескертпе</label><textarea id="teacherNote" rows="2"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('teacherModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveTeacher()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- STUDENT -->
+<div class="modal-overlay" id="studentModal">
+  <div class="modal">
+    <div class="modal-title">👩‍🎓 Оқушы</div>
+    <input type="hidden" id="studentId" />
+    <div class="form-row">
+      <div class="form-group"><label>Аты</label><input type="text" id="studentName" /></div>
+      <div class="form-group"><label>Тегі</label><input type="text" id="studentSurname" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Телефон</label><input type="text" id="studentPhone" /></div>
+      <div class="form-group"><label>Туған күні</label><input type="date" id="studentBirth" /></div>
+    </div>
+    <div class="form-group"><label>Группа</label><select id="studentGroup"><option value="">—</option></select></div>
+    <div class="form-group"><label>Келесі төлем күні</label><input type="date" id="studentNextPayDate" /></div>
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">👨‍👩‍👧 Ата-ана</div>
+      <div class="form-row">
+        <div class="form-group"><label>Аты-жөні</label><input type="text" id="parentName" /></div>
+        <div class="form-group"><label>Телефон</label><input type="text" id="parentPhone" /></div>
+      </div>
+    </div>
+    <div class="form-group"><label>Ескертпе</label><textarea id="studentNote" rows="2"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('studentModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveStudent()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- LESSON -->
+<div class="modal-overlay" id="lessonModal">
+  <div class="modal">
+    <div class="modal-title">📅 Сабақ қосу</div>
+    <input type="hidden" id="lessonId" />
+    <div class="form-group"><label>Группа</label><select id="lessonGroup"><option value="">—</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Апта күні</label>
+        <select id="lessonDay">
+          <option value="1">Дүйсенбі</option><option value="2">Сейсенбі</option>
+          <option value="3">Сәрсенбі</option><option value="4">Бейсенбі</option>
+          <option value="5">Жұма</option><option value="6">Сенбі</option><option value="0">Жексенбі</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Бөлме</label><input type="text" id="lessonRoom" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Басталу</label><input type="time" id="lessonStart" /></div>
+      <div class="form-group"><label>Аяқталу</label><input type="time" id="lessonEnd" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('lessonModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveLesson()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- LESSON DETAIL (attendance + grades) -->
+<div class="modal-overlay" id="lessonDetailModal">
+  <div class="modal modal-lg">
+    <div class="modal-title" id="ldTitle">📋 Сабақ журналы</div>
+    <div id="ldContent"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('lessonDetailModal')">Жабу</button>
+      <button class="btn btn-blue" onclick="saveLessonDetail()">💾 Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAYMENT -->
+<div class="modal-overlay" id="paymentModal">
+  <div class="modal">
+    <div class="modal-title">💳 Төлем қосу</div>
+    <div class="form-group"><label>Оқушы</label><select id="paymentStudent" onchange="fillPaymentAmount()"><option value="">—</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Сомасы (₸)</label><input type="number" id="paymentAmount" /></div>
+      <div class="form-group"><label>Күні</label><input type="date" id="paymentDate" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Ай</label>
+        <select id="paymentMonth">
+          <option value="1">Қаңтар</option><option value="2">Ақпан</option><option value="3">Наурыз</option>
+          <option value="4">Сәуір</option><option value="5">Мамыр</option><option value="6">Маусым</option>
+          <option value="7">Шілде</option><option value="8">Тамыз</option><option value="9">Қыркүйек</option>
+          <option value="10">Қазан</option><option value="11">Қараша</option><option value="12">Желтоқсан</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Жыл</label><input type="number" id="paymentYear" /></div>
+    </div>
+    <div class="form-group"><label>Төлем түрі</label>
+      <select id="paymentType"><option value="cash">💵 Қолма-қол</option><option value="card">💳 Карта</option><option value="transfer">📲 Аударым</option></select>
+    </div>
+    <div class="form-group"><label>Ескертпе</label><input type="text" id="paymentNote" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('paymentModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="savePayment()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPENSE -->
+<div class="modal-overlay" id="expenseModal">
+  <div class="modal">
+    <div class="modal-title">🧾 Шығыс қосу</div>
+    <div class="form-group"><label>Категория</label>
+      <select id="expenseCategory">
+        <option value="Аренда">🏢 Аренда</option>
+        <option value="Маркетинг">📣 Маркетинг</option>
+        <option value="Хозтовары">🧹 Хозтовары</option>
+        <option value="Жалақы">💰 Жалақы</option>
+        <option value="Салық">🏛️ Салық</option>
+        <option value="Басқа">📌 Басқа</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Сомасы (₸)</label><input type="number" id="expenseAmount" /></div>
+      <div class="form-group"><label>Күні</label><input type="date" id="expenseDate" /></div>
+    </div>
+    <div class="form-group"><label>Заметка (міндетті) *</label><textarea id="expenseNote" rows="3" placeholder="Бұл ақша не үшін жұмсалды?"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('expenseModal')">Бас тарту</button>
+      <button class="btn btn-red" onclick="saveExpense()">💾 Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- SALARY -->
+<div class="modal-overlay" id="salaryModal">
+  <div class="modal modal-lg">
+    <div class="modal-title">💰 Жалақы & Сабақ белгілеу</div>
+    <div id="salaryContent"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('salaryModal')">Жабу</button>
+      <button class="btn btn-green" id="payoutBtn" onclick="confirmPayout()" style="display:none">💸 Жалақыны беру</button>
+    </div>
+  </div>
+</div>
+
+<!-- GRADE -->
+<div class="modal-overlay" id="gradeModal">
+  <div class="modal">
+    <div class="modal-title">📝 Баға қою</div>
+    <input type="hidden" id="gradeId" />
+    <div class="form-group"><label>Оқушы</label><select id="gradeStudent"><option value="">—</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Үй тапсырмасы (0-5)</label><input type="number" id="gradeHomework" min="0" max="5" /></div>
+      <div class="form-group"><label>Белсенділік (0-5)</label><input type="number" id="gradeActivity" min="0" max="5" /></div>
+    </div>
+    <div class="form-group"><label>Емтихан бағасы (0-100)</label><input type="number" id="gradeExam" min="0" max="100" /></div>
+    <div class="form-group"><label>Күні</label><input type="date" id="gradeDate" /></div>
+    <div class="form-group"><label>Заметка</label><textarea id="gradeNote" rows="2"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('gradeModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveGrade()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- HOLIDAY -->
+<div class="modal-overlay" id="holidayModal">
+  <div class="modal">
+    <div class="modal-title">🎉 Демалыс қосу</div>
+    <input type="hidden" id="holidayId" />
+    <div class="form-group"><label>Атауы</label><input type="text" id="holidayName" /></div>
+    <div class="form-row">
+      <div class="form-group"><label>Басталу</label><input type="date" id="holidayStart" /></div>
+      <div class="form-group"><label>Аяқталу</label><input type="date" id="holidayEnd" /></div>
+    </div>
+    <div class="form-group"><label>Түрі</label>
+      <select id="holidayType"><option value="holiday">🎉 Мереке</option><option value="vacation">🏖️ Каникул</option><option value="other">📌 Басқа</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('holidayModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveHoliday()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACHIEVE -->
+<div class="modal-overlay" id="achieveModal">
+  <div class="modal">
+    <div class="modal-title">🏆 Марапат беру</div>
+    <div class="form-group"><label>Оқушы</label><select id="achStudent"><option value="">—</option></select></div>
+    <div class="form-group"><label>Марапат атауы</label><input type="text" id="achName" /></div>
+    <div class="form-group"><label>Белгі (emoji)</label><input type="text" id="achIcon" placeholder="🏆" /></div>
+    <div class="form-group"><label>Сипаттама</label><textarea id="achDesc" rows="2"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('achieveModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveAchievement()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
+<!-- STUDENT DETAIL -->
+<div class="modal-overlay" id="studentDetailModal">
+  <div class="modal modal-lg">
+    <div class="modal-title" id="sdTitle"></div>
+    <div id="sdContent"></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('studentDetailModal')">Жабу</button></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// CONFIG & STATE
+// ================================================================
+const SB_URL = 'https://hslcdmtlnribxpnlmkxg.supabase.co';
+const SB_KEY = 'sb_publishable_bsFB2bPrgFykLSXdKtL28A_bV5K181Y';
+
+// Жергілікті аккаунттар
+const LOCAL_ACCOUNTS = [
+  { login:'director', pass:'MyPass2025', role:'director', name:'Директор' },
+  { login:'admin',    pass:'Qwerty123',  role:'admin',    name:'Администратор' }
+];
+
+let sb = null;
+let currentUser = null; // { email, role, name }
+let DATA = {
+  courses:[], teachers:[], groups:[], students:[],
+  lessons:[], payments:[], grades:[], holidays:[],
+  achievements:[], attendance:[], salary_logs:[], expenses:[]
+};
+let quickPayStudent = null;
+let salaryTeacherId = null;
+let currentLessonDetail = null; // for lesson journal modal
+let studentFilter = '';
+let payFilter = '';
+
+// ================================================================
+// THEME
+// ================================================================
+function initTheme(){
+  const saved = localStorage.getItem('academy_theme') || 'dark';
+  setTheme(saved);
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme');
+  setTheme(cur === 'dark' ? 'light' : 'dark');
+}
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('academy_theme', t);
+  const icon = t === 'light' ? '🌙 Түнгі' : '☀️ Күндіз';
+  const iconShort = t === 'light' ? '🌙' : '☀️';
+  document.querySelectorAll('.theme-toggle').forEach(btn => {
+    btn.textContent = btn.id === 'mobileThemeBtn' ? iconShort : icon + ' режимі';
+  });
+  // Login button
+  const lb = document.getElementById('loginThemeBtn');
+  if(lb) lb.textContent = t === 'light' ? '🌙 Түнгі' : '☀️ Күндіз';
+}
+
+// ================================================================
+// SUPABASE INIT
+// ================================================================
+sb = window.supabase.createClient(SB_URL, SB_KEY);
+
+// ================================================================
+// AUTH
+// ================================================================
+async function doLogin(){
+  const login = document.getElementById('loginInput').value.trim();
+  const pass  = document.getElementById('passInput').value.trim();
+  const err   = document.getElementById('loginError');
+  err.style.display = 'none';
+
+  // Директор / Админ тексеру
+  const localUser = LOCAL_ACCOUNTS.find(u => u.login === login && u.pass === pass);
+  if(localUser){
+    currentUser = { login: localUser.login, role: localUser.role, name: localUser.name };
+    saveSession();
+    startApp();
+    return;
+  }
+
+  // Мұғалім тексеру (teachers кестесінен)
+  try{
+    const {data:teachers} = await sb.from('teachers').select('*').eq('email', login);
+    if(teachers && teachers.length>0){
+      const t=teachers[0];
+      if(t.pass && t.pass===pass){
+        currentUser={ login, role:'teacher', name:t.name+' '+(t.surname||''), teacherId:t.id };
+        saveSession();
+        startApp();
+        return;
+      }
+    }
+  }catch(e){}
+
+  err.style.display = 'block';
+}
+
+function saveSession(){
+  localStorage.setItem('academy_session', JSON.stringify(currentUser));
+}
+
+function checkSession(){
+  try{
+    const saved = localStorage.getItem('academy_session');
+    if(!saved) return false;
+    const u = JSON.parse(saved);
+    if(!u || !u.role || !u.name) return false;
+    currentUser = u;
+    startApp();
+    return true;
+  }catch(e){
+    localStorage.removeItem('academy_session');
+    return false;
+  }
+}
+
+function logout(){
+  currentUser = null;
+  localStorage.removeItem('academy_session');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('loginInput').value = '';
+  document.getElementById('passInput').value = '';
+}
+
+function startApp(){
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  setupUI();
+  loadAll();
+}
+
+// ================================================================
+// UI SETUP & ROLE-BASED ACCESS
+// ================================================================
+function setupUI(){
+  const r = currentUser.role;
+  document.getElementById('uName').textContent = currentUser.name;
+  document.getElementById('uAvatar').textContent = currentUser.name[0];
+  document.getElementById('sidebarRole').textContent =
+    r==='director' ? 'Директор' : r==='admin' ? 'Администратор' : 'Мұғалім';
+  document.getElementById('uRole').textContent =
+    r==='director' ? 'Толық рұқсат' : r==='admin' ? 'Шектеулі рұқсат' : 'Мұғалім рұқсаты';
+
+  // dir-only: visible only for director
+  document.querySelectorAll('.dir-only').forEach(el =>
+    el.style.display = r==='director' ? '' : 'none'
+  );
+  // dir-admin: visible for director and admin
+  document.querySelectorAll('.dir-admin').forEach(el =>
+    el.style.display = (r==='director'||r==='admin') ? '' : 'none'
+  );
+  // admin-hidden: hide financial columns for admin
+  if(r === 'admin'){
+    document.querySelectorAll('.admin-hidden').forEach(el => el.style.display='none');
+  }
+  // teacher-only
+  document.querySelectorAll('.teacher-only').forEach(el =>
+    el.style.display = r==='teacher' ? '' : 'none'
+  );
+
+  // Init dates
+  const now = new Date();
+  document.getElementById('dashDate').textContent =
+    now.toLocaleDateString('kk-KZ',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('attendDate').value = now.toISOString().slice(0,10);
+  document.getElementById('paymentDate').value = now.toISOString().slice(0,10);
+  document.getElementById('gradeDate').value   = now.toISOString().slice(0,10);
+  document.getElementById('paymentYear').value  = now.getFullYear();
+  document.getElementById('paymentMonth').value = now.getMonth()+1;
+  document.getElementById('expenseDate').value  = now.toISOString().slice(0,10);
+
+  // Мұғалімге stat карточка labels өзгерту
+  if(r==='teacher'){
+    const l1=document.querySelector('#statStudents + .stat-label');
+    const l2=document.querySelector('#statTeachers + .stat-label');
+    const l3=document.querySelector('#statGroups + .stat-label');
+    if(l1) l1.textContent='Менің оқушыларым';
+    if(l2) l2.textContent='Менің топтарым';
+    if(l3) l3.textContent='Апталық сабақтар';
+    // Quick pay карточка тақырыбын өзгерту
+    const qpTitle=document.querySelector('.card-title');
+    if(qpTitle&&qpTitle.textContent.includes('Жылдам төлем'))
+      qpTitle.textContent='📅 Менің кестем';
+    // Alerts card title
+    const alertTitle=document.querySelectorAll('.card-title')[1];
+    if(alertTitle&&alertTitle.textContent.includes('Ескертулер'))
+      alertTitle.textContent='👥 Менің топтарым';
+  }
+
+  // Finance month select
+  const fm = document.getElementById('finMonth'); fm.innerHTML='';
+  const MN=['Қаңтар','Ақпан','Наурыз','Сәуір','Мамыр','Маусым','Шілде','Тамыз','Қыркүйек','Қазан','Қараша','Желтоқсан'];
+  [now.getFullYear()-1, now.getFullYear()].forEach(yr=>{
+    MN.forEach((mn,i)=>{
+      const o=document.createElement('option');
+      o.value=`${i+1}_${yr}`; o.textContent=`${mn} ${yr}`;
+      if(i===now.getMonth()&&yr===now.getFullYear()) o.selected=true;
+      fm.appendChild(o);
+    });
+  });
+}
+
+// ================================================================
+// MOBILE SIDEBAR
+// ================================================================
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('mobileOverlay').classList.toggle('open');
+}
+
+// ================================================================
+// NAVIGATION
+// ================================================================
+function showPage(name, el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name)?.classList.add('active');
+  el?.classList.add('active');
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobileOverlay').classList.remove('open');
+  const renders={
+    courses:renderCourses, groups:renderGroups, schedule:renderSchedule,
+    students:renderStudents, teachers:renderTeachers, finance:renderFinance,
+    payments:renderPayments, attendance:renderAttendance, grades:renderGrades,
+    holidays:renderHolidays, reports:renderReports
+  };
+  renders[name]?.();
+}
+
+// ================================================================
+// LOAD ALL DATA
+// ================================================================
+async function loadAll(){
+  if(!sb) return;
+  const tables = ['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance'];
+  await Promise.all(tables.map(async t=>{
+    const {data,error}=await sb.from(t).select('*').order('created_at',{ascending:true});
+    if(!error&&data) DATA[t]=data;
+  }));
+  try{
+    const {data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false});
+    if(sl) DATA.salary_logs=sl;
+  }catch(e){ DATA.salary_logs=[]; }
+  try{
+    const {data:ex}=await sb.from('expenses').select('*').order('created_at',{ascending:false});
+    if(ex) DATA.expenses=ex;
+  }catch(e){ DATA.expenses=[]; }
+
+  renderDashboard();
+  updateBadges();
+  populateAttendGroups();
+  populateStudentGroupFilter();
+}
+
+// ================================================================
+// HELPERS
+// ================================================================
+const MONTHS=['','Қаңтар','Ақпан','Наурыз','Сәуір','Мамыр','Маусым','Шілде','Тамыз','Қыркүйек','Қазан','Қараша','Желтоқсан'];
+const DAYS=['Жексенбі','Дүйсенбі','Сейсенбі','Сәрсенбі','Бейсенбі','Жұма','Сенбі'];
+const EXPENSE_COLORS={
+  'Аренда':'#4f8ef7','Маркетинг':'#a78bfa','Хозтовары':'#34d399',
+  'Жалақы':'#f87171','Салық':'#fbbf24','Басқа':'#fb923c'
+};
+
+function fmt(n){ return Number(n||0).toLocaleString('kk-KZ'); }
+function dur(s,e){ if(!s||!e) return 1; const[sh,sm]=s.split(':').map(Number);const[eh,em]=e.split(':').map(Number); return Math.max(((eh*60+em)-(sh*60+sm))/60,0.5); }
+function toast(msg,type='success'){ const t=document.createElement('div'); t.className=`toast ${type}`; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3000); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function sel(id, items, val=''){
+  const el=document.getElementById(id); if(!el) return;
+  const first=el.options[0]?.text.startsWith('—')?el.options[0].outerHTML:'';
+  el.innerHTML=first+items.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+  if(val) el.value=val;
+}
+
+// ================================================================
+// PAYMENT STATUS
+// ================================================================
+// Timezone-safe date parsing
+function parseLocalDate(ds){
+  if(!ds) return null;
+  const[y,m,d]=ds.split('-').map(Number);
+  return new Date(y,m-1,d); // local timezone
+}
+function getPayStatus(student){
+  const today=new Date(); today.setHours(0,0,0,0);
+  if(!student.next_pay_date) return 'none';
+  const due=parseLocalDate(student.next_pay_date);
+  const diff=Math.floor((due-today)/(1000*60*60*24));
+  if(diff<0) return 'overdue';
+  if(diff<=5) return 'pending';
+  return 'active';
+}
+function daysUntil(ds){
+  const t=new Date();t.setHours(0,0,0,0);
+  const d=parseLocalDate(ds);
+  return Math.floor((d-t)/(1000*60*60*24));
+}
+function payStatusBadge(student){
+  const st=getPayStatus(student); const d=student.next_pay_date;
+  if(st==='overdue'){
+    const ago=Math.abs(daysUntil(d));
+    return `<span class="badge badge-red">❌ ${ago} күн өтті — ${d}</span>`;
+  }
+  if(st==='pending'){
+    const left=daysUntil(d);
+    return `<span class="badge badge-yellow">⏳ ${left===0?'Бүгін':left+' күн қалды'} — ${d}</span>`;
+  }
+  if(st==='active')  return `<span class="badge badge-green">✅ Төленді — келесі: ${d}</span>`;
+  return `<span class="badge" style="background:var(--surface2);color:var(--text2)">📅 Күн қойылмаған</span>`;
+}
+
+// ================================================================
+// PROGRESS PERCENT CALCULATION
+// ================================================================
+function calcProgress(studentId){
+  const gs = DATA.grades.filter(g=>g.student_id===studentId);
+
+  // Қатысу % есептеу (attendance 10%)
+  const attRecs = DATA.attendance.filter(a=>a.student_id===studentId);
+  let attScore = 10; // default: толық қатысты деп есептейміз
+  if(attRecs.length>0){
+    const present = attRecs.filter(a=>a.status==='present'||a.status==='excused').length;
+    attScore = Math.round((present/attRecs.length)*10);
+  }
+
+  if(!gs.length) return attScore; // тек қатысу бары
+
+  let total=0, count=0;
+  gs.forEach(g=>{
+    const hw   = Number(g.homework_score??0);
+    const act  = Number(g.activity_score??0);
+    const exam = Number(g.exam_score??g.value??0);
+    // Формула: ҮТ(0-5)→30% + Белс(0-5)→20% + Емт(0-100)→40%
+    const score = (hw/5*30) + (act/5*20) + (exam/100*40);
+    total += score;
+    count++;
+  });
+  const gradeScore = Math.round(total/count); // 0-90 аралығы
+  return Math.min(100, gradeScore + attScore);
+}
+
+// ================================================================
+// BADGES
+// ================================================================
+function updateBadges(){
+  const overdue=DATA.students.filter(s=>getPayStatus(s)==='overdue').length;
+  const pending=DATA.students.filter(s=>getPayStatus(s)==='pending').length;
+  const total=overdue+pending;
+  const bd=document.getElementById('badgeDash');
+  const bp=document.getElementById('badgePay');
+  if(total>0){bd.textContent=total;bd.classList.remove('hidden');}else bd.classList.add('hidden');
+  if(overdue>0){bp.textContent=overdue;bp.classList.remove('hidden');}else bp.classList.add('hidden');
+}
+
+// ================================================================
+// DASHBOARD
+// ================================================================
+function renderDashboard(){
+  const role=currentUser?.role;
+
+  // ====== МҰҒАЛІМ ДАШБОРДЫ ======
+  if(role==='teacher'&&currentUser.teacherId){
+    renderTeacherDashboard();
+    return;
+  }
+
+  const overdue=DATA.students.filter(s=>getPayStatus(s)==='overdue');
+  const pending=DATA.students.filter(s=>getPayStatus(s)==='pending');
+  document.getElementById('statStudents').textContent=DATA.students.length;
+  document.getElementById('statTeachers').textContent=DATA.teachers.length;
+  document.getElementById('statGroups').textContent=DATA.groups.length;
+  if(document.getElementById('statOverdue')) document.getElementById('statOverdue').textContent=overdue.length;
+  if(document.getElementById('statPending')) document.getElementById('statPending').textContent=pending.length;
+
+  const now=new Date(); const m=now.getMonth()+1; const y=now.getFullYear();
+  const inc=DATA.payments.filter(p=>p.month==m&&p.year==y).reduce((s,p)=>s+Number(p.amount||0),0);
+  if(document.getElementById('statMonthIncome')) document.getElementById('statMonthIncome').textContent=fmt(inc)+'₸';
+
+  // Quick pay list (dir only)
+  const qpEl=document.getElementById('quickPayList');
+  if(qpEl){
+    const needPay=[...overdue,...pending].slice(0,8);
+    if(!needPay.length){
+      qpEl.innerHTML='<div class="empty-state"><div class="empty-icon">✅</div><p>Барлығы төледі!</p></div>';
+    } else {
+      qpEl.innerHTML=needPay.map(s=>{
+        const g=DATA.groups.find(g=>g.id===s.group_id);
+        const st=getPayStatus(s);
+        const dl=s.next_pay_date?daysUntil(s.next_pay_date):null;
+        const dInfo=dl!==null?(dl<0?`${Math.abs(dl)} күн өтті`:`${dl} күн қалды`):'';
+        return`<div class="quick-pay-item ${st}" onclick="openQuickPay('${s.id}')">
+          <div><div class="qp-name">${s.name} ${s.surname||''}</div><div class="qp-info">${g?g.name:'—'} ${dInfo?'| '+dInfo:''}</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;font-size:13px">${g&&g.fee?fmt(g.fee)+'₸':''}</span>
+            <button class="btn btn-green btn-sm" onclick="event.stopPropagation();openQuickPay('${s.id}')">💳</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Today lessons
+  const today=now.getDay();
+  const todayL=DATA.lessons.filter(l=>Number(l.day)===today);
+  const tEl=document.getElementById('dashToday');
+  if(tEl) tEl.innerHTML=todayL.length?todayL.map(l=>{
+    const g=DATA.groups.find(g=>g.id===l.group_id);
+    return`<div class="attend-row"><div><div class="attend-name">${g?g.name:'—'}</div><div class="attend-info">${l.start_time}–${l.end_time} | ${l.room||'—'}</div></div><span class="badge badge-blue">${l.start_time}</span></div>`;
+  }).join(''):'<div class="empty-state"><div class="empty-icon">📅</div><p>Бүгін сабақ жоқ</p></div>';
+
+  // Alerts (dir only)
+  const aEl=document.getElementById('dashAlerts');
+  if(aEl){
+    const alerts=[];
+    overdue.forEach(s=>alerts.push({type:'danger',msg:`❌ ${s.name} ${s.surname||''} — мерзімі өтті (${s.next_pay_date})`}));
+    pending.forEach(s=>alerts.push({type:'warning',msg:`⏳ ${s.name} ${s.surname||''} — ${daysUntil(s.next_pay_date)} күннен кейін төлем`}));
+    DATA.teachers.forEach(t=>{const bal=Number(t.balance||0);if(bal>0)alerts.push({type:'info',msg:`💰 ${t.name} ${t.surname||''} — берілуі тиіс: ${fmt(bal)}₸`});});
+    aEl.innerHTML=alerts.length?alerts.map(a=>`<div class="alert-item ${a.type}">${a.msg}</div>`).join(''):'<div class="empty-state"><div class="empty-icon">✅</div><p>Ескертулер жоқ</p></div>';
+  }
+}
+
+// ================================================================
+// QUICK PAY
+// ================================================================
+function openQuickPay(sId){
+  quickPayStudent=DATA.students.find(s=>s.id===sId); if(!quickPayStudent) return;
+  const g=DATA.groups.find(g=>g.id===quickPayStudent.group_id);
+  const fee=g?.fee||0;
+  document.getElementById('quickPayModalContent').innerHTML=`
+    <div class="wallet-card" style="margin-bottom:16px">
+      <div class="wallet-label">Оқушы</div>
+      <div style="font-size:18px;font-weight:700;margin:6px 0">${quickPayStudent.name} ${quickPayStudent.surname||''}</div>
+      <div class="wallet-label">${g?g.name:'—'} | Мерзім: ${quickPayStudent.next_pay_date||'—'}</div>
+    </div>
+    <div class="form-group"><label>Төлем сомасы (₸)</label><input type="number" id="qpAmount" value="${fee}" /></div>
+    <div class="form-group"><label>Төлем түрі</label>
+      <select id="qpType"><option value="cash">💵 Қолма-қол</option><option value="card">💳 Карта</option><option value="transfer">📲 Аударым</option></select>
+    </div>
+    <div class="form-group"><label>Ескертпе</label><input type="text" id="qpNote" /></div>
+    <div style="background:var(--surface2);border-radius:10px;padding:12px;font-size:13px;color:var(--text2)">
+      📅 Төлегеннен кейін <b>келесі төлем күні автоматты 1 айға алға жылжиды</b>
+    </div>`;
+  openModal('quickPayModal');
+}
+
+async function confirmQuickPay(){
+  if(!quickPayStudent) return;
+  const amount=Number(document.getElementById('qpAmount').value);
+  const type=document.getElementById('qpType').value;
+  const note=document.getElementById('qpNote').value;
+  if(!amount) return alert('Сомасын енгізіңіз');
+  const now=new Date();
+  // Timezone-safe: next_pay_date негізінде ай анықтаймыз
+  const dueDate=quickPayStudent.next_pay_date?parseLocalDate(quickPayStudent.next_pay_date):now;
+  const payMonth=dueDate.getMonth()+1; const payYear=dueDate.getFullYear();
+  await sb.from('payments').insert({
+    student_id:quickPayStudent.id, amount, month:payMonth, year:payYear,
+    pay_date:now.toISOString().slice(0,10), pay_type:type, note
+  });
+  // Келесі мерзімді 1 айға алға жылжыту
+  const nd=new Date(dueDate.getFullYear(), dueDate.getMonth()+1, dueDate.getDate());
+  const ndStr=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`;
+  await sb.from('students').update({next_pay_date:ndStr}).eq('id',quickPayStudent.id);
+  closeModal('quickPayModal');
+  await loadAll();
+  renderStudents();
+  toast(`✅ ${quickPayStudent.name} — ${fmt(amount)}₸ қабылданды!`);
+}
+
+// ================================================================
+// COURSES
+// ================================================================
+function openCourseModal(c=null){
+  document.getElementById('courseId').value=c?.id||'';
+  document.getElementById('courseName').value=c?.name||'';
+  document.getElementById('courseDesc').value=c?.description||'';
+  document.getElementById('courseColor').value=c?.color||'blue';
+  document.getElementById('levelsList').innerHTML='';
+  (c?.levels||[]).forEach(l=>addLevel(l));
+  openModal('courseModal');
+}
+function addLevel(val=''){
+  const d=document.createElement('div');d.style.cssText='display:flex;gap:8px;margin-bottom:8px';
+  d.innerHTML=`<input type="text" class="lv-input" value="${val}" placeholder="мысалы: Beginner" style="flex:1;padding:9px 13px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:Manrope,sans-serif;font-size:14px;outline:none"><button class="btn btn-red btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+  document.getElementById('levelsList').appendChild(d);
+}
+async function saveCourse(){
+  const name=document.getElementById('courseName').value.trim(); if(!name) return alert('Атауын енгізіңіз');
+  const levels=[...document.querySelectorAll('.lv-input')].map(i=>i.value.trim()).filter(Boolean);
+  const row={name,description:document.getElementById('courseDesc').value,color:document.getElementById('courseColor').value,levels};
+  const id=document.getElementById('courseId').value;
+  if(id) await sb.from('courses').update(row).eq('id',id); else await sb.from('courses').insert(row);
+  closeModal('courseModal'); await loadAll(); renderCourses(); toast('✅ Сақталды!');
+}
+async function deleteCourse(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('courses').delete().eq('id',id); await loadAll(); renderCourses(); }
+function renderCourses(){
+  const colors={blue:'var(--accent)',purple:'var(--accent2)',green:'var(--green)',yellow:'var(--yellow)',red:'var(--red)'};
+  document.getElementById('coursesList').innerHTML=DATA.courses.length?DATA.courses.map(c=>`
+    <div class="card" style="border-left:4px solid ${colors[c.color]||'var(--accent)'}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><div style="font-size:17px;font-weight:700">${c.name}</div>
+          <div class="text-muted text-sm mt-2">${c.description||''}</div>
+          <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">${(c.levels||[]).map(l=>`<span class="badge badge-blue">${l}</span>`).join('')}</div>
+          <div class="text-sm text-muted mt-2">👥 ${DATA.groups.filter(g=>g.course_id===c.id).length} группа</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick='openCourseModal(${JSON.stringify(c).replace(/'/g,"&#39;")})'>✏️</button>
+          <button class="btn btn-red btn-sm" onclick="deleteCourse('${c.id}')">🗑️</button>
+        </div>
+      </div>
+    </div>`).join(''):'<div class="empty-state card"><div class="empty-icon">📚</div><p>Курстар жоқ</p></div>';
+}
+
+// ================================================================
+// GROUPS
+// ================================================================
+function openGroupModal(g=null){
+  document.getElementById('groupId').value=g?.id||'';
+  document.getElementById('groupName').value=g?.name||'';
+  document.getElementById('groupRoom').value=g?.room||'';
+  document.getElementById('groupFee').value=g?.fee||'';
+  document.getElementById('groupMax').value=g?.max_students||'';
+  sel('groupCourse',DATA.courses.map(c=>({id:c.id,name:c.name})),g?.course_id||'');
+  const c=DATA.courses.find(c=>c.id===g?.course_id);
+  sel('groupLevel',(c?.levels||[]).map(l=>({id:l,name:l})),g?.level||'');
+  sel('groupTeacher',DATA.teachers.map(t=>({id:t.id,name:t.name+' '+(t.surname||'')})),g?.teacher_id||'');
+  openModal('groupModal');
+}
+function updateGroupLevels(){
+  const c=DATA.courses.find(c=>c.id===document.getElementById('groupCourse').value);
+  sel('groupLevel',(c?.levels||[]).map(l=>({id:l,name:l})));
+}
+async function saveGroup(){
+  const name=document.getElementById('groupName').value.trim(); if(!name) return alert('Атауын енгізіңіз');
+  const row={name,course_id:document.getElementById('groupCourse').value||null,level:document.getElementById('groupLevel').value,teacher_id:document.getElementById('groupTeacher').value||null,room:document.getElementById('groupRoom').value,fee:document.getElementById('groupFee').value||null,max_students:document.getElementById('groupMax').value||null};
+  const id=document.getElementById('groupId').value;
+  if(id) await sb.from('groups').update(row).eq('id',id); else await sb.from('groups').insert(row);
+  closeModal('groupModal'); await loadAll(); renderGroups(); toast('✅ Сақталды!');
+}
+async function deleteGroup(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('groups').delete().eq('id',id); await loadAll(); renderGroups(); }
+function renderGroups(){
+  document.getElementById('groupsList').innerHTML=DATA.groups.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Группа</th><th>Курс</th><th>Деңгей</th><th>Мұғалім</th><th>Оқушы</th><th>Бөлме</th><th>Ай. төлем</th><th>Әрекет</th></tr></thead><tbody>${
+    DATA.groups.map((g,i)=>{
+      const c=DATA.courses.find(c=>c.id===g.course_id);
+      const t=DATA.teachers.find(t=>t.id===g.teacher_id);
+      const sc=DATA.students.filter(s=>s.group_id===g.id).length;
+      return`<tr><td>${i+1}</td><td class="font-bold">${g.name}</td><td>${c?c.name:'—'}</td><td><span class="badge badge-purple">${g.level||'—'}</span></td><td>${t?t.name+' '+(t.surname||''):'—'}</td><td><span class="badge badge-blue">${sc}/${g.max_students||'∞'}</span></td><td>${g.room||'—'}</td><td>${g.fee?fmt(g.fee)+'₸':'—'}</td>
+      <td><div style="display:flex;gap:5px"><button class="btn btn-ghost btn-sm" onclick='openGroupModal(${JSON.stringify(g).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-red btn-sm" onclick="deleteGroup('${g.id}')">🗑️</button></div></td></tr>`;
+    }).join('')
+  }</tbody></table></div>`:'<div class="empty-state card"><div class="empty-icon">👥</div><p>Группалар жоқ</p></div>';
+}
+
+// ================================================================
+// TEACHERS
+// ================================================================
+function openTeacherModal(t=null){
+  document.getElementById('teacherId').value=t?.id||'';
+  document.getElementById('teacherName').value=t?.name||'';
+  document.getElementById('teacherSurname').value=t?.surname||'';
+  document.getElementById('teacherPhone').value=t?.phone||'';
+  document.getElementById('teacherSubject').value=t?.subject||'';
+  document.getElementById('teacherRate').value=t?.hourly_rate||t?.rate||'';
+  document.getElementById('teacherEmail').value=t?.email||'';
+  document.getElementById('teacherPass').value=t?.pass||'';
+  document.getElementById('teacherNote').value=t?.note||'';
+  openModal('teacherModal');
+}
+async function saveTeacher(){
+  const name=document.getElementById('teacherName').value.trim(); if(!name) return alert('Атын енгізіңіз');
+  const row={name,surname:document.getElementById('teacherSurname').value,phone:document.getElementById('teacherPhone').value,subject:document.getElementById('teacherSubject').value,hourly_rate:document.getElementById('teacherRate').value||null,email:document.getElementById('teacherEmail').value,pass:document.getElementById('teacherPass').value,note:document.getElementById('teacherNote').value};
+  const id=document.getElementById('teacherId').value;
+  if(id) await sb.from('teachers').update(row).eq('id',id); else await sb.from('teachers').insert({...row,balance:0});
+  closeModal('teacherModal'); await loadAll(); renderTeachers(); toast('✅ Сақталды!');
+}
+async function deleteTeacher(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('teachers').delete().eq('id',id); await loadAll(); renderTeachers(); }
+function renderTeachers(){
+  document.getElementById('teachersList').innerHTML=DATA.teachers.length?DATA.teachers.map(t=>{
+    const gs=DATA.groups.filter(g=>g.teacher_id===t.id);
+    const bal=Number(t.balance||0);
+    const rate=Number(t.hourly_rate||t.rate||0);
+    return`<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;gap:14px">
+          <div style="width:48px;height:48px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0">${t.name[0]}</div>
+          <div>
+            <div style="font-size:17px;font-weight:700">${t.name} ${t.surname||''}</div>
+            <div class="text-muted text-sm">${t.subject||'—'} | ${fmt(rate)}₸/сағ | ${t.phone||'—'}</div>
+            ${t.email?`<div class="text-sm" style="margin-top:4px">🔑 Логин: <b>${t.email}</b> | Пароль: <b>${t.pass||'—'}</b></div>`:''}
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${gs.map(g=>`<span class="badge badge-purple">${g.name}</span>`).join('')||'<span class="text-muted text-sm">Группа жоқ</span>'}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="wallet-label">Виртуалды әмиян</div>
+          <div style="font-size:26px;font-weight:800;color:${bal>0?'var(--green)':'var(--text2)'}">${fmt(bal)}₸</div>
+          <div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+            <button class="btn btn-blue btn-sm" onclick="openSalaryModal('${t.id}')">📋 Сабақтар</button>
+            ${bal>0?`<button class="btn btn-green btn-sm" onclick="openSalaryModal('${t.id}')">💸 Жалақы беру</button>`:''}
+            <button class="btn btn-ghost btn-sm" onclick='openTeacherModal(${JSON.stringify(t).replace(/'/g,"&#39;")})'>✏️</button>
+            <button class="btn btn-red btn-sm" onclick="deleteTeacher('${t.id}')">🗑️</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty-state card"><div class="empty-icon">👨‍🏫</div><p>Мұғалімдер жоқ</p></div>';
+}
+
+// SALARY MODAL
+function openSalaryModal(tId){
+  salaryTeacherId=tId;
+  const t=DATA.teachers.find(t=>t.id===tId); if(!t) return;
+  const gs=DATA.groups.filter(g=>g.teacher_id===tId);
+  const now=new Date(); const m=now.getMonth()+1; const y=now.getFullYear();
+  const rate=Number(t.hourly_rate||t.rate||0);
+  let html=`<div style="font-weight:600;margin-bottom:16px">${t.name} ${t.surname||''} — ${fmt(rate)}₸/сағ</div>`;
+  html+=`<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">${MONTHS[m]} ${y} — САБАҚТАР</div>`;
+  gs.forEach(g=>{
+    const ls=DATA.lessons.filter(l=>l.group_id===g.id);
+    if(!ls.length) return;
+    html+=`<div style="margin-bottom:14px"><div class="font-bold text-sm" style="margin-bottom:8px;color:var(--accent2)">${g.name}</div><div class="sal-cal">`;
+    ls.forEach(l=>{
+      const d=dur(l.start_time,l.end_time);
+      const earned=Math.round(d*rate);
+      const dates=getDatesInMonth(y,m,Number(l.day));
+      dates.forEach(ds=>{
+        const rec=DATA.salary_logs.find(sl=>sl.lesson_id===l.id&&sl.date===ds&&sl.teacher_id===tId&&sl.note!=='payout');
+        const taught=!!rec;
+        html+=`<div class="sal-day">
+          <div class="sal-day-info"><b>${ds}</b> — ${DAYS[Number(l.day)]} ${l.start_time}–${l.end_time}</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="sal-day-amount" style="${taught?'':'color:var(--text3)'}">${taught?'+'+fmt(earned)+'₸':'—'}</div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+              <input type="checkbox" data-lid="${l.id}" data-date="${ds}" data-earned="${earned}" data-tid="${tId}" ${taught?'checked':''} onchange="toggleSalaryDay(this)" />
+              Өтті
+            </label>
+          </div>
+        </div>`;
+      });
+    });
+    html+='</div></div>';
+  });
+  if(!gs.length) html+='<div class="text-muted">Группалар жоқ</div>';
+  document.getElementById('salaryContent').innerHTML=html;
+  const bal=Number(t.balance||0);
+  const pb=document.getElementById('payoutBtn');
+  pb.style.display=bal>0?'flex':'none';
+  pb.textContent=`💸 Жалақыны беру (${fmt(bal)}₸)`;
+  openModal('salaryModal');
+}
+
+function getDatesInMonth(year,month,dayOfWeek){
+  const dates=[]; const d=new Date(year,month-1,1);
+  // Check holidays
+  const holidays=DATA.holidays||[];
+  while(d.getMonth()===month-1){
+    if(d.getDay()===dayOfWeek){
+      const ds=d.toISOString().slice(0,10);
+      // Check if holiday
+      const isHoliday=holidays.some(h=>ds>=h.start_date&&ds<=h.end_date);
+      dates.push(ds+(isHoliday?' 🎉':''));
+    }
+    d.setDate(d.getDate()+1);
+  }
+  return dates;
+}
+
+async function toggleSalaryDay(cb){
+  const lid=cb.dataset.lid; const date=cb.dataset.date.replace(' 🎉','');
+  const earned=Number(cb.dataset.earned); const tid=cb.dataset.tid;
+  const t=DATA.teachers.find(t=>t.id===tid); if(!t) return;
+  if(cb.checked){
+    await sb.from('salary_logs').insert({lesson_id:lid,teacher_id:tid,date,amount:earned});
+    const nb=Number(t.balance||0)+earned;
+    await sb.from('teachers').update({balance:nb}).eq('id',tid);
+    t.balance=nb;
+    toast(`+${fmt(earned)}₸ балансқа қосылды`,'success');
+  } else {
+    await sb.from('salary_logs').delete().eq('lesson_id',lid).eq('teacher_id',tid).eq('date',date);
+    const nb=Math.max(0,Number(t.balance||0)-earned);
+    await sb.from('teachers').update({balance:nb}).eq('id',tid);
+    t.balance=nb;
+  }
+  try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
+  const pb=document.getElementById('payoutBtn'); const bal=Number(t.balance||0);
+  pb.style.display=bal>0?'flex':'none';
+  pb.textContent=`💸 Жалақыны беру (${fmt(bal)}₸)`;
+}
+
+async function confirmPayout(){
+  const t=DATA.teachers.find(t=>t.id===salaryTeacherId); if(!t) return;
+  const bal=Number(t.balance||0);
+  if(!bal){toast('Баланс 0₸','error');return;}
+  if(!confirm(`${t.name} ${t.surname||''} — ${fmt(bal)}₸ берілді деп белгілеу?`))return;
+  const now=new Date();
+  await sb.from('salary_logs').insert({teacher_id:t.id,lesson_id:null,date:now.toISOString().slice(0,10),amount:-bal,note:'payout'});
+  await sb.from('teachers').update({balance:0}).eq('id',t.id);
+  closeModal('salaryModal');
+  await loadAll(); renderTeachers();
+  toast(`💸 ${fmt(bal)}₸ берілді! Баланс 0₸ болды.`,'success');
+}
+
+// ================================================================
+// STUDENTS
+// ================================================================
+function populateStudentGroupFilter(){
+  const sel=document.getElementById('studentGroupFilter'); if(!sel) return;
+  const v=sel.value;
+  sel.innerHTML='<option value="">👥 Барлық топ</option>'+DATA.groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  if(v) sel.value=v;
+}
+
+function openStudentModal(s=null){
+  document.getElementById('studentId').value=s?.id||'';
+  document.getElementById('studentName').value=s?.name||'';
+  document.getElementById('studentSurname').value=s?.surname||'';
+  document.getElementById('studentPhone').value=s?.phone||'';
+  document.getElementById('studentBirth').value=s?.birth_date||'';
+  document.getElementById('parentName').value=s?.parent_name||'';
+  document.getElementById('parentPhone').value=s?.parent_phone||'';
+  document.getElementById('studentNote').value=s?.note||'';
+  document.getElementById('studentNextPayDate').value=s?.next_pay_date||'';
+  sel('studentGroup',DATA.groups.map(g=>({id:g.id,name:g.name})),s?.group_id||'');
+  openModal('studentModal');
+}
+async function saveStudent(){
+  const name=document.getElementById('studentName').value.trim(); if(!name)return alert('Атын енгізіңіз');
+  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:document.getElementById('studentGroup').value||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:document.getElementById('studentNextPayDate').value||null};
+  const id=document.getElementById('studentId').value;
+  if(id) await sb.from('students').update(row).eq('id',id); else await sb.from('students').insert(row);
+  closeModal('studentModal'); await loadAll(); renderStudents(); toast('✅ Сақталды!');
+}
+async function deleteStudent(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('students').delete().eq('id',id); await loadAll(); renderStudents(); }
+
+function filterStudents(val){ studentFilter=val; renderStudents(); }
+
+function renderStudents(){
+  const gFilter=document.getElementById('studentGroupFilter')?.value||'';
+  const statusFilter=document.getElementById('studentStatusFilter')?.value||'';
+  const role=currentUser?.role;
+
+  let list=DATA.students.filter(s=>{
+    const q=studentFilter.toLowerCase();
+    const match=!q||(s.name+' '+(s.surname||'')).toLowerCase().includes(q);
+    if(!match)return false;
+    if(gFilter&&s.group_id!==gFilter)return false;
+    if(statusFilter&&getPayStatus(s)!==statusFilter)return false;
+    // Teacher: only show own group students
+    if(role==='teacher'&&currentUser.teacherId){
+      const g=DATA.groups.find(g=>g.id===s.group_id);
+      if(!g||g.teacher_id!==currentUser.teacherId)return false;
+    }
+    return true;
+  });
+
+  // Мұғалімге де қаржылық ақпарат жасырын
+  const showFinance = role==='director';
+
+  document.getElementById('studentsTable').innerHTML=list.map((s,i)=>{
+    const g=DATA.groups.find(g=>g.id===s.group_id);
+    const t=DATA.teachers.find(t=>g&&t.id===g.teacher_id);
+    const prog=calcProgress(s.id);
+    return`<tr>
+      <td>${i+1}</td>
+      <td><span class="font-bold" style="cursor:pointer;color:var(--accent)" onclick="showStudentDetail('${s.id}')">${s.name} ${s.surname||''}</span></td>
+      <td>${g?g.name:'—'}</td>
+      <td>${t?t.name+' '+(t.surname||''):'—'}</td>
+      ${showFinance?`<td style="white-space:nowrap">${s.next_pay_date||'—'}</td>`:''}
+      <td>
+        <div class="progress-bar" style="width:70px;display:inline-block;margin-right:6px"><div class="progress-fill" style="width:${prog}%;background:${prog>=80?'var(--green)':prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
+        <span class="text-sm">${prog}%</span>
+      </td>
+      ${showFinance?`<td>${payStatusBadge(s)}</td>`:''}
+      <td><div class="text-sm">${s.parent_name||'—'}</div><div class="text-sm text-muted">${s.parent_phone||''}</div></td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${showFinance?`<button class="btn btn-green btn-sm" onclick="openQuickPay('${s.id}')">💳</button>`:''}
+        <button class="btn btn-ghost btn-sm" onclick='openStudentModal(${JSON.stringify(s).replace(/'/g,"&#39;")})'>✏️</button>
+        <button class="btn btn-red btn-sm dir-only" onclick="deleteStudent('${s.id}')">🗑️</button>
+      </div></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div></td></tr>';
+}
+
+function showStudentDetail(id){
+  const s=DATA.students.find(s=>s.id===id); if(!s)return;
+  const g=DATA.groups.find(g=>g.id===s.group_id);
+  const t=DATA.teachers.find(t=>g&&t.id===g.teacher_id);
+  const c=DATA.courses.find(c=>g&&c.id===g.course_id);
+  const grades=DATA.grades.filter(gr=>gr.student_id===s.id);
+  const achs=DATA.achievements.filter(a=>a.student_id===s.id);
+  const pmts=[...DATA.payments].filter(p=>p.student_id===s.id).reverse().slice(0,5);
+  const prog=calcProgress(s.id);
+  const role=currentUser?.role;
+  document.getElementById('sdTitle').textContent=s.name+' '+(s.surname||'');
+  document.getElementById('sdContent').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Группа</div><div class="font-bold">${g?g.name:'—'}</div></div>
+      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Мұғалім</div><div class="font-bold">${t?t.name+' '+(t.surname||''):'—'}</div></div>
+      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Курс</div><div class="font-bold">${c?c.name:'—'}</div></div>
+      ${role!=='admin'?`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келесі төлем</div><div class="font-bold">${s.next_pay_date||'—'}</div>${payStatusBadge(s)}</div>`:'<div></div>'}
+    </div>
+    <div style="margin-bottom:12px">
+      <div class="text-muted text-sm" style="margin-bottom:4px">📊 Үлгерім</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${prog}%;background:${prog>=80?'var(--green)':prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
+      <div class="text-sm" style="margin-top:4px">${prog}%</div>
+    </div>
+    ${s.parent_name?`<div class="text-sm" style="margin-bottom:10px">📞 <b>${s.parent_name}</b> — ${s.parent_phone||''}</div>`:''}
+    <div style="margin-bottom:12px"><b>📝 Соңғы бағалар:</b>
+      <div style="margin-top:8px">${grades.slice(-5).map(gr=>`
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span class="text-sm">${gr.grade_date||'—'}</span>
+          <span class="text-sm">ҮТ:${gr.homework_score??'—'} Б:${gr.activity_score??'—'} Е:${gr.exam_score??gr.value??'—'}</span>
+          <span class="text-sm text-muted">${gr.note||''}</span>
+        </div>`).join('')||'<span class="text-muted text-sm">Жоқ</span>'}
+      </div>
+    </div>
+    <div style="margin-bottom:12px"><b>🏆 Марапаттар:</b> ${achs.map(a=>`<span class="badge badge-yellow" style="margin:0 3px">${a.icon||'🏆'} ${a.name}</span>`).join('')||'<span class="text-muted text-sm">Жоқ</span>'}</div>
+    ${role!=='admin'?`<div><b>💳 Төлем тарихы:</b><div style="margin-top:8px">${pmts.map(p=>`<div class="text-sm" style="padding:5px 0;border-bottom:1px solid var(--border)">${MONTHS[p.month]} ${p.year} — <b>${fmt(p.amount)}₸</b> (${p.pay_date||''})</div>`).join('')||'<span class="text-muted text-sm">Жоқ</span>'}</div></div>`:''}`;
+  openModal('studentDetailModal');
+}
+
+// ================================================================
+// SCHEDULE
+// ================================================================
+function openLessonModal(){
+  document.getElementById('lessonId').value='';
+  sel('lessonGroup',DATA.groups.map(g=>({id:g.id,name:g.name})));
+  document.getElementById('lessonStart').value='';
+  document.getElementById('lessonEnd').value='';
+  document.getElementById('lessonRoom').value='';
+  openModal('lessonModal');
+}
+async function saveLesson(){
+  const gId=document.getElementById('lessonGroup').value; if(!gId)return alert('Группа таңдаңыз');
+  const g=DATA.groups.find(g=>g.id===gId);
+  await sb.from('lessons').insert({group_id:gId,teacher_id:g?.teacher_id||null,day:Number(document.getElementById('lessonDay').value),start_time:document.getElementById('lessonStart').value,end_time:document.getElementById('lessonEnd').value,room:document.getElementById('lessonRoom').value});
+  closeModal('lessonModal'); await loadAll(); renderSchedule(); toast('✅ Сақталды!');
+}
+async function deleteLesson(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('lessons').delete().eq('id',id); await loadAll(); renderSchedule(); }
+
+function openLessonDetail(lessonId){
+  const l=DATA.lessons.find(l=>l.id===lessonId); if(!l)return;
+  const g=DATA.groups.find(g=>g.id===l.group_id);
+  const students=DATA.students.filter(s=>s.group_id===l.group_id);
+  const today=new Date().toISOString().slice(0,10);
+  currentLessonDetail={lessonId, date:today, groupId:l.group_id};
+
+  document.getElementById('ldTitle').textContent=`📋 ${g?g.name:'—'} — ${DAYS[Number(l.day)]} ${l.start_time}–${l.end_time}`;
+
+  let html=`<div class="form-group"><label>Күн таңдаңыз</label><input type="date" id="ldDate" value="${today}" onchange="refreshLessonDetail('${lessonId}')" /></div>`;
+  html+=`<div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px;margin-top:4px">Қатысу & Бағалар</div>`;
+
+  if(!students.length){html+='<div class="text-muted">Оқушылар жоқ</div>';}
+  else{
+    students.forEach(s=>{
+      const attRec=DATA.attendance.find(a=>a.student_id===s.id&&a.group_id===l.group_id&&a.attend_date===today);
+      const grRec=DATA.grades.find(gr=>gr.student_id===s.id&&gr.grade_date===today);
+      const att=attRec?.status||'';
+      html+=`<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="font-bold">${s.name} ${s.surname||''}</div>
+          <div style="display:flex;gap:6px">
+            <button class="att-btn ${att==='present'?'present':''}" onclick="ldMarkAttend('${s.id}','present',this)" title="Келді">✓</button>
+            <button class="att-btn ${att==='absent'?'absent':''}" onclick="ldMarkAttend('${s.id}','absent',this)" title="Келмеді">✗</button>
+            <button class="att-btn ${att==='excused'?'excused':''}" onclick="ldMarkAttend('${s.id}','excused',this)" title="Себепті">⚠</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:8px;align-items:center">
+          <div><div class="text-sm text-muted" style="margin-bottom:4px">ҮТ (0-5)</div><input type="number" class="grade-score-input" data-sid="${s.id}" data-f="hw" min="0" max="5" value="${grRec?.homework_score??''}" /></div>
+          <div><div class="text-sm text-muted" style="margin-bottom:4px">Белс. (0-5)</div><input type="number" class="grade-score-input" data-sid="${s.id}" data-f="act" min="0" max="5" value="${grRec?.activity_score??''}" /></div>
+          <div><div class="text-sm text-muted" style="margin-bottom:4px">Емтихан</div><input type="number" class="grade-score-input" data-sid="${s.id}" data-f="exam" min="0" max="100" value="${grRec?.exam_score??''}" style="width:60px" /></div>
+          <div><div class="text-sm text-muted" style="margin-bottom:4px">Заметка</div><input type="text" class="grade-score-input" data-sid="${s.id}" data-f="note" value="${grRec?.note||''}" style="width:100%" placeholder="Ескертпе" /></div>
+        </div>
+      </div>`;
+    });
+  }
+  document.getElementById('ldContent').innerHTML=html;
+  openModal('lessonDetailModal');
+}
+
+// Attendance buttons in lesson detail
+const ldAttendState={};
+function ldMarkAttend(sid, status, btn){
+  ldAttendState[sid]=status;
+  const row=btn.closest('div[style]');
+  row.querySelectorAll('.att-btn').forEach(b=>b.classList.remove('present','absent','excused'));
+  btn.classList.add(status);
+}
+
+async function saveLessonDetail(){
+  const date=document.getElementById('ldDate')?.value||new Date().toISOString().slice(0,10);
+  if(!currentLessonDetail)return;
+  const {lessonId,groupId}=currentLessonDetail;
+  const students=DATA.students.filter(s=>s.group_id===groupId);
+
+  for(const s of students){
+    // Save attendance
+    const status=ldAttendState[s.id];
+    if(status){
+      const existing=DATA.attendance.find(a=>a.student_id===s.id&&a.group_id===groupId&&a.attend_date===date);
+      if(existing) await sb.from('attendance').update({status}).eq('id',existing.id);
+      else await sb.from('attendance').insert({student_id:s.id,group_id:groupId,attend_date:date,status});
+    }
+    // Save grades
+    const hw=document.querySelector(`input.grade-score-input[data-sid="${s.id}"][data-f="hw"]`)?.value;
+    const act=document.querySelector(`input.grade-score-input[data-sid="${s.id}"][data-f="act"]`)?.value;
+    const exam=document.querySelector(`input.grade-score-input[data-sid="${s.id}"][data-f="exam"]`)?.value;
+    const note=document.querySelector(`input.grade-score-input[data-sid="${s.id}"][data-f="note"]`)?.value||'';
+    if(hw!==''||act!==''||exam!==''){
+      const existing=DATA.grades.find(gr=>gr.student_id===s.id&&gr.grade_date===date);
+      // Calculate progress
+      const hwN=Number(hw||0); const actN=Number(act||0); const examN=Number(exam||0);
+      // Жаңа формула: ҮТ→30% Белс→20% Емт→40% (Қатысу 10% жеке есептеледі)
+      const prog=Math.min(90, Math.round((hwN/5*30)+(actN/5*20)+(examN/100*40)));
+      const grRow={student_id:s.id,grade_date:date,homework_score:hwN||null,activity_score:actN||null,exam_score:examN||null,note};
+      if(existing) await sb.from('grades').update(grRow).eq('id',existing.id);
+      else await sb.from('grades').insert(grRow);
+      // Update progress_percent in students table
+      await sb.from('students').update({progress_percent:prog}).eq('id',s.id);
+    }
+  }
+  closeModal('lessonDetailModal');
+  await loadAll();
+  toast('✅ Журнал сақталды!','success');
+}
+
+function renderSchedule(){
+  const grid=document.getElementById('scheduleGrid');
+  const times=['08','09','10','11','12','13','14','15','16','17','18','19','20'];
+  const colors=['#4f8ef7','#a78bfa','#34d399','#fbbf24','#f87171'];
+  const today=new Date().toISOString().slice(0,10);
+
+  // TABLE нұсқасы — ең сенімді
+  // 1. Header
+  let html=`<thead><tr>
+    <th class="time-col">Уақыт</th>
+    ${[1,2,3,4,5,6,0].map(d=>`<th>${DAYS[d]}</th>`).join('')}
+  </tr></thead><tbody>`;
+
+  // 2. Rows — әр сағат бір жол
+  times.forEach(h=>{
+    html+=`<tr><td class="time-cell">${h}:00</td>`;
+    [1,2,3,4,5,6,0].forEach(day=>{
+      // Сол күн + сол сағатта басталатын сабақтарды табу
+      const ls=DATA.lessons.filter(l=>{
+        if(Number(l.day)!==day) return false;
+        const lessonHour=(l.start_time||'').slice(0,2);
+        return lessonHour===h;
+      });
+      const isHoliday=DATA.holidays?.some(hd=>today>=hd.start_date&&today<=hd.end_date);
+      html+=`<td>${ls.map((l,idx)=>{
+        const g=DATA.groups.find(g=>g.id===l.group_id);
+        const col=colors[idx%5];
+        return`<div class="lesson-block"
+          style="background:${col}22;border:1.5px solid ${col}66;color:${col}"
+          onclick="openLessonDetail('${l.id}')">
+          <div style="font-weight:700;font-size:11px">${g?g.name:'—'}</div>
+          <div style="font-size:10px;opacity:.8">${l.start_time}–${l.end_time}${isHoliday?' 🎉':''}</div>
+        </div>`;
+      }).join('')}</td>`;
+    });
+    html+=`</tr>`;
+  });
+
+  html+=`</tbody>`;
+  grid.innerHTML=html;
+
+  // Сабақтар тізімі
+  const role=currentUser?.role;
+  const el=document.getElementById('lessonsList');
+  if(!el) return;
+  if(!DATA.lessons.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Сабақтар жоқ</p></div>';
+    return;
+  }
+  // Күн тәртібімен сорттау: Дс→Жк
+  const dayOrder=[1,2,3,4,5,6,0];
+  const sorted=[...DATA.lessons].sort((a,b)=>{
+    const da=dayOrder.indexOf(Number(a.day));
+    const db=dayOrder.indexOf(Number(b.day));
+    if(da!==db) return da-db;
+    return (a.start_time||'').localeCompare(b.start_time||'');
+  });
+  el.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>Күн</th><th>Группа</th><th>Мұғалім</th><th>Уақыт</th><th>Бөлме</th><th>Әрекет</th></tr></thead>
+    <tbody>${sorted.map(l=>{
+      const g=DATA.groups.find(g=>g.id===l.group_id);
+      const t=DATA.teachers.find(t=>t.id===l.teacher_id);
+      return`<tr>
+        <td>${DAYS[Number(l.day)]}</td>
+        <td class="font-bold">${g?g.name:'—'}</td>
+        <td>${t?t.name+' '+(t.surname||''):'—'}</td>
+        <td>${l.start_time}–${l.end_time}</td>
+        <td>${l.room||'—'}</td>
+        <td><div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="openLessonDetail('${l.id}')">📋 Журнал</button>
+          ${role==='director'||role==='admin'?`<button class="btn btn-red btn-sm" onclick="deleteLesson('${l.id}')">🗑️</button>`:''}
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+// ================================================================
+// PAYMENTS
+// ================================================================
+function openPaymentModal(){
+  sel('paymentStudent',DATA.students.map(s=>({id:s.id,name:s.name+' '+(s.surname||'')})));
+  const now=new Date();
+  document.getElementById('paymentDate').value=now.toISOString().slice(0,10);
+  document.getElementById('paymentMonth').value=now.getMonth()+1;
+  document.getElementById('paymentYear').value=now.getFullYear();
+  document.getElementById('paymentAmount').value='';
+  document.getElementById('paymentNote').value='';
+  openModal('paymentModal');
+}
+function fillPaymentAmount(){
+  const sId=document.getElementById('paymentStudent').value;
+  const s=DATA.students.find(s=>s.id===sId); if(!s)return;
+  const g=DATA.groups.find(g=>g.id===s.group_id);
+  // Сома автоматты
+  if(g?.fee) document.getElementById('paymentAmount').value=g.fee;
+  // Ай/жыл: next_pay_date негізінде
+  if(s.next_pay_date){
+    const d=parseLocalDate(s.next_pay_date);
+    document.getElementById('paymentMonth').value=d.getMonth()+1;
+    document.getElementById('paymentYear').value=d.getFullYear();
+  }
+}
+async function savePayment(){
+  const sId=document.getElementById('paymentStudent').value;
+  const amt=document.getElementById('paymentAmount').value;
+  if(!sId||!amt)return alert('Оқушы және сомасын енгізіңіз');
+  const now=new Date();
+  const payM=Number(document.getElementById('paymentMonth').value);
+  const payY=Number(document.getElementById('paymentYear').value);
+  await sb.from('payments').insert({
+    student_id:sId, amount:Number(amt), month:payM, year:payY,
+    pay_date:document.getElementById('paymentDate').value,
+    pay_type:document.getElementById('paymentType').value,
+    note:document.getElementById('paymentNote').value
+  });
+  // next_pay_date автоматты жылжыту
+  const s2=DATA.students.find(s=>s.id===sId);
+  if(s2){
+    const base=s2.next_pay_date?parseLocalDate(s2.next_pay_date):now;
+    const nd=new Date(base.getFullYear(),base.getMonth()+1,base.getDate());
+    const ndStr=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`;
+    await sb.from('students').update({next_pay_date:ndStr}).eq('id',sId);
+  }
+  closeModal('paymentModal'); await loadAll(); renderPayments(); toast('✅ Төлем сақталды!');
+}
+async function deletePayment(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('payments').delete().eq('id',id); await loadAll(); renderPayments(); }
+function filterPayments(val){ payFilter=val; renderPayments(); }
+function renderPayments(){
+  const typeL={cash:'💵 Қолма-қол',card:'💳 Карта',transfer:'📲 Аударым'};
+  let sorted=[...DATA.payments].sort((a,b)=>(b.pay_date||'').localeCompare(a.pay_date||''));
+  if(payFilter)sorted=sorted.filter(p=>{const s=DATA.students.find(s=>s.id===p.student_id);return(s?s.name+' '+(s.surname||''):'').toLowerCase().includes(payFilter.toLowerCase());});
+  document.getElementById('paymentsTable').innerHTML=sorted.map((p,i)=>{
+    const s=DATA.students.find(s=>s.id===p.student_id);
+    const g=DATA.groups.find(g=>s&&g.id===s.group_id);
+    // Келесі мерзімді есептеу
+    const payD=p.pay_date?parseLocalDate(p.pay_date):null;
+    const nextD=payD?new Date(payD.getFullYear(),payD.getMonth()+1,payD.getDate()):null;
+    const nextStr=nextD?`${nextD.getFullYear()}-${String(nextD.getMonth()+1).padStart(2,'0')}-${String(nextD.getDate()).padStart(2,'0')}`:'—';
+    return`<tr>
+      <td>${i+1}</td>
+      <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
+      <td class="font-bold" style="color:var(--green)">${fmt(p.amount)}₸</td>
+      <td><span class="badge badge-blue">${MONTHS[p.month]||p.month} ${p.year}</span></td>
+      <td>${p.pay_date||'—'}</td>
+      <td class="text-muted text-sm">${nextStr}</td>
+      <td>${typeL[p.pay_type]||'—'}</td>
+      <td class="text-muted text-sm">${p.note||''}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}')">🗑️</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">💳</div><p>Төлемдер жоқ</p></div></td></tr>';
+}
+
+// ================================================================
+// EXPENSES
+// ================================================================
+function openExpenseModal(){
+  document.getElementById('expenseAmount').value='';
+  document.getElementById('expenseNote').value='';
+  document.getElementById('expenseDate').value=new Date().toISOString().slice(0,10);
+  openModal('expenseModal');
+}
+async function saveExpense(){
+  const amount=document.getElementById('expenseAmount').value;
+  const note=document.getElementById('expenseNote').value.trim();
+  if(!amount)return alert('Сомасын енгізіңіз');
+  if(!note)return alert('Заметка міндетті өріс!');
+  await sb.from('expenses').insert({amount:Number(amount),category:document.getElementById('expenseCategory').value,notes:note,date:document.getElementById('expenseDate').value});
+  closeModal('expenseModal'); await loadAll(); renderFinance(); toast('✅ Шығыс сақталды!');
+}
+async function deleteExpense(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('expenses').delete().eq('id',id); await loadAll(); renderFinance(); }
+
+// ================================================================
+// FINANCE
+// ================================================================
+function renderFinance(){
+  const finVal=document.getElementById('finMonth').value;
+  const[mStr,yStr]=finVal.includes('_')?finVal.split('_'):[finVal,String(new Date().getFullYear())];
+  const m=Number(mStr); const y=Number(yStr);
+  const mPad=String(m).padStart(2,'0');
+
+  const pms=DATA.payments.filter(p=>p.month==m&&p.year==y);
+  const income=pms.reduce((s,p)=>s+Number(p.amount||0),0);
+
+  // Expenses for this month
+  const monthExp=DATA.expenses.filter(e=>e.date?.startsWith(`${y}-${mPad}`));
+  // Salary payouts
+  const salExp=DATA.salary_logs.filter(sl=>sl.note==='payout'&&sl.date?.startsWith(`${y}-${mPad}`)).reduce((s,l)=>s+Math.abs(Number(l.amount||0)),0);
+  const otherExp=monthExp.reduce((s,e)=>s+Number(e.amount||0),0);
+  const totalExpense=salExp+otherExp;
+
+  document.getElementById('finIncome').textContent=fmt(income)+'₸';
+  document.getElementById('finExpense').textContent=fmt(totalExpense)+'₸';
+  document.getElementById('finProfit').textContent=fmt(income-totalExpense)+'₸';
+
+  // Teacher salaries
+  document.getElementById('finTeachers').innerHTML=DATA.teachers.map(t=>{
+    const bal=Number(t.balance||0);
+    return`<div class="attend-row"><div><div class="attend-name">${t.name} ${t.surname||''}</div><div class="attend-info">Баланс: ${fmt(bal)}₸</div></div><span class="badge ${bal>0?'badge-yellow':'badge-green'}">${bal>0?'⏳ Берілмеген':'✅ Берілді'}</span></div>`;
+  }).join('')||'<div class="empty-state"><div class="empty-icon">👨‍🏫</div><p>Жоқ</p></div>';
+
+  // Student payments
+  const unpaid=DATA.students.filter(s=>getPayStatus(s)==='overdue');
+  document.getElementById('finStudents').innerHTML=`
+    <div class="attend-row"><div class="attend-name">Осы айда төленді</div><span class="badge badge-green">${pms.length}</span></div>
+    <div class="attend-row"><div class="attend-name">Мерзімі өткен</div><span class="badge badge-red">${unpaid.length}</span></div>
+    ${unpaid.slice(0,5).map(s=>`<div class="text-sm text-muted" style="padding:3px 0">⚠️ ${s.name} ${s.surname||''}</div>`).join('')}`;
+
+  // Expense chart
+  const catTotals={};
+  monthExp.forEach(e=>{ catTotals[e.category]=(catTotals[e.category]||0)+Number(e.amount||0); });
+  if(salExp>0) catTotals['Жалақы']=(catTotals['Жалақы']||0)+salExp;
+  const maxVal=Math.max(...Object.values(catTotals),1);
+  document.getElementById('expenseChart').innerHTML=Object.keys(catTotals).length?Object.entries(catTotals).map(([cat,amt])=>`
+    <div class="expense-bar">
+      <div class="expense-bar-label"><span>${cat}</span><span style="font-weight:700">${fmt(amt)}₸</span></div>
+      <div class="expense-bar-track"><div class="expense-bar-fill" style="width:${(amt/maxVal*100).toFixed(1)}%;background:${EXPENSE_COLORS[cat]||'var(--accent)'}"></div></div>
+    </div>`).join(''):'<div class="empty-state"><div class="empty-icon">📊</div><p>Шығыстар жоқ</p></div>';
+
+  // Expenses table
+  document.getElementById('expensesTable').innerHTML=monthExp.map(e=>`
+    <tr><td>${e.date}</td><td><span class="badge" style="background:${EXPENSE_COLORS[e.category]||'var(--surface2)'}20;color:${EXPENSE_COLORS[e.category]||'var(--text2)'}">${e.category}</span></td>
+    <td style="color:var(--red);font-weight:700">${fmt(e.amount)}₸</td><td class="text-muted text-sm">${e.notes||''}</td>
+    <td><button class="btn btn-red btn-sm" onclick="deleteExpense('${e.id}')">🗑️</button></td></tr>`).join('')||'<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🧾</div><p>Шығыстар жоқ</p></div></td></tr>';
+
+  // Salary history
+  const payouts=DATA.salary_logs.filter(sl=>sl.note==='payout').slice(0,10);
+  document.getElementById('salaryHistory').innerHTML=payouts.length?`<div class="table-wrap"><table><thead><tr><th>Күні</th><th>Мұғалім</th><th>Сома</th></tr></thead><tbody>${payouts.map(sl=>{const t=DATA.teachers.find(t=>t.id===sl.teacher_id);return`<tr><td>${sl.date}</td><td>${t?t.name+' '+(t.surname||''):'—'}</td><td style="color:var(--red);font-weight:700">-${fmt(Math.abs(sl.amount))}₸</td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">💰</div><p>Тарих жоқ</p></div>';
+}
+
+// ================================================================
+// FINANCE PAYMENTS (Кірістер журналы)
+// ================================================================
+function renderFinancePayments(){
+  const finVal=document.getElementById('finMonth')?.value||'';
+  const[mStr,yStr]=finVal.includes('_')?finVal.split('_'):[String(new Date().getMonth()+1),String(new Date().getFullYear())];
+  const m=Number(mStr); const y=Number(yStr);
+  const q=(document.getElementById('finPayFilter')?.value||'').toLowerCase();
+  const typeL={cash:'💵 Қолма-қол',card:'💳 Карта',transfer:'📲 Аударым'};
+
+  let pays=[...DATA.payments].filter(p=>Number(p.month)===m&&Number(p.year)===y);
+  if(q) pays=pays.filter(p=>{
+    const s=DATA.students.find(s=>s.id===p.student_id);
+    return (s?s.name+' '+(s.surname||''):'').toLowerCase().includes(q);
+  });
+  pays.sort((a,b)=>(b.pay_date||'').localeCompare(a.pay_date||''));
+
+  const tbody=document.getElementById('finPaymentsTable');
+  if(!tbody) return;
+  const total=pays.reduce((s,p)=>s+Number(p.amount||0),0);
+
+  tbody.innerHTML=pays.map((p,i)=>{
+    const s=DATA.students.find(s=>s.id===p.student_id);
+    const g=DATA.groups.find(g=>s&&g.id===s.group_id);
+    return`<tr>
+      <td>${i+1}</td>
+      <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
+      <td>${g?g.name:'—'}</td>
+      <td><span class="badge badge-blue">${MONTHS[p.month]||p.month} ${p.year}</span></td>
+      <td class="font-bold" style="color:var(--green)">${fmt(p.amount)}₸</td>
+      <td>${p.pay_date||'—'}</td>
+      <td>${typeL[p.pay_type]||'—'}</td>
+      <td class="text-muted text-sm">${p.note||''}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}');setTimeout(()=>{loadAll().then(renderFinance)},400)">🗑️</button></td>
+    </tr>`;
+  }).join('')||`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text2)">${MONTHS[m]||m} ${y} — төлем жоқ</td></tr>`;
+
+  if(pays.length>0){
+    tbody.innerHTML+=`<tr style="background:var(--surface2);font-weight:700">
+      <td colspan="4" style="text-align:right;padding:10px 14px;color:var(--text2)">Барлығы:</td>
+      <td style="color:var(--green);padding:10px 14px">${fmt(total)}₸</td>
+      <td colspan="4"></td>
+    </tr>`;
+  }
+}
+
+// ================================================================
+// ATTENDANCE
+// ================================================================
+function populateAttendGroups(){
+  const s=document.getElementById('attendGroup'); if(!s)return;
+  const v=s.value;
+  let groups=DATA.groups;
+  // Teacher: only own groups
+  if(currentUser?.role==='teacher'&&currentUser.teacherId){
+    groups=groups.filter(g=>g.teacher_id===currentUser.teacherId);
+  }
+  s.innerHTML='<option value="">— Таңдаңыз —</option>'+groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  if(v)s.value=v;
+}
+async function renderAttendance(){
+  const gId=document.getElementById('attendGroup').value;
+  const date=document.getElementById('attendDate').value;
+  const el=document.getElementById('attendanceList');
+  if(!gId){el.innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>Группа таңдаңыз</p></div>';return;}
+  const{data:attData}=await sb.from('attendance').select('*').eq('group_id',gId).eq('attend_date',date);
+  const students=DATA.students.filter(s=>s.group_id===gId);
+  if(!students.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div>';return;}
+  el.innerHTML=students.map(s=>{
+    const rec=attData?.find(a=>a.student_id===s.id);
+    const st=rec?.status||'';
+    return`<div class="attend-row">
+      <div><div class="attend-name">${s.name} ${s.surname||''}</div><div class="attend-info">${s.phone||''}</div></div>
+      <div style="display:flex;gap:8px">
+        <button class="att-btn ${st==='present'?'present':''}" onclick="markAttend('${s.id}','${gId}','${date}','present','${rec?.id||''}',this)" title="Келді">✓</button>
+        <button class="att-btn ${st==='absent'?'absent':''}" onclick="markAttend('${s.id}','${gId}','${date}','absent','${rec?.id||''}',this)" title="Келмеді">✗</button>
+        <button class="att-btn ${st==='excused'?'excused':''}" onclick="markAttend('${s.id}','${gId}','${date}','excused','${rec?.id||''}',this)" title="Себепті">⚠</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function markAttend(sId,gId,date,status,recId,btn){
+  if(recId) await sb.from('attendance').update({status}).eq('id',recId);
+  else await sb.from('attendance').insert({student_id:sId,group_id:gId,attend_date:date,status});
+  btn.closest('.attend-row').querySelectorAll('.att-btn').forEach(b=>b.classList.remove('present','absent','excused'));
+  btn.classList.add(status);
+}
+
+// ================================================================
+// GRADES
+// ================================================================
+function openGradeModal(){
+  document.getElementById('gradeId').value='';
+  sel('gradeStudent',DATA.students.map(s=>({id:s.id,name:s.name+' '+(s.surname||'')})));
+  document.getElementById('gradeHomework').value='';
+  document.getElementById('gradeActivity').value='';
+  document.getElementById('gradeExam').value='';
+  document.getElementById('gradeNote').value='';
+  document.getElementById('gradeDate').value=new Date().toISOString().slice(0,10);
+  openModal('gradeModal');
+}
+async function saveGrade(){
+  const sId=document.getElementById('gradeStudent').value;
+  const hw=document.getElementById('gradeHomework').value;
+  const act=document.getElementById('gradeActivity').value;
+  const exam=document.getElementById('gradeExam').value;
+  if(!sId)return alert('Оқушы таңдаңыз');
+  const hwN=Number(hw||0);const actN=Number(act||0);const examN=Number(exam||0);
+  const prog=Math.min(90, Math.round((hwN/5*30)+(actN/5*20)+(examN/100*40)));
+  const grRow={student_id:sId,homework_score:hwN||null,activity_score:actN||null,exam_score:examN||null,grade_date:document.getElementById('gradeDate').value,note:document.getElementById('gradeNote').value};
+  await sb.from('grades').insert(grRow);
+  await sb.from('students').update({progress_percent:prog}).eq('id',sId);
+  closeModal('gradeModal'); await loadAll(); renderGrades(); toast('✅ Баға қойылды!');
+}
+async function deleteGrade(id){ await sb.from('grades').delete().eq('id',id); await loadAll(); renderGrades(); }
+function renderGrades(){
+  const gf=document.getElementById('gradeGroupFilter').value;
+  sel('gradeGroupFilter',DATA.groups.map(g=>({id:g.id,name:g.name})),gf);
+  let grades=gf?DATA.grades.filter(gr=>{const s=DATA.students.find(s=>s.id===gr.student_id);return s&&s.group_id===gf;}):DATA.grades;
+  // Teacher: only own groups
+  if(currentUser?.role==='teacher'&&currentUser.teacherId){
+    grades=grades.filter(gr=>{
+      const s=DATA.students.find(s=>s.id===gr.student_id);
+      if(!s)return false;
+      const g=DATA.groups.find(g=>g.id===s.group_id);
+      return g&&g.teacher_id===currentUser.teacherId;
+    });
+  }
+  document.getElementById('gradesTable').innerHTML=grades.map(gr=>{
+    const s=DATA.students.find(s=>s.id===gr.student_id);
+    const g=DATA.groups.find(g=>s&&g.id===s.group_id);
+    const hw=gr.homework_score; const act=gr.activity_score; const exam=gr.exam_score;
+    const prog=hw!=null?Math.round((Number(hw)/5*30)+(Number(act||0)/5*30)+(Number(exam||0)/100*40)):Number(gr.value||0);
+    const bc=prog>=80?'badge-green':prog>=60?'badge-yellow':'badge-red';
+    return`<tr>
+      <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
+      <td>${g?g.name:'—'}</td>
+      <td>${gr.grade_date||'—'}</td>
+      <td><span class="badge badge-blue">${hw??'—'}/5</span></td>
+      <td><span class="badge badge-purple">${act??'—'}/5</span></td>
+      <td><span class="badge badge-orange">${exam??'—'}</span></td>
+      <td><span class="badge ${bc}">${prog}%</span></td>
+      <td class="text-muted text-sm">${gr.note||''}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteGrade('${gr.id}')">🗑️</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📝</div><p>Бағалар жоқ</p></div></td></tr>';
+}
+
+// ================================================================
+// HOLIDAYS
+// ================================================================
+function openHolidayModal(){ document.getElementById('holidayId').value=''; ['holidayName','holidayStart','holidayEnd'].forEach(f=>document.getElementById(f).value=''); openModal('holidayModal'); }
+async function saveHoliday(){ const name=document.getElementById('holidayName').value.trim(); if(!name)return alert('Атауын енгізіңіз'); await sb.from('holidays').insert({name,start_date:document.getElementById('holidayStart').value,end_date:document.getElementById('holidayEnd').value,type:document.getElementById('holidayType').value}); closeModal('holidayModal'); await loadAll(); renderHolidays(); toast('✅ Сақталды!'); }
+async function deleteHoliday(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('holidays').delete().eq('id',id); await loadAll(); renderHolidays(); }
+function renderHolidays(){
+  const typeL={holiday:'🎉 Мереке',vacation:'🏖️ Каникул',other:'📌 Басқа'};
+  document.getElementById('holidaysList').innerHTML=DATA.holidays.length?DATA.holidays.map(h=>`
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+      <div><div class="font-bold">${h.name}</div><div class="text-sm text-muted">${h.start_date} – ${h.end_date}</div></div>
+      <div style="display:flex;gap:8px;align-items:center"><span class="badge badge-yellow">${typeL[h.type]||h.type}</span><button class="btn btn-red btn-sm dir-only" onclick="deleteHoliday('${h.id}')">🗑️</button></div>
+    </div>`).join(''):'<div class="empty-state card"><div class="empty-icon">🎉</div><p>Демалыс күндері жоқ</p></div>';
+}
+
+// ================================================================
+// REPORTS
+// ================================================================
+function openAchieveModal(){ sel('achStudent',DATA.students.map(s=>({id:s.id,name:s.name+' '+(s.surname||'')})));document.getElementById('achName').value='';document.getElementById('achIcon').value='🏆';document.getElementById('achDesc').value='';openModal('achieveModal'); }
+async function saveAchievement(){ const sId=document.getElementById('achStudent').value;const name=document.getElementById('achName').value.trim();if(!sId||!name)return alert('Оқушы және атауын енгізіңіз');await sb.from('achievements').insert({student_id:sId,name,icon:document.getElementById('achIcon').value||'🏆',description:document.getElementById('achDesc').value});closeModal('achieveModal');await loadAll();renderReports();toast('🏆 Марапат берілді!'); }
+async function deleteAchievement(id){ await sb.from('achievements').delete().eq('id',id);await loadAll();renderReports(); }
+function renderReports(){
+  const studentAvg=DATA.students.map(s=>({s,prog:calcProgress(s.id)})).sort((a,b)=>b.prog-a.prog).slice(0,5);
+  document.getElementById('topStudents').innerHTML=studentAvg.length?studentAvg.map((x,i)=>`
+    <div class="attend-row"><div><div class="attend-name">${i+1}. ${x.s.name} ${x.s.surname||''}</div><div class="attend-info">${x.prog}% үлгерім</div></div>
+    <div class="progress-bar" style="width:80px"><div class="progress-fill" style="width:${x.prog}%;background:${x.prog>=80?'var(--green)':x.prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
+    </div>`).join(''):'<div class="empty-state"><div class="empty-icon">🏆</div><p>Жоқ</p></div>';
+  const now=new Date();const m=now.getMonth()+1;const y=now.getFullYear();const mR=String(m).padStart(2,'0');
+  document.getElementById('teacherActivity').innerHTML=DATA.teachers.length?DATA.teachers.map(t=>{const ls=DATA.salary_logs.filter(sl=>sl.teacher_id===t.id&&sl.note!=='payout'&&sl.date?.startsWith(`${y}-${mR}`)).length;return`<div class="attend-row"><div class="attend-name">${t.name} ${t.surname||''}</div><span class="badge badge-blue">${ls} сабақ</span></div>`;}).join(''):'<div class="empty-state"><div class="empty-icon">👨‍🏫</div><p>Жоқ</p></div>';
+  document.getElementById('achievementList').innerHTML=DATA.achievements.length?DATA.achievements.map(a=>{const s=DATA.students.find(s=>s.id===a.student_id);return`<div style="display:flex;align-items:center;gap:14px;padding:14px;background:var(--surface2);border-radius:12px;margin-bottom:8px"><div style="font-size:28px">${a.icon||'🏆'}</div><div style="flex:1"><div class="font-bold text-sm">${a.name}</div><div class="text-sm text-muted">${s?s.name+' '+(s.surname||''):'—'}</div></div><button class="btn btn-red btn-sm" onclick="deleteAchievement('${a.id}')">🗑️</button></div>`;}).join(''):'<div class="empty-state"><div class="empty-icon">🎯</div><p>Марапаттар жоқ</p></div>';
+}
+
+// ================================================================
+// EXPORT / IMPORT
+// ================================================================
+function exportData(){ const blob=new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='academy_'+new Date().toISOString().slice(0,10)+'.json';a.click(); }
+function importData(input){ const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const d=JSON.parse(e.target.result);if(confirm('Импорт жасалсын ба?')){DATA=d;renderDashboard();alert('✅ Импорт сәтті!');}}catch(e){alert('JSON қате');}};reader.readAsText(file);input.value=''; }
+
+// ================================================================
+// MODAL OVERLAY CLOSE
+// ================================================================
+document.querySelectorAll('.modal-overlay').forEach(o=>{
+  o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
+});
+
+// ================================================================
+// TEACHER DASHBOARD
+// ================================================================
+function renderTeacherDashboard(){
+  const tid=currentUser.teacherId;
+  const myGroups=DATA.groups.filter(g=>g.teacher_id===tid);
+  const myStudents=DATA.students.filter(s=>myGroups.some(g=>g.id===s.group_id));
+  const myLessons=DATA.lessons.filter(l=>l.teacher_id===tid);
+  const now=new Date();
+  const today=now.getDay();
+  const todayLessons=myLessons.filter(l=>Number(l.day)===today);
+
+  // Stats
+  document.getElementById('statStudents').textContent=myStudents.length;
+  document.getElementById('statTeachers').textContent=myGroups.length;
+  document.getElementById('statGroups').textContent=myLessons.length;
+
+  // Бүгінгі сабақтар
+  const tEl=document.getElementById('dashToday');
+  if(tEl) tEl.innerHTML=todayLessons.length?todayLessons.map(l=>{
+    const g=DATA.groups.find(g=>g.id===l.group_id);
+    return`<div class="attend-row">
+      <div><div class="attend-name">${g?g.name:'—'}</div><div class="attend-info">${l.start_time}–${l.end_time} | ${l.room||'—'}</div></div>
+      <button class="btn btn-blue btn-sm" onclick="openLessonDetail('${l.id}')">📋 Журнал</button>
+    </div>`;
+  }).join(''):'<div class="empty-state"><div class="empty-icon">📅</div><p>Бүгін сабақ жоқ</p></div>';
+
+  // Менің топтарым + оқушылар саны
+  const aEl=document.getElementById('dashAlerts');
+  if(aEl){
+    if(!myGroups.length){
+      aEl.innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>Сізге топ тағайындалмаған</p></div>';
+    } else {
+      aEl.innerHTML=myGroups.map(g=>{
+        const sc=DATA.students.filter(s=>s.group_id===g.id).length;
+        const c=DATA.courses.find(c=>c.id===g.course_id);
+        return`<div class="attend-row">
+          <div>
+            <div class="attend-name">${g.name}</div>
+            <div class="attend-info">${c?c.name:'—'} | ${g.room||'—'}</div>
+          </div>
+          <span class="badge badge-blue">${sc} оқушы</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Апталық кесте
+  const qpEl=document.getElementById('quickPayList');
+  if(qpEl){
+    if(!myLessons.length){
+      qpEl.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Сабақ кестесі жоқ</p></div>';
+    } else {
+      const dayOrder=[1,2,3,4,5,6,0];
+      const sorted=[...myLessons].sort((a,b)=>{
+        const da=dayOrder.indexOf(Number(a.day));
+        const db=dayOrder.indexOf(Number(b.day));
+        return da!==db?da-db:(a.start_time||'').localeCompare(b.start_time||'');
+      });
+      qpEl.innerHTML=sorted.map(l=>{
+        const g=DATA.groups.find(g=>g.id===l.group_id);
+        const isToday=Number(l.day)===today;
+        return`<div class="attend-row" style="${isToday?'background:rgba(79,142,247,0.06);border-radius:8px;padding:8px':''}>
+          <div>
+            <div class="attend-name" style="${isToday?'color:var(--accent)':''}">
+              ${isToday?'📍 ':''}${DAYS[Number(l.day)]} — ${l.start_time}–${l.end_time}
+            </div>
+            <div class="attend-info">${g?g.name:'—'} | ${l.room||'бөлме жоқ'}</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="openLessonDetail('${l.id}')">📋</button>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ================================================================
+// STARTUP
+// ================================================================
+initTheme();
+checkSession();
+
+/*
+=================================================================
+SUPABASE SQL — Run in SQL Editor:
+=================================================================
+
+-- 1. Existing tables (if not already created):
+create table if not exists courses(id uuid primary key default gen_random_uuid(),name text,description text,color text,levels jsonb,created_at timestamptz default now());
+create table if not exists teachers(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,subject text,hourly_rate numeric,email text,balance numeric default 0,note text,created_at timestamptz default now());
+create table if not exists groups(id uuid primary key default gen_random_uuid(),name text,course_id uuid,level text,teacher_id uuid,room text,fee numeric,max_students int,created_at timestamptz default now());
+create table if not exists students(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,birth_date date,group_id uuid,parent_name text,parent_phone text,note text,next_pay_date date,progress_percent int default 0,created_at timestamptz default now());
+create table if not exists lessons(id uuid primary key default gen_random_uuid(),group_id uuid,teacher_id uuid,day int,start_time text,end_time text,room text,created_at timestamptz default now());
+create table if not exists payments(id uuid primary key default gen_random_uuid(),student_id uuid,amount numeric,month int,year int,pay_date date,pay_type text,note text,created_at timestamptz default now());
+create table if not exists grades(id uuid primary key default gen_random_uuid(),student_id uuid,homework_score int,activity_score int,exam_score numeric,grade_date date,note text,created_at timestamptz default now());
+create table if not exists holidays(id uuid primary key default gen_random_uuid(),name text,start_date date,end_date date,type text,created_at timestamptz default now());
+create table if not exists achievements(id uuid primary key default gen_random_uuid(),student_id uuid,name text,icon text,description text,created_at timestamptz default now());
+create table if not exists attendance(id uuid primary key default gen_random_uuid(),student_id uuid,group_id uuid,attend_date date,status text,created_at timestamptz default now());
+create table if not exists salary_logs(id uuid primary key default gen_random_uuid(),teacher_id uuid,lesson_id uuid,date date,amount numeric,note text,created_at timestamptz default now());
+create table if not exists expenses(id uuid primary key default gen_random_uuid(),amount numeric,category text,notes text,date date,created_at timestamptz default now());
+
+-- 2. Alter existing tables (add missing columns):
+alter table teachers add column if not exists hourly_rate numeric;
+alter table teachers add column if not exists email text;
+alter table teachers add column if not exists balance numeric default 0;
+alter table students add column if not exists next_pay_date date;
+alter table students add column if not exists progress_percent int default 0;
+
+-- 3. RLS Policies:
+do $$ declare t text; begin
+  foreach t in array array['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance','salary_logs','expenses']
+  loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists "allow all" on %I', t);
+    execute format('create policy "allow all" on %I for all using(true) with check(true)', t);
+  end loop;
+end $$;
+=================================================================
+*/
+</script>
+</body>
+</html>
