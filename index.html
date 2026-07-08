@@ -1045,9 +1045,10 @@ function setupUI(){
   if(r === 'admin'){
     document.querySelectorAll('.admin-hidden').forEach(el => el.style.display='none');
   }
-  // teacher-only
+  // teacher-only (.teacher-only класының өзінде display:none бар, сондықтан
+  // бос '' емес, нақты 'flex' мәнін қою керек — әйтпесе класс ережесі басым болып қалады)
   document.querySelectorAll('.teacher-only').forEach(el =>
-    el.style.display = r==='teacher' ? '' : 'none'
+    el.style.display = r==='teacher' ? 'flex' : 'none'
   );
 
   // Init dates
@@ -1619,12 +1620,18 @@ async function dedupeAndRecalcSalary(tId){
   const uniqueEarnSum=[...seen.values()].reduce((s,e)=>s+Number(e.amount||0),0);
   const payoutSum=payouts.reduce((s,p)=>s+Number(p.amount||0),0); // теріс сан
   const correctBalance=Math.max(0, Math.round(uniqueEarnSum+payoutSum));
-  if(dupIds.length){
+  const curBalance=Number(t.balance||0);
+  // Балансты ӘРҚАШАН нақты жазбалар қосындысымен салыстырамыз (тек дубликат
+  // табылғанда емес) — бұрынғы қате нұсқа кейбір мұғалімдердің балансын дұрыс
+  // емес санға (мыс. 0₸) қалдырып кеткен еді; бұл тексеру соны өзі түзетеді.
+  if(dupIds.length || correctBalance!==curBalance){
     await sb.from('teachers').update({balance:correctBalance}).eq('id',tId);
     t.balance=correctBalance;
-    try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
+    if(dupIds.length){
+      try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
+    }
   }
-  return dupIds.length;
+  return dupIds.length || (correctBalance!==curBalance ? 1 : 0);
 }
 
 async function autoSyncSalaryFromJournal(tId){
