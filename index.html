@@ -2270,8 +2270,14 @@ async function saveJournalEntry(){
     mock_total: mockTotal===''?null:Number(mockTotal),
     note: document.getElementById('jeNote').value||null
   };
-  if(id) await sb.from('journal_entries').update(row).eq('id',id);
-  else await sb.from('journal_entries').insert(row);
+  const {error} = id
+    ? await sb.from('journal_entries').update(row).eq('id',id)
+    : await sb.from('journal_entries').insert(row);
+  if(error){
+    console.error('journal_entries save error:', error);
+    alert('❌ Сақталмады! Қате: '+(error.message||JSON.stringify(error)));
+    return;
+  }
   closeModal('journalEntryModal');
   await loadAll();
   renderJournal();
@@ -2280,7 +2286,12 @@ async function saveJournalEntry(){
 
 async function deleteJournalEntry(){
   if(!currentJournalEntry?.id) return;
-  await sb.from('journal_entries').delete().eq('id',currentJournalEntry.id);
+  const {error} = await sb.from('journal_entries').delete().eq('id',currentJournalEntry.id);
+  if(error){
+    console.error('journal_entries delete error:', error);
+    alert('❌ Өшірілмеді! Қате: '+(error.message||JSON.stringify(error)));
+    return;
+  }
   closeModal('journalEntryModal');
   await loadAll();
   renderJournal();
