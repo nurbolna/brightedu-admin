@@ -338,6 +338,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-section">Қаржы</div>
         <div class="nav-item dir-only" onclick="showPage('payments',this)">💳 Төлемдер<span class="nav-badge hidden" id="badgePay">0</span></div>
         <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
+        <div class="nav-item teacher-only" onclick="openMySalary()">💰 Жалақым</div>
         <div class="nav-section">Журнал</div>
         <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
         <div class="nav-item" onclick="showPage('analysis',this)">📊 Анализ</div>
@@ -728,18 +729,6 @@ details[open] summary::before{content:'▾ '}
   </div>
 </div>
 
-<!-- LESSON DETAIL (attendance + grades) -->
-<div class="modal-overlay" id="lessonDetailModal">
-  <div class="modal modal-lg">
-    <div class="modal-title" id="ldTitle">📋 Сабақ журналы</div>
-    <div id="ldContent"></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('lessonDetailModal')">Жабу</button>
-      <button class="btn btn-blue" onclick="saveLessonDetail()">💾 Сақтау</button>
-    </div>
-  </div>
-</div>
-
 <!-- PAYMENT -->
 <div class="modal-overlay" id="paymentModal">
   <div class="modal">
@@ -917,7 +906,6 @@ let DATA = {
 };
 let quickPayStudent = null;
 let salaryTeacherId = null;
-let currentLessonDetail = null; // for lesson journal modal
 let currentJournalEntry = null; // {studentId, groupId, date, id} for journal modal
 let journalStatus = null; // selected status in journal modal
 let studentFilter = '';
@@ -1515,27 +1503,43 @@ function groupPerformance(gId){
 // TEACHER PROFILE / SALARY MODAL
 let salaryActiveTab='groups';
 
+// Мұғалім өзінің профилін (сабақтар, ЗП, тарих) ашуы үшін
+function openMySalary(){
+  if(currentUser?.role==='teacher' && currentUser.teacherId){
+    openSalaryModal(currentUser.teacherId);
+  }
+}
+
 function openSalaryModal(tId){
   salaryTeacherId=tId;
   const t=DATA.teachers.find(t=>t.id===tId); if(!t) return;
   renderSalaryHeader(t);
   switchSalaryTab('groups');
   openModal('salaryModal');
-  // Журналда толтырылған, бірақ әлі "Өтті" деп белгіленбеген сабақтарды
-  // автоматты түрде табады да, жалақыға қосады.
-  autoSyncSalaryFromJournal(tId).then(changed=>{
-    if(changed && salaryTeacherId===tId){
+  // Алдымен кездейсоқ қайталанған жазбаларды тазалап, балансты түзетеміз,
+  // содан кейін журналда толтырылған бірақ әлі белгіленбеген сабақтарды қосамыз.
+  (async()=>{
+    const dupCount = await dedupeAndRecalcSalary(tId);
+    const changed = await autoSyncSalaryFromJournal(tId);
+    if((dupCount || changed) && salaryTeacherId===tId){
       const t2=DATA.teachers.find(t=>t.id===tId);
       if(t2) renderSalaryHeader(t2);
       if(salaryActiveTab==='groups') renderSalaryGroups(tId);
-      toast('📔 Журналға сай сабақтар автоматты белгіленді','success');
+      else renderSalaryHistory(tId);
+      renderTeachers();
+      if(dupCount) toast(`⚠️ ${dupCount} қайталанған жазба табылып, баланс түзетілді`,'error');
+      if(changed) toast('📔 Журналға сай сабақтар автоматты белгіленді','success');
     }
-  });
+  })();
 }
 
 function renderSalaryHeader(t){
   const rate=Number(t.hourly_rate||t.rate||0);
   const bal=Number(t.balance||0);
+  const now=new Date(); const ym=localDateStr(now).slice(0,7);
+  const monthLogs=DATA.salary_logs.filter(sl=>sl.teacher_id===t.id&&sl.note!=='payout'&&sl.date?.startsWith(ym));
+  const monthCount=monthLogs.length;
+  const monthSum=monthLogs.reduce((s,l)=>s+Number(l.amount||0),0);
   document.getElementById('salaryTeacherHeader').innerHTML=`
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
       <div style="width:48px;height:48px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0">${t.name[0]}</div>
@@ -1547,45 +1551,88 @@ function renderSalaryHeader(t){
         <div class="wallet-label">Виртуалды әмиян</div>
         <div style="font-size:22px;font-weight:800;color:${bal>0?'var(--green)':'var(--text2)'}">${fmt(bal)}₸</div>
       </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <span class="badge badge-blue">${MONTHS[now.getMonth()+1]}: ${monthCount} сабақ өтілді</span>
+      <span class="badge badge-green">${MONTHS[now.getMonth()+1]} ЗП: ${fmt(monthSum)}₸</span>
     </div>`;
   const pb=document.getElementById('payoutBtn');
-  pb.style.display=bal>0?'flex':'none';
+  const canPayout = currentUser?.role==='director'||currentUser?.role==='admin';
+  pb.style.display=(bal>0&&canPayout)?'flex':'none';
   pb.textContent=`💸 Жалақыны беру (${fmt(bal)}₸)`;
 }
 
 // Ағымдағы айда: топтың сабақ кестесіндегі әр датаға журнал толтырылған
 // (кемінде 1 оқушыға attendance белгіленген) болса, бірақ сол сабаққа әлі
 // жалақы жазылмаған болса — автоматты түрде "өтті" деп белгілеп, балансқа қосады.
-async function autoSyncSalaryFromJournal(tId){
-  const t=DATA.teachers.find(t=>t.id===tId); if(!t) return false;
-  const gs=DATA.groups.filter(g=>g.teacher_id===tId);
-  const now=new Date(); const m=now.getMonth()+1; const y=now.getFullYear();
-  const rate=Number(t.hourly_rate||t.rate||0);
-  let addedTotal=0, changed=false;
-  for(const g of gs){
-    const ls=DATA.lessons.filter(l=>l.group_id===g.id);
-    for(const l of ls){
-      const d=dur(l.start_time,l.end_time);
-      const earned=Math.round(d*rate);
-      const dates=getDatesInMonth(y,m,Number(l.day));
-      for(const dsRaw of dates){
-        const ds=dsRaw.replace(' 🎉','');
-        const already=DATA.salary_logs.find(sl=>sl.lesson_id===l.id&&sl.date===ds&&sl.teacher_id===tId&&sl.note!=='payout');
-        if(already) continue;
-        const journalFilled=DATA.journal_entries.some(je=>je.group_id===g.id&&je.lesson_date===ds&&je.attendance);
-        if(!journalFilled) continue;
-        await sb.from('salary_logs').insert({lesson_id:l.id,teacher_id:tId,date:ds,amount:earned});
-        addedTotal+=earned; changed=true;
-      }
-    }
+const salarySyncing=new Set(); // қайталанып (race condition) синхрондалудан сақтайды
+
+// Бір лекция+дата+мұғалім комбинациясына бірнеше salary_logs жазбасы кездейсоқ
+// қосылып қалса (мыс. профиль модалы қатарынан бірнеше рет ашылса), соларды
+// тауып, артығын өшіріп, балансты дұрыс сомаға қайта есептейді.
+async function dedupeAndRecalcSalary(tId){
+  const t=DATA.teachers.find(t=>t.id===tId); if(!t) return 0;
+  const all=DATA.salary_logs.filter(sl=>sl.teacher_id===tId);
+  const earnings=all.filter(sl=>sl.note!=='payout' && sl.lesson_id)
+    .sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+  const payouts=all.filter(sl=>sl.note==='payout');
+  const seen=new Map(); const dupIds=[];
+  earnings.forEach(e=>{
+    const key=e.lesson_id+'|'+e.date;
+    if(seen.has(key)) dupIds.push(e.id); else seen.set(key,e);
+  });
+  if(dupIds.length){
+    for(const id of dupIds){ await sb.from('salary_logs').delete().eq('id',id); }
   }
-  if(changed){
-    const nb=Number(t.balance||0)+addedTotal;
-    await sb.from('teachers').update({balance:nb}).eq('id',tId);
-    t.balance=nb;
+  const uniqueEarnSum=[...seen.values()].reduce((s,e)=>s+Number(e.amount||0),0);
+  const payoutSum=payouts.reduce((s,p)=>s+Number(p.amount||0),0); // теріс сан
+  const correctBalance=Math.max(0, Math.round(uniqueEarnSum+payoutSum));
+  if(dupIds.length || correctBalance!==Number(t.balance||0)){
+    await sb.from('teachers').update({balance:correctBalance}).eq('id',tId);
+    t.balance=correctBalance;
+  }
+  if(dupIds.length){
     try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
   }
-  return changed;
+  return dupIds.length;
+}
+
+async function autoSyncSalaryFromJournal(tId){
+  if(salarySyncing.has(tId)) return false; // қазір басқа синхрондау жүріп жатыр — қайталамаймыз
+  salarySyncing.add(tId);
+  try{
+    const t=DATA.teachers.find(t=>t.id===tId); if(!t) return false;
+    const gs=DATA.groups.filter(g=>g.teacher_id===tId);
+    const now=new Date(); const m=now.getMonth()+1; const y=now.getFullYear();
+    const rate=Number(t.hourly_rate||t.rate||0);
+    let addedTotal=0, changed=false;
+    for(const g of gs){
+      const ls=DATA.lessons.filter(l=>l.group_id===g.id);
+      for(const l of ls){
+        const d=dur(l.start_time,l.end_time);
+        const earned=Math.round(d*rate);
+        const dates=getDatesInMonth(y,m,Number(l.day));
+        for(const dsRaw of dates){
+          const ds=dsRaw.replace(' 🎉','');
+          const already=DATA.salary_logs.find(sl=>sl.lesson_id===l.id&&sl.date===ds&&sl.teacher_id===tId&&sl.note!=='payout');
+          if(already) continue;
+          const journalFilled=DATA.journal_entries.some(je=>je.group_id===g.id&&je.lesson_date===ds&&je.attendance);
+          if(!journalFilled) continue;
+          await sb.from('salary_logs').insert({lesson_id:l.id,teacher_id:tId,date:ds,amount:earned});
+          addedTotal+=earned; changed=true;
+        }
+      }
+    }
+    if(changed){
+      const nb=Number(t.balance||0)+addedTotal;
+      await sb.from('teachers').update({balance:nb}).eq('id',tId);
+      t.balance=nb;
+      try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
+    }
+    return changed;
+  } finally {
+    salarySyncing.delete(tId);
+  }
 }
 
 function switchSalaryTab(tab){
@@ -1641,13 +1688,14 @@ function renderSalaryGroups(tId){
       });
     });
     dayEntries.sort((a,b)=>a.ds.localeCompare(b.ds));
+    const readOnly = currentUser?.role==='teacher';
     dayEntries.forEach(e=>{
       html+=`<div class="sal-day">
           <div class="sal-day-info"><b>${e.ds}</b>${e.isHoliday?' 🎉':''} — ${DAYS[Number(e.l.day)]} ${e.l.start_time}–${e.l.end_time} ${e.journalFilled?'<span class="badge badge-blue" style="margin-left:6px;font-size:10px" title="Журнал толтырылған">📔 журнал</span>':''}</div>
           <div style="display:flex;align-items:center;gap:10px">
             <div class="sal-day-amount" style="${e.taught?'':'color:var(--text3)'}">${e.taught?'+'+fmt(e.earned)+'₸':'—'}</div>
-            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
-              <input type="checkbox" data-lid="${e.l.id}" data-date="${e.ds}" data-earned="${e.earned}" data-tid="${tId}" ${e.taught?'checked':''} onchange="toggleSalaryDay(this)" />
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;${readOnly?'':'cursor:pointer'};white-space:nowrap${readOnly?';opacity:0.75':''}">
+              <input type="checkbox" data-lid="${e.l.id}" data-date="${e.ds}" data-earned="${e.earned}" data-tid="${tId}" ${e.taught?'checked':''} ${readOnly?'disabled':''} onchange="toggleSalaryDay(this)" />
               Өтті
             </label>
           </div>
@@ -1871,67 +1919,13 @@ async function saveLesson(){
 }
 async function deleteLesson(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('lessons').delete().eq('id',id); await loadAll(); renderSchedule(); }
 
-function openLessonDetail(lessonId){
-  const l=DATA.lessons.find(l=>l.id===lessonId); if(!l)return;
-  const g=DATA.groups.find(g=>g.id===l.group_id);
-  const students=DATA.students.filter(s=>s.group_id===l.group_id);
-  const today=localDateStr(new Date());
-  currentLessonDetail={lessonId, date:today, groupId:l.group_id};
-
-  document.getElementById('ldTitle').textContent=`📋 ${g?g.name:'—'} — ${DAYS[Number(l.day)]} ${l.start_time}–${l.end_time}`;
-
-  let html=`<div class="form-group"><label>Күн таңдаңыз</label><input type="date" id="ldDate" value="${today}" onchange="refreshLessonDetail('${lessonId}')" /></div>`;
-  html+=`<div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px;margin-top:4px">Қатысу</div>`;
-  html+=`<div class="text-sm text-muted" style="margin-bottom:10px">Белсенділік, ҮЖ және мок тест бағаларын <b>📔 Журнал</b> бетінен енгізіңіз.</div>`;
-
-  if(!students.length){html+='<div class="text-muted">Оқушылар жоқ</div>';}
-  else{
-    students.forEach(s=>{
-      const attRec=DATA.attendance.find(a=>a.student_id===s.id&&a.group_id===l.group_id&&a.attend_date===today);
-      const att=attRec?.status||'';
-      html+=`<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div class="font-bold">${s.name} ${s.surname||''}</div>
-          <div style="display:flex;gap:6px">
-            <button class="att-btn ${att==='present'?'present':''}" onclick="ldMarkAttend('${s.id}','present',this)" title="Келді">✓</button>
-            <button class="att-btn ${att==='absent'?'absent':''}" onclick="ldMarkAttend('${s.id}','absent',this)" title="Келмеді">✗</button>
-            <button class="att-btn ${att==='excused'?'excused':''}" onclick="ldMarkAttend('${s.id}','excused',this)" title="Себепті">⚠</button>
-          </div>
-        </div>
-      </div>`;
-    });
-  }
-  document.getElementById('ldContent').innerHTML=html;
-  openModal('lessonDetailModal');
-}
-
-// Attendance buttons in lesson detail
-const ldAttendState={};
-function ldMarkAttend(sid, status, btn){
-  ldAttendState[sid]=status;
-  const row=btn.closest('div[style]');
-  row.querySelectorAll('.att-btn').forEach(b=>b.classList.remove('present','absent','excused'));
-  btn.classList.add(status);
-}
-
-async function saveLessonDetail(){
-  const date=document.getElementById('ldDate')?.value||localDateStr(new Date());
-  if(!currentLessonDetail)return;
-  const {lessonId,groupId}=currentLessonDetail;
-  const students=DATA.students.filter(s=>s.group_id===groupId);
-
-  for(const s of students){
-    // Save attendance
-    const status=ldAttendState[s.id];
-    if(status){
-      const existing=DATA.attendance.find(a=>a.student_id===s.id&&a.group_id===groupId&&a.attend_date===date);
-      if(existing) await sb.from('attendance').update({status}).eq('id',existing.id);
-      else await sb.from('attendance').insert({student_id:s.id,group_id:groupId,attend_date:date,status});
-    }
-  }
-  closeModal('lessonDetailModal');
-  await loadAll();
-  toast('✅ Журнал сақталды!','success');
+// Ескі "Журнал" батырмасы осы жерге бағыттайды: нақты Журнал бетіне
+// (журналда: қатысу + белсенділік + ҮЖ + мок тест бір жерде толтырылады).
+function goToJournal(groupId){
+  const journalNav=document.querySelector('.nav-item[onclick*="showPage(\'journal\'"]');
+  showPage('journal', journalNav);
+  const gEl=document.getElementById('journalGroup');
+  if(gEl && groupId){ gEl.value=groupId; renderJournal(); }
 }
 
 function renderSchedule(){
@@ -1963,7 +1957,7 @@ function renderSchedule(){
         const col=colors[idx%5];
         return`<div class="lesson-block"
           style="background:${col}22;border:1.5px solid ${col}66;color:${col}"
-          onclick="openLessonDetail('${l.id}')">
+          onclick="goToJournal('${l.group_id}')">
           <div style="font-weight:700;font-size:11px">${g?g.name:'—'}</div>
           <div style="font-size:10px;opacity:.8">${l.start_time}–${l.end_time}${isHoliday?' 🎉':''}</div>
         </div>`;
@@ -2003,7 +1997,7 @@ function renderSchedule(){
         <td>${l.start_time}–${l.end_time}</td>
         <td>${l.room||'—'}</td>
         <td><div style="display:flex;gap:6px">
-          <button class="btn btn-ghost btn-sm" onclick="openLessonDetail('${l.id}')">📋 Журнал</button>
+          <button class="btn btn-ghost btn-sm" onclick="goToJournal('${l.group_id}')">📋 Журнал</button>
           ${role==='director'||role==='admin'?`<button class="btn btn-red btn-sm" onclick="deleteLesson('${l.id}')">🗑️</button>`:''}
         </div></td>
       </tr>`;
@@ -2681,7 +2675,7 @@ function renderTeacherDashboard(){
     const g=DATA.groups.find(g=>g.id===l.group_id);
     return`<div class="attend-row">
       <div><div class="attend-name">${g?g.name:'—'}</div><div class="attend-info">${l.start_time}–${l.end_time} | ${l.room||'—'}</div></div>
-      <button class="btn btn-blue btn-sm" onclick="openLessonDetail('${l.id}')">📋 Журнал</button>
+      <button class="btn btn-blue btn-sm" onclick="goToJournal('${l.group_id}')">📋 Журнал</button>
     </div>`;
   }).join(''):'<div class="empty-state"><div class="empty-icon">📅</div><p>Бүгін сабақ жоқ</p></div>';
 
@@ -2727,7 +2721,7 @@ function renderTeacherDashboard(){
             </div>
             <div class="attend-info">${g?g.name:'—'} | ${l.room||'бөлме жоқ'}</div>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="openLessonDetail('${l.id}')">📋</button>
+          <button class="btn btn-ghost btn-sm" onclick="goToJournal('${l.group_id}')">📋</button>
         </div>`;
       }).join('');
     }
