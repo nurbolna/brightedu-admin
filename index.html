@@ -1030,7 +1030,6 @@ function setupUI(){
   const now = new Date();
   document.getElementById('dashDate').textContent =
     now.toLocaleDateString('kk-KZ',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  document.getElementById('attendDate').value = now.toISOString().slice(0,10);
   document.getElementById('paymentDate').value = now.toISOString().slice(0,10);
   document.getElementById('gradeDate').value   = now.toISOString().slice(0,10);
   document.getElementById('paymentYear').value  = now.getFullYear();
