@@ -336,7 +336,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Рейтинг</div>
         <div class="nav-item dir-admin" onclick="showPage('holidays',this)">🎉 Демалыс</div>
         <div class="nav-section">Адамдар</div>
-        <div class="nav-item" onclick="showPage('students',this)">👩‍🎓 Оқушылар</div>
+        <div class="nav-item dir-admin" onclick="showPage('students',this)">👩‍🎓 Оқушылар</div>
         <div class="nav-item dir-only" onclick="showPage('teachers',this)">👨‍🏫 Мұғалімдер</div>
         <div class="nav-section">Қаржы</div>
         <div class="nav-item dir-only" onclick="showPage('payments',this)">💳 Төлемдер<span class="nav-badge hidden" id="badgePay">0</span></div>
@@ -2036,6 +2036,13 @@ function renderSchedule(){
   const colors=['#4f8ef7','#a78bfa','#34d399','#fbbf24','#f87171'];
   const today=localDateStr(new Date());
 
+  // Мұғалім: тек өз топтарының сабақтары
+  let myLessons=DATA.lessons;
+  if(currentUser?.role==='teacher'&&currentUser.teacherId){
+    const myGroupIds=new Set(DATA.groups.filter(g=>g.teacher_id===currentUser.teacherId).map(g=>g.id));
+    myLessons=DATA.lessons.filter(l=>myGroupIds.has(l.group_id));
+  }
+
   // TABLE нұсқасы — ең сенімді
   // 1. Header
   let html=`<thead><tr>
@@ -2048,7 +2055,7 @@ function renderSchedule(){
     html+=`<tr><td class="time-cell">${h}:00</td>`;
     [1,2,3,4,5,6,0].forEach(day=>{
       // Сол күн + сол сағатта басталатын сабақтарды табу
-      const ls=DATA.lessons.filter(l=>{
+      const ls=myLessons.filter(l=>{
         if(Number(l.day)!==day) return false;
         const lessonHour=(l.start_time||'').slice(0,2);
         return lessonHour===h;
@@ -2075,13 +2082,13 @@ function renderSchedule(){
   const role=currentUser?.role;
   const el=document.getElementById('lessonsList');
   if(!el) return;
-  if(!DATA.lessons.length){
+  if(!myLessons.length){
     el.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Сабақтар жоқ</p></div>';
     return;
   }
   // Күн тәртібімен сорттау: Дс→Жк
   const dayOrder=[1,2,3,4,5,6,0];
-  const sorted=[...DATA.lessons].sort((a,b)=>{
+  const sorted=[...myLessons].sort((a,b)=>{
     const da=dayOrder.indexOf(Number(a.day));
     const db=dayOrder.indexOf(Number(b.day));
     if(da!==db) return da-db;
