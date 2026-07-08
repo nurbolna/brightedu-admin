@@ -337,8 +337,8 @@ tr:hover td{background:rgba(255,255,255,0.02);}
         <div class="nav-section">Журнал</div>
         <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
         <div class="nav-item" onclick="showPage('analysis',this)">📊 Анализ</div>
+        <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Рейтинг</div>
         <div class="nav-item dir-admin" onclick="showPage('holidays',this)">🎉 Демалыс</div>
-        <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Есептер</div>
       </nav>
       <div class="sidebar-bottom">
         <button class="theme-toggle" onclick="toggleTheme()" id="sidebarThemeBtn" style="width:100%;justify-content:center">☀️ Күндіз режимі</button>
@@ -558,10 +558,10 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
       <!-- ========== REPORTS ========== -->
       <div class="page dir-only" id="page-reports">
-        <div class="page-header"><div><div class="page-title">Есептер</div><div class="page-subtitle">Статистика және аналитика</div></div></div>
+        <div class="page-header"><div><div class="page-title">Рейтинг</div><div class="page-subtitle">Статистика және аналитика</div></div></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="card"><div class="card-title">🏆 Үздік оқушылар</div><div id="topStudents"></div></div>
-          <div class="card"><div class="card-title">👨‍🏫 Мұғалім белсенділігі</div><div id="teacherActivity"></div></div>
+          <div class="card"><div class="card-title">🏆 Үздік оқушылар (ТОП-10)</div><div id="topStudents"></div></div>
+          <div class="card"><div class="card-title">⚠️ Назар аудару керек оқушылар</div><div id="riskyStudents"></div></div>
         </div>
         <div class="card">
           <div class="card-title">🎯 Марапаттар</div>
@@ -805,26 +805,6 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   </div>
 </div>
 
-<!-- GRADE -->
-<div class="modal-overlay" id="gradeModal">
-  <div class="modal">
-    <div class="modal-title">📝 Баға қою</div>
-    <input type="hidden" id="gradeId" />
-    <div class="form-group"><label>Оқушы</label><select id="gradeStudent"><option value="">—</option></select></div>
-    <div class="form-row">
-      <div class="form-group"><label>Үй тапсырмасы (0-5)</label><input type="number" id="gradeHomework" min="0" max="5" /></div>
-      <div class="form-group"><label>Белсенділік (0-5)</label><input type="number" id="gradeActivity" min="0" max="5" /></div>
-    </div>
-    <div class="form-group"><label>Емтихан бағасы (0-100)</label><input type="number" id="gradeExam" min="0" max="100" /></div>
-    <div class="form-group"><label>Күні</label><input type="date" id="gradeDate" /></div>
-    <div class="form-group"><label>Заметка</label><textarea id="gradeNote" rows="2"></textarea></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('gradeModal')">Бас тарту</button>
-      <button class="btn btn-blue" onclick="saveGrade()">Сақтау</button>
-    </div>
-  </div>
-</div>
-
 <!-- JOURNAL ENTRY -->
 <div class="modal-overlay" id="journalEntryModal">
   <div class="modal">
@@ -922,7 +902,7 @@ let sb = null;
 let currentUser = null; // { email, role, name }
 let DATA = {
   courses:[], teachers:[], groups:[], students:[],
-  lessons:[], payments:[], grades:[], holidays:[],
+  lessons:[], payments:[], holidays:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
   journal_entries:[]
 };
@@ -1067,7 +1047,6 @@ function setupUI(){
   document.getElementById('dashDate').textContent =
     now.toLocaleDateString('kk-KZ',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   document.getElementById('paymentDate').value = now.toISOString().slice(0,10);
-  document.getElementById('gradeDate').value   = now.toISOString().slice(0,10);
   document.getElementById('paymentYear').value  = now.getFullYear();
   document.getElementById('paymentMonth').value = now.getMonth()+1;
   document.getElementById('expenseDate').value  = now.toISOString().slice(0,10);
@@ -1135,7 +1114,7 @@ function showPage(name, el){
 // ================================================================
 async function loadAll(){
   if(!sb) return;
-  const tables = ['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance','journal_entries'];
+  const tables = ['courses','teachers','groups','students','lessons','payments','holidays','achievements','attendance','journal_entries'];
   await Promise.all(tables.map(async t=>{
     const {data,error}=await sb.from(t).select('*').order('created_at',{ascending:true});
     if(!error&&data) DATA[t]=data;
@@ -1218,31 +1197,12 @@ function payStatusBadge(student){
 // ================================================================
 // PROGRESS PERCENT CALCULATION
 // ================================================================
+// Оқушылар тізімі мен жеке карточкада көрсету үшін жеңіл орама:
+// journal_entries негізіндегі жаңа формуланы (10/30/30/30) пайдаланады, деректер
+// болмаса 0 қайтарады (minLessons=1 — тіпті 1 сабақ болса да көрсетеді).
 function calcProgress(studentId){
-  const gs = DATA.grades.filter(g=>g.student_id===studentId);
-
-  // Қатысу % есептеу (attendance 10%)
-  const attRecs = DATA.attendance.filter(a=>a.student_id===studentId);
-  let attScore = 10; // default: толық қатысты деп есептейміз
-  if(attRecs.length>0){
-    const present = attRecs.filter(a=>a.status==='present'||a.status==='excused').length;
-    attScore = Math.round((present/attRecs.length)*10);
-  }
-
-  if(!gs.length) return attScore; // тек қатысу бары
-
-  let total=0, count=0;
-  gs.forEach(g=>{
-    const hw   = Number(g.homework_score??0);
-    const act  = Number(g.activity_score??0);
-    const exam = Number(g.exam_score??g.value??0);
-    // Формула: ҮТ(0-5)→30% + Белс(0-5)→20% + Емт(0-100)→40%
-    const score = (hw/5*30) + (act/5*20) + (exam/100*40);
-    total += score;
-    count++;
-  });
-  const gradeScore = Math.round(total/count); // 0-90 аралығы
-  return Math.min(100, gradeScore + attScore);
+  const r = calcProgressJournal(studentId, 1);
+  return r ? r.prog : 0;
 }
 
 // ================================================================
@@ -1690,7 +1650,7 @@ function showStudentDetail(id){
   const g=DATA.groups.find(g=>g.id===s.group_id);
   const t=DATA.teachers.find(t=>g&&t.id===g.teacher_id);
   const c=DATA.courses.find(c=>g&&c.id===g.course_id);
-  const grades=DATA.grades.filter(gr=>gr.student_id===s.id);
+  const jEntries=DATA.journal_entries.filter(je=>je.student_id===s.id).sort((a,b)=>b.lesson_date.localeCompare(a.lesson_date));
   const achs=DATA.achievements.filter(a=>a.student_id===s.id);
   const pmts=[...DATA.payments].filter(p=>p.student_id===s.id).reverse().slice(0,5);
   const prog=calcProgress(s.id);
@@ -1709,13 +1669,14 @@ function showStudentDetail(id){
       <div class="text-sm" style="margin-top:4px">${prog}%</div>
     </div>
     ${s.parent_name?`<div class="text-sm" style="margin-bottom:10px">📞 <b>${s.parent_name}</b> — ${s.parent_phone||''}</div>`:''}
-    <div style="margin-bottom:12px"><b>📝 Соңғы бағалар:</b>
-      <div style="margin-top:8px">${grades.slice(-5).map(gr=>`
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-          <span class="text-sm">${gr.grade_date||'—'}</span>
-          <span class="text-sm">ҮТ:${gr.homework_score??'—'} Б:${gr.activity_score??'—'} Е:${gr.exam_score??gr.value??'—'}</span>
-          <span class="text-sm text-muted">${gr.note||''}</span>
-        </div>`).join('')||'<span class="text-muted text-sm">Жоқ</span>'}
+    <div style="margin-bottom:12px"><b>📔 Соңғы журнал жазбалары:</b>
+      <div style="margin-top:8px">${jEntries.slice(0,5).map(e=>{
+        const attLabel={present:'✓',absent_excused:'Себепті',absent_unexcused:'Себепсіз',late:'⏰'}[e.attendance]||'—';
+        return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span class="text-sm">${e.lesson_date||'—'} (${attLabel})</span>
+          <span class="text-sm">Белс:${e.activity??'—'} ҮЖ:${e.homework??'—'} Мок:${e.mock_score!=null&&e.mock_total!=null?e.mock_score+'/'+e.mock_total:'—'}</span>
+          <span class="text-sm text-muted">${e.note||''}</span>
+        </div>`;}).join('')||'<span class="text-muted text-sm">Жоқ</span>'}
       </div>
     </div>
     <div style="margin-bottom:12px"><b>🏆 Марапаттар:</b> ${achs.map(a=>`<span class="badge badge-yellow" style="margin:0 3px">${a.icon||'🏆'} ${a.name}</span>`).join('')||'<span class="text-muted text-sm">Жоқ</span>'}</div>
@@ -1752,28 +1713,22 @@ function openLessonDetail(lessonId){
   document.getElementById('ldTitle').textContent=`📋 ${g?g.name:'—'} — ${DAYS[Number(l.day)]} ${l.start_time}–${l.end_time}`;
 
   let html=`<div class="form-group"><label>Күн таңдаңыз</label><input type="date" id="ldDate" value="${today}" onchange="refreshLessonDetail('${lessonId}')" /></div>`;
-  html+=`<div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px;margin-top:4px">Қатысу & Бағалар</div>`;
+  html+=`<div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px;margin-top:4px">Қатысу</div>`;
+  html+=`<div class="text-sm text-muted" style="margin-bottom:10px">Белсенділік, ҮЖ және мок тест бағаларын <b>📔 Журнал</b> бетінен енгізіңіз.</div>`;
 
   if(!students.length){html+='<div class="text-muted">Оқушылар жоқ</div>';}
   else{
     students.forEach(s=>{
       const attRec=DATA.attendance.find(a=>a.student_id===s.id&&a.group_id===l.group_id&&a.attend_date===today);
-      const grRec=DATA.grades.find(gr=>gr.student_id===s.id&&gr.grade_date===today);
       const att=attRec?.status||'';
       html+=`<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
           <div class="font-bold">${s.name} ${s.surname||''}</div>
           <div style="display:flex;gap:6px">
             <button class="att-btn ${att==='present'?'present':''}" onclick="ldMarkAttend('${s.id}','present',this)" title="Келді">✓</button>
             <button class="att-btn ${att==='absent'?'absent':''}" onclick="ldMarkAttend('${s.id}','absent',this)" title="Келмеді">✗</button>
             <button class="att-btn ${att==='excused'?'excused':''}" onclick="ldMarkAttend('${s.id}','excused',this)" title="Себепті">⚠</button>
           </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:8px;align-items:center">
-          <div><div class="text-sm text-muted" style="margin-bottom:4px">ҮТ (0-5)</div><input type="number" class="grade-score-input" data-sid="${s.id}" data-f="hw" min="0" max="5" value="${grRec?.homework_score??''}" /></div>
-          <div><div class="text-sm text-muted" style="margin-bottom:4px">Белс. (0-5)</div><input type="number" class="grade-score-input" data-sid="${s.id}" data-f="act" min="0" max="5" value="${grRec?.activity_score??''}" /></div>
-          <div><div class="text-sm text-muted" style="margin-bottom:4px">Емтихан</div><input type="number" class="grade-score-input" data-sid="${s.id}" data-f="exam" min="0" max="100" value="${grRec?.exam_score??''}" style="width:60px" /></div>
-          <div><div class="text-sm text-muted" style="margin-bottom:4px">Заметка</div><input type="text" class="grade-score-input" data-sid="${s.id}" data-f="note" value="${grRec?.note||''}" style="width:100%" placeholder="Ескертпе" /></div>
         </div>
       </div>`;
     });
@@ -1804,23 +1759,6 @@ async function saveLessonDetail(){
       const existing=DATA.attendance.find(a=>a.student_id===s.id&&a.group_id===groupId&&a.attend_date===date);
       if(existing) await sb.from('attendance').update({status}).eq('id',existing.id);
       else await sb.from('attendance').insert({student_id:s.id,group_id:groupId,attend_date:date,status});
-    }
-    // Save grades
-    const hw=document.querySelector(`input.grade-score-input[data-sid="${s.id}"][data-f="hw"]`)?.value;
-    const act=document.querySelector(`input.grade-score-input[data-sid="${s.id}"][data-f="act"]`)?.value;
-    const exam=document.querySelector(`input.grade-score-input[data-sid="${s.id}"][data-f="exam"]`)?.value;
-    const note=document.querySelector(`input.grade-score-input[data-sid="${s.id}"][data-f="note"]`)?.value||'';
-    if(hw!==''||act!==''||exam!==''){
-      const existing=DATA.grades.find(gr=>gr.student_id===s.id&&gr.grade_date===date);
-      // Calculate progress
-      const hwN=Number(hw||0); const actN=Number(act||0); const examN=Number(exam||0);
-      // Жаңа формула: ҮТ→30% Белс→20% Емт→40% (Қатысу 10% жеке есептеледі)
-      const prog=Math.min(90, Math.round((hwN/5*30)+(actN/5*20)+(examN/100*40)));
-      const grRow={student_id:s.id,grade_date:date,homework_score:hwN||null,activity_score:actN||null,exam_score:examN||null,note};
-      if(existing) await sb.from('grades').update(grRow).eq('id',existing.id);
-      else await sb.from('grades').insert(grRow);
-      // Update progress_percent in students table
-      await sb.from('students').update({progress_percent:prog}).eq('id',s.id);
     }
   }
   closeModal('lessonDetailModal');
@@ -2158,6 +2096,40 @@ function attendancePercent(e){
   return 0; // absent_excused or absent_unexcused
 }
 
+// Жаңа жүйе бойынша үлгерім: Қатысу 10% + Белсенділік 30% + ҮЖ 30% + Мок тест 30%
+// (journal_entries негізінде). Кез келген компонент болмаса, қалғандары арасында
+// салмақ пропорционал қайта бөлінеді. minLessons — рейтингке кіру үшін керекті
+// ең аз "қатысу" жазбасының саны (кездейсоқ 1 сабақпен 100% алып кетуден сақтайды).
+function calcProgressJournal(studentId, minLessons=3){
+  const entries = DATA.journal_entries.filter(je=>je.student_id===studentId && je.attendance);
+  if(entries.length < minLessons) return null;
+
+  const pcts = entries.map(attendancePercent).filter(p=>p!=null);
+  const attAvg = pcts.length ? pcts.reduce((a,b)=>a+b,0)/pcts.length : null; // 0-100
+
+  const acts = entries.filter(e=>e.activity!=null).map(e=>Number(e.activity));
+  const actAvg = acts.length ? acts.reduce((a,b)=>a+b,0)/acts.length : null; // 0-5
+
+  const hws = entries.filter(e=>e.homework!=null).map(e=>Number(e.homework));
+  const hwAvg = hws.length ? hws.reduce((a,b)=>a+b,0)/hws.length : null; // 0-5
+
+  const mocks = entries.filter(e=>e.mock_score!=null && e.mock_total!=null && Number(e.mock_total)>0);
+  const mockScoreSum = mocks.reduce((a,e)=>a+Number(e.mock_score),0);
+  const mockTotalSum = mocks.reduce((a,e)=>a+Number(e.mock_total),0);
+  const mockPct = mocks.length ? (mockScoreSum/mockTotalSum*100) : null; // 0-100
+
+  const parts=[];
+  if(attAvg!=null)  parts.push({v:attAvg,        w:0.10});
+  if(actAvg!=null)  parts.push({v:actAvg/5*100,  w:0.30});
+  if(hwAvg!=null)   parts.push({v:hwAvg/5*100,   w:0.30});
+  if(mockPct!=null) parts.push({v:mockPct,       w:0.30});
+  if(!parts.length) return null;
+
+  const totalW = parts.reduce((a,p)=>a+p.w,0);
+  const prog = Math.round(parts.reduce((a,p)=>a+p.v*p.w,0)/totalW);
+  return { prog, attAvg: attAvg!=null?Math.round(attAvg):null, lessons: entries.length };
+}
+
 // Course name (lowercased) for a group, used to guess the mock-test max score.
 function courseNameForGroup(gId){
   const g=DATA.groups.find(g=>g.id===gId);
@@ -2461,66 +2433,6 @@ async function markAttend(sId,gId,date,status,recId,btn){
 }
 
 // ================================================================
-// GRADES
-// ================================================================
-function openGradeModal(){
-  document.getElementById('gradeId').value='';
-  sel('gradeStudent',DATA.students.map(s=>({id:s.id,name:s.name+' '+(s.surname||'')})));
-  document.getElementById('gradeHomework').value='';
-  document.getElementById('gradeActivity').value='';
-  document.getElementById('gradeExam').value='';
-  document.getElementById('gradeNote').value='';
-  document.getElementById('gradeDate').value=new Date().toISOString().slice(0,10);
-  openModal('gradeModal');
-}
-async function saveGrade(){
-  const sId=document.getElementById('gradeStudent').value;
-  const hw=document.getElementById('gradeHomework').value;
-  const act=document.getElementById('gradeActivity').value;
-  const exam=document.getElementById('gradeExam').value;
-  if(!sId)return alert('Оқушы таңдаңыз');
-  const hwN=Number(hw||0);const actN=Number(act||0);const examN=Number(exam||0);
-  const prog=Math.min(90, Math.round((hwN/5*30)+(actN/5*20)+(examN/100*40)));
-  const grRow={student_id:sId,homework_score:hwN||null,activity_score:actN||null,exam_score:examN||null,grade_date:document.getElementById('gradeDate').value,note:document.getElementById('gradeNote').value};
-  await sb.from('grades').insert(grRow);
-  await sb.from('students').update({progress_percent:prog}).eq('id',sId);
-  closeModal('gradeModal'); await loadAll(); renderGrades(); toast('✅ Баға қойылды!');
-}
-async function deleteGrade(id){ await sb.from('grades').delete().eq('id',id); await loadAll(); renderGrades(); }
-function renderGrades(){
-  const gf=document.getElementById('gradeGroupFilter').value;
-  sel('gradeGroupFilter',DATA.groups.map(g=>({id:g.id,name:g.name})),gf);
-  let grades=gf?DATA.grades.filter(gr=>{const s=DATA.students.find(s=>s.id===gr.student_id);return s&&s.group_id===gf;}):DATA.grades;
-  // Teacher: only own groups
-  if(currentUser?.role==='teacher'&&currentUser.teacherId){
-    grades=grades.filter(gr=>{
-      const s=DATA.students.find(s=>s.id===gr.student_id);
-      if(!s)return false;
-      const g=DATA.groups.find(g=>g.id===s.group_id);
-      return g&&g.teacher_id===currentUser.teacherId;
-    });
-  }
-  document.getElementById('gradesTable').innerHTML=grades.map(gr=>{
-    const s=DATA.students.find(s=>s.id===gr.student_id);
-    const g=DATA.groups.find(g=>s&&g.id===s.group_id);
-    const hw=gr.homework_score; const act=gr.activity_score; const exam=gr.exam_score;
-    const prog=hw!=null?Math.round((Number(hw)/5*30)+(Number(act||0)/5*30)+(Number(exam||0)/100*40)):Number(gr.value||0);
-    const bc=prog>=80?'badge-green':prog>=60?'badge-yellow':'badge-red';
-    return`<tr>
-      <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
-      <td>${g?g.name:'—'}</td>
-      <td>${gr.grade_date||'—'}</td>
-      <td><span class="badge badge-blue">${hw??'—'}/5</span></td>
-      <td><span class="badge badge-purple">${act??'—'}/5</span></td>
-      <td><span class="badge badge-orange">${exam??'—'}</span></td>
-      <td><span class="badge ${bc}">${prog}%</span></td>
-      <td class="text-muted text-sm">${gr.note||''}</td>
-      <td><button class="btn btn-red btn-sm" onclick="deleteGrade('${gr.id}')">🗑️</button></td>
-    </tr>`;
-  }).join('')||'<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📝</div><p>Бағалар жоқ</p></div></td></tr>';
-}
-
-// ================================================================
 // HOLIDAYS
 // ================================================================
 function openHolidayModal(){ document.getElementById('holidayId').value=''; ['holidayName','holidayStart','holidayEnd'].forEach(f=>document.getElementById(f).value=''); openModal('holidayModal'); }
@@ -2542,13 +2454,23 @@ function openAchieveModal(){ sel('achStudent',DATA.students.map(s=>({id:s.id,nam
 async function saveAchievement(){ const sId=document.getElementById('achStudent').value;const name=document.getElementById('achName').value.trim();if(!sId||!name)return alert('Оқушы және атауын енгізіңіз');await sb.from('achievements').insert({student_id:sId,name,icon:document.getElementById('achIcon').value||'🏆',description:document.getElementById('achDesc').value});closeModal('achieveModal');await loadAll();renderReports();toast('🏆 Марапат берілді!'); }
 async function deleteAchievement(id){ await sb.from('achievements').delete().eq('id',id);await loadAll();renderReports(); }
 function renderReports(){
-  const studentAvg=DATA.students.map(s=>({s,prog:calcProgress(s.id)})).sort((a,b)=>b.prog-a.prog).slice(0,5);
+  // Барлық топтар ішінен ТОП-10 (жаңа журнал жүйесі бойынша: Қатысу10% + Белс30% + ҮЖ30% + Мок30%)
+  const allProg = DATA.students.map(s=>{const r=calcProgressJournal(s.id); return r?{s,...r}:null;}).filter(Boolean);
+  const studentAvg = [...allProg].sort((a,b)=>b.prog-a.prog).slice(0,10);
   document.getElementById('topStudents').innerHTML=studentAvg.length?studentAvg.map((x,i)=>`
-    <div class="attend-row"><div><div class="attend-name">${i+1}. ${x.s.name} ${x.s.surname||''}</div><div class="attend-info">${x.prog}% үлгерім</div></div>
+    <div class="attend-row"><div><div class="attend-name">${i+1}. ${x.s.name} ${x.s.surname||''}</div><div class="attend-info">${x.prog}% үлгерім · ${x.lessons} сабақ</div></div>
     <div class="progress-bar" style="width:80px"><div class="progress-fill" style="width:${x.prog}%;background:${x.prog>=80?'var(--green)':x.prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
-    </div>`).join(''):'<div class="empty-state"><div class="empty-icon">🏆</div><p>Жоқ</p></div>';
-  const now=new Date();const m=now.getMonth()+1;const y=now.getFullYear();const mR=String(m).padStart(2,'0');
-  document.getElementById('teacherActivity').innerHTML=DATA.teachers.length?DATA.teachers.map(t=>{const ls=DATA.salary_logs.filter(sl=>sl.teacher_id===t.id&&sl.note!=='payout'&&sl.date?.startsWith(`${y}-${mR}`)).length;return`<div class="attend-row"><div class="attend-name">${t.name} ${t.surname||''}</div><span class="badge badge-blue">${ls} сабақ</span></div>`;}).join(''):'<div class="empty-state"><div class="empty-icon">👨‍🏫</div><p>Жоқ</p></div>';
+    </div>`).join(''):'<div class="empty-state"><div class="empty-icon">🏆</div><p>Жеткілікті журнал деректері жоқ</p></div>';
+
+  // Назар аудару керек оқушылар: үлгерімі <60% немесе қатысуы <70% (кемінде 1 жазба болса да көрсетіледі)
+  const risky = DATA.students.map(s=>{const r=calcProgressJournal(s.id,1); return r?{s,...r}:null;})
+    .filter(x=>x && (x.prog<60 || (x.attAvg!=null && x.attAvg<70)))
+    .sort((a,b)=>a.prog-b.prog).slice(0,10);
+  document.getElementById('riskyStudents').innerHTML=risky.length?risky.map(x=>`
+    <div class="attend-row"><div><div class="attend-name">${x.s.name} ${x.s.surname||''}</div><div class="attend-info">${x.prog}% үлгерім · ${x.attAvg??'—'}% қатысу · ${x.lessons} сабақ</div></div>
+    <span class="badge ${x.prog<40?'badge-red':'badge-yellow'}">⚠️</span>
+    </div>`).join(''):'<div class="empty-state"><div class="empty-icon">✅</div><p>Назар аударатын оқушы жоқ</p></div>';
+
   document.getElementById('achievementList').innerHTML=DATA.achievements.length?DATA.achievements.map(a=>{const s=DATA.students.find(s=>s.id===a.student_id);return`<div style="display:flex;align-items:center;gap:14px;padding:14px;background:var(--surface2);border-radius:12px;margin-bottom:8px"><div style="font-size:28px">${a.icon||'🏆'}</div><div style="flex:1"><div class="font-bold text-sm">${a.name}</div><div class="text-sm text-muted">${s?s.name+' '+(s.surname||''):'—'}</div></div><button class="btn btn-red btn-sm" onclick="deleteAchievement('${a.id}')">🗑️</button></div>`;}).join(''):'<div class="empty-state"><div class="empty-icon">🎯</div><p>Марапаттар жоқ</p></div>';
 }
 
@@ -2659,6 +2581,9 @@ create table if not exists groups(id uuid primary key default gen_random_uuid(),
 create table if not exists students(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,birth_date date,group_id uuid,parent_name text,parent_phone text,note text,next_pay_date date,progress_percent int default 0,created_at timestamptz default now());
 create table if not exists lessons(id uuid primary key default gen_random_uuid(),group_id uuid,teacher_id uuid,day int,start_time text,end_time text,room text,created_at timestamptz default now());
 create table if not exists payments(id uuid primary key default gen_random_uuid(),student_id uuid,amount numeric,month int,year int,pay_date date,pay_type text,note text,created_at timestamptz default now());
+-- DEPRECATED: 'grades' table is no longer used by the app (fully replaced by
+-- journal_entries). Kept here only so the one-time migration below still works
+-- if you haven't migrated yet. Safe to drop after migrating.
 create table if not exists grades(id uuid primary key default gen_random_uuid(),student_id uuid,homework_score int,activity_score int,exam_score numeric,grade_date date,note text,created_at timestamptz default now());
 create table if not exists holidays(id uuid primary key default gen_random_uuid(),name text,start_date date,end_date date,type text,created_at timestamptz default now());
 create table if not exists achievements(id uuid primary key default gen_random_uuid(),student_id uuid,name text,icon text,description text,created_at timestamptz default now());
