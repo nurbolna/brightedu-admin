@@ -190,7 +190,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .journal-table td{padding:0;text-align:center;border-top:1px solid var(--border);border-left:1px solid var(--border);}
 .journal-table td.j-student-cell{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1;padding:8px 12px;font-weight:600;font-size:13px;white-space:nowrap;}
 .journal-table td.j-avg-cell{padding:8px 6px;font-weight:700;font-size:12px;}
-.j-cell{width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex-direction:column;line-height:1;cursor:pointer;transition:all .15s;font-weight:700;font-size:12px;color:var(--text2);}
+.j-cell{width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex-direction:column;line-height:1;cursor:pointer;transition:all .15s;font-weight:700;font-size:12px;color:var(--text2);position:relative;}
 .j-cell:hover{outline:2px solid var(--accent);outline-offset:-2px;}
 .j-cell.empty{color:var(--border);font-weight:400;}
 .j-cell .j-grade{font-size:10px;font-weight:600;margin-top:1px;opacity:.85;}
@@ -203,6 +203,10 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .j-status-btn.active.absent_excused{background:var(--orange);border-color:var(--orange);color:#fff;}
 .j-status-btn.active.absent_unexcused{background:var(--red);border-color:var(--red);color:#fff;}
 .j-status-btn.active.late{background:var(--yellow);border-color:var(--yellow);color:#fff;}
+.j-scale-row{display:flex;gap:6px;flex-wrap:wrap;}
+.j-scale-btn{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;}
+.j-scale-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.j-mini-dot{width:5px;height:5px;border-radius:50%;background:currentColor;position:absolute;top:3px;right:3px;}
 
 /* ===================== FINANCE ===================== */
 .finance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;}
@@ -332,6 +336,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
         <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
         <div class="nav-section">Журнал</div>
         <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
+        <div class="nav-item" onclick="showPage('analysis',this)">📊 Анализ</div>
         <div class="nav-item dir-admin" onclick="showPage('holidays',this)">🎉 Демалыс</div>
         <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Есептер</div>
       </nav>
@@ -521,6 +526,24 @@ tr:hover td{background:rgba(255,255,255,0.02);}
             </div>
           </div>
           <div id="journalGridWrap"><div class="empty-state"><div class="empty-icon">📔</div><p>Группа мен айды таңдаңыз</p></div></div>
+        </div>
+      </div>
+
+      <!-- ========== ANALYSIS ========== -->
+      <div class="page" id="page-analysis">
+        <div class="page-header"><div><div class="page-title">Анализ</div><div class="page-subtitle">Топ пен оқушы бойынша қатысу мен үлгерім статистикасы</div></div></div>
+        <div class="card">
+          <div class="journal-toolbar">
+            <div class="form-group" style="margin:0"><label>Группа</label><select id="analysisGroup" onchange="renderAnalysis()"><option value="">— Таңдаңыз —</option></select></div>
+            <div class="form-group" style="margin:0"><label>Кезең</label><select id="analysisPeriod" onchange="onAnalysisPeriodChange()"><option value="week">Апталық</option><option value="month" selected>Айлық</option></select></div>
+            <div class="form-group" style="margin:0" id="analysisWeekWrap"><label>Апта (кез келген күні)</label><input type="date" id="analysisWeekDate" onchange="renderAnalysis()" /></div>
+            <div class="form-group" style="margin:0" id="analysisMonthWrap"><label>Ай</label><input type="month" id="analysisMonth" onchange="renderAnalysis()" /></div>
+          </div>
+          <div id="analysisGroupWrap"><div class="empty-state"><div class="empty-icon">📊</div><p>Группа таңдаңыз</p></div></div>
+        </div>
+        <div class="card" id="analysisDetailCard" style="display:none">
+          <div class="page-header" style="margin-bottom:12px"><div><div class="card-title" id="analysisDetailTitle"></div></div><button class="btn btn-ghost btn-sm" onclick="closeAnalysisDetail()">✕ Жабу</button></div>
+          <div id="analysisDetailContent"></div>
         </div>
       </div>
 
@@ -815,7 +838,20 @@ tr:hover td{background:rgba(255,255,255,0.02);}
       </div>
     </div>
     <div class="form-group" id="jeLateWrap" style="display:none"><label>Неше минут кешікті?</label><input type="number" id="jeLateMinutes" min="1" placeholder="мыс. 10" /></div>
-    <div class="form-group"><label>Баға (0-100, міндетті емес)</label><input type="number" id="jeGrade" min="0" max="100" /></div>
+    <div class="form-group"><label>Белсенділік (0-5)</label>
+      <div class="j-scale-row" id="jeActivityRow"></div>
+    </div>
+    <div class="form-group"><label>Үй жұмысы (0-10)</label>
+      <div class="j-scale-row" id="jeHomeworkRow"></div>
+    </div>
+    <div class="form-group"><label>Мок тест (міндетті емес)</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="jeMockScore" step="0.5" min="0" placeholder="алған балл" style="flex:1" />
+        <span style="color:var(--text2);font-weight:700">/</span>
+        <input type="number" id="jeMockTotal" step="0.5" min="0" placeholder="барлық балл" style="flex:1" />
+      </div>
+      <div class="text-muted text-sm" id="jeMockHint" style="margin-top:4px"></div>
+    </div>
     <div class="form-group"><label>Заметка</label><textarea id="jeNote" rows="2" placeholder="Ескертпе (мыс. себебі)"></textarea></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="jeDeleteBtn" onclick="deleteJournalEntry()" style="display:none;margin-right:auto">🗑️ Өшіру</button>
@@ -1088,7 +1124,7 @@ function showPage(name, el){
   const renders={
     courses:renderCourses, groups:renderGroups, schedule:renderSchedule,
     students:renderStudents, teachers:renderTeachers, finance:renderFinance,
-    payments:renderPayments, journal:renderJournal,
+    payments:renderPayments, journal:renderJournal, analysis:renderAnalysis,
     holidays:renderHolidays, reports:renderReports
   };
   renders[name]?.();
@@ -1116,6 +1152,7 @@ async function loadAll(){
   renderDashboard();
   updateBadges();
   populateJournalGroups();
+  populateAnalysisGroups();
   populateStudentGroupFilter();
 }
 
@@ -2068,9 +2105,10 @@ function renderFinancePayments(){
 }
 
 // ================================================================
-// JOURNAL (unified attendance + grade grid)
+// JOURNAL (unified attendance + activity/homework/mock grid)
 // ================================================================
 const J_STATUS_LABEL={present:'✓',absent_excused:'С',absent_unexcused:'Қ',late:'⏰'};
+let jeActivityVal=null, jeHomeworkVal=null;
 
 function populateJournalGroups(){
   const s=document.getElementById('journalGroup'); if(!s)return;
@@ -2105,6 +2143,42 @@ function journalDatesForGroup(gId, monthStr){
   return dates;
 }
 
+// Attendance % for one journal entry: present=100, late scales down over a 60-min lesson,
+// absent (excused or not) = 0. Returns null if attendance wasn't recorded at all.
+function attendancePercent(e){
+  if(!e || !e.attendance) return null;
+  if(e.attendance==='present') return 100;
+  if(e.attendance==='late'){
+    const mins=Number(e.late_minutes||0);
+    return Math.max(0, Math.round((60-mins)/60*100));
+  }
+  return 0; // absent_excused or absent_unexcused
+}
+
+// Course name (lowercased) for a group, used to guess the mock-test max score.
+function courseNameForGroup(gId){
+  const g=DATA.groups.find(g=>g.id===gId);
+  const c=g&&DATA.courses.find(c=>c.id===g.course_id);
+  return (c?.name||'').toLowerCase();
+}
+function mockMaxForGroup(gId){
+  const name=courseNameForGroup(gId);
+  if(name.includes('ielts')) return 9;
+  if(name.includes('nuet')) return 30;
+  return null;
+}
+
+function buildScaleRow(containerId, max, selectedVal, onSelect){
+  const el=document.getElementById(containerId);
+  el.innerHTML='';
+  for(let i=0;i<=max;i++){
+    const btn=document.createElement('button');
+    btn.type='button'; btn.className='j-scale-btn'+(selectedVal===i?' active':''); btn.textContent=i;
+    btn.onclick=()=>{ onSelect(i); buildScaleRow(containerId,max, (containerId==='jeActivityRow'?jeActivityVal:jeHomeworkVal), onSelect); };
+    el.appendChild(btn);
+  }
+}
+
 function renderJournal(){
   const gId=document.getElementById('journalGroup')?.value;
   const monthStr=document.getElementById('journalMonth')?.value;
@@ -2120,19 +2194,26 @@ function renderJournal(){
     const day=Number(d.slice(8,10));
     const wd=['Жк','Дс','Сс','Ср','Бс','Жм','Сб'][new Date(d).getDay()];
     return `<th>${day}<br>${wd}</th>`;
-  }).join('')+`<th>Орташа</th>`;
+  }).join('')+`<th>Қатысу %</th>`;
 
   const rows=students.map(s=>{
-    const cells=dates.map(d=>{
-      const e=DATA.journal_entries.find(je=>je.student_id===s.id&&je.lesson_date===d);
+    const entries=dates.map(d=>DATA.journal_entries.find(je=>je.student_id===s.id&&je.lesson_date===d));
+    const cells=entries.map((e,i)=>{
+      const d=dates[i];
       if(!e || !e.attendance) return `<td><div class="j-cell empty" onclick="openJournalEntry('${s.id}','${gId}','${d}')">—</div></td>`;
       const label=e.attendance==='late'&&e.late_minutes?`${e.late_minutes}м`:J_STATUS_LABEL[e.attendance]||'';
-      const gradeHtml=e.grade!=null?`<div class="j-grade">${e.grade}</div>`:'';
-      return `<td><div class="j-cell ${e.attendance}" onclick="openJournalEntry('${s.id}','${gId}','${d}')" title="${e.note||''}">${label}${gradeHtml}</div></td>`;
+      const hasExtra=e.activity!=null||e.homework!=null||(e.mock_score!=null&&e.mock_total!=null)||e.note;
+      const dot=hasExtra?'<span class="j-mini-dot"></span>':'';
+      const tipParts=[];
+      if(e.activity!=null) tipParts.push(`Белс:${e.activity}/5`);
+      if(e.homework!=null) tipParts.push(`ҮЖ:${e.homework}/10`);
+      if(e.mock_score!=null&&e.mock_total!=null) tipParts.push(`Мок:${e.mock_score}/${e.mock_total}`);
+      if(e.note) tipParts.push(e.note);
+      return `<td><div class="j-cell ${e.attendance}" onclick="openJournalEntry('${s.id}','${gId}','${d}')" title="${tipParts.join(' | ')}">${label}${dot}</div></td>`;
     }).join('');
-    const grades=dates.map(d=>DATA.journal_entries.find(je=>je.student_id===s.id&&je.lesson_date===d)).filter(e=>e&&e.grade!=null).map(e=>Number(e.grade));
-    const avg=grades.length?Math.round(grades.reduce((a,b)=>a+b,0)/grades.length):null;
-    return `<tr><td class="j-student-cell">${s.name} ${s.surname||''}</td>${cells}<td class="j-avg-cell">${avg!=null?avg:'—'}</td></tr>`;
+    const pcts=entries.filter(e=>e&&e.attendance).map(attendancePercent);
+    const avg=pcts.length?Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length):null;
+    return `<tr><td class="j-student-cell">${s.name} ${s.surname||''}</td>${cells}<td class="j-avg-cell">${avg!=null?avg+'%':'—'}</td></tr>`;
   }).join('');
 
   wrap.innerHTML=`<div class="journal-table-wrap"><table class="journal-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -2143,11 +2224,19 @@ function openJournalEntry(sId, gId, date){
   const e=DATA.journal_entries.find(je=>je.student_id===sId&&je.lesson_date===date);
   currentJournalEntry={studentId:sId, groupId:gId, date, id:e?.id||null};
   journalStatus=e?.attendance||null;
+  jeActivityVal=e?.activity??null;
+  jeHomeworkVal=e?.homework??null;
   document.getElementById('jeTitle').textContent=`📔 ${s.name} ${s.surname||''} — ${date}`;
-  document.getElementById('jeGrade').value=e?.grade??'';
   document.getElementById('jeNote').value=e?.note||'';
   document.getElementById('jeLateMinutes').value=e?.late_minutes??'';
+  document.getElementById('jeMockScore').value=e?.mock_score??'';
+  document.getElementById('jeMockTotal').value=e?.mock_total??'';
   document.getElementById('jeDeleteBtn').style.display=e?'inline-flex':'none';
+  const mockMax=mockMaxForGroup(gId);
+  document.getElementById('jeMockHint').textContent = mockMax ? `Бұл топтың толық баллы: ${mockMax}` : '';
+  if(!e) document.getElementById('jeMockTotal').value = mockMax ?? '';
+  buildScaleRow('jeActivityRow', 5, jeActivityVal, v=>{ jeActivityVal=v; });
+  buildScaleRow('jeHomeworkRow', 10, jeHomeworkVal, v=>{ jeHomeworkVal=v; });
   applyJournalStatusUI();
   openModal('journalEntryModal');
 }
@@ -2169,12 +2258,16 @@ async function saveJournalEntry(){
   const {studentId,groupId,date,id}=currentJournalEntry;
   if(!journalStatus){ return alert('Қатысу түрін таңдаңыз'); }
   if(journalStatus==='late' && !document.getElementById('jeLateMinutes').value){ return alert('Кешіккен минут санын енгізіңіз'); }
-  const gradeVal=document.getElementById('jeGrade').value;
+  const mockScore=document.getElementById('jeMockScore').value;
+  const mockTotal=document.getElementById('jeMockTotal').value;
   const row={
     student_id:studentId, group_id:groupId, lesson_date:date,
     attendance:journalStatus,
     late_minutes: journalStatus==='late' ? Number(document.getElementById('jeLateMinutes').value) : null,
-    grade: gradeVal===''?null:Number(gradeVal),
+    activity: jeActivityVal,
+    homework: jeHomeworkVal,
+    mock_score: mockScore===''?null:Number(mockScore),
+    mock_total: mockTotal===''?null:Number(mockTotal),
     note: document.getElementById('jeNote').value||null
   };
   if(id) await sb.from('journal_entries').update(row).eq('id',id);
@@ -2192,6 +2285,122 @@ async function deleteJournalEntry(){
   await loadAll();
   renderJournal();
   toast('🗑️ Өшірілді');
+}
+
+// ================================================================
+// ANALYSIS (group + individual student stats over a week/month)
+// ================================================================
+function populateAnalysisGroups(){
+  const s=document.getElementById('analysisGroup'); if(!s)return;
+  const v=s.value;
+  let groups=DATA.groups;
+  if(currentUser?.role==='teacher'&&currentUser.teacherId){
+    groups=groups.filter(g=>g.teacher_id===currentUser.teacherId);
+  }
+  s.innerHTML='<option value="">— Таңдаңыз —</option>'+groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  if(v)s.value=v;
+  const mEl=document.getElementById('analysisMonth');
+  if(mEl && !mEl.value) mEl.value=new Date().toISOString().slice(0,7);
+  const wEl=document.getElementById('analysisWeekDate');
+  if(wEl && !wEl.value) wEl.value=new Date().toISOString().slice(0,10);
+  onAnalysisPeriodChange();
+}
+
+function onAnalysisPeriodChange(){
+  const period=document.getElementById('analysisPeriod')?.value;
+  const wWrap=document.getElementById('analysisWeekWrap');
+  const mWrap=document.getElementById('analysisMonthWrap');
+  if(wWrap) wWrap.style.display = period==='week' ? '' : 'none';
+  if(mWrap) mWrap.style.display = period==='month' ? '' : 'none';
+  renderAnalysis();
+}
+
+// Returns [startDateStr, endDateStr] (inclusive) for the currently selected period.
+function analysisDateRange(){
+  const period=document.getElementById('analysisPeriod')?.value;
+  if(period==='week'){
+    const anchor=document.getElementById('analysisWeekDate')?.value;
+    if(!anchor) return [null,null];
+    const d=new Date(anchor);
+    const dow=(d.getDay()+6)%7; // Monday=0
+    const monday=new Date(d); monday.setDate(d.getDate()-dow);
+    const sunday=new Date(monday); sunday.setDate(monday.getDate()+6);
+    return [monday.toISOString().slice(0,10), sunday.toISOString().slice(0,10)];
+  } else {
+    const monthStr=document.getElementById('analysisMonth')?.value;
+    if(!monthStr) return [null,null];
+    const [y,m]=monthStr.split('-').map(Number);
+    const last=new Date(y,m,0).getDate();
+    return [`${monthStr}-01`, `${monthStr}-${String(last).padStart(2,'0')}`];
+  }
+}
+
+function studentStatsForRange(sId, start, end){
+  const entries=DATA.journal_entries.filter(je=>je.student_id===sId&&je.lesson_date>=start&&je.lesson_date<=end&&je.attendance);
+  const pcts=entries.map(attendancePercent);
+  const attAvg=pcts.length?Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length):null;
+  const acts=entries.filter(e=>e.activity!=null).map(e=>Number(e.activity));
+  const actAvg=acts.length?(acts.reduce((a,b)=>a+b,0)/acts.length).toFixed(1):null;
+  const hws=entries.filter(e=>e.homework!=null).map(e=>Number(e.homework));
+  const hwAvg=hws.length?(hws.reduce((a,b)=>a+b,0)/hws.length).toFixed(1):null;
+  const mocks=entries.filter(e=>e.mock_score!=null&&e.mock_total!=null);
+  const mockScoreSum=mocks.reduce((a,e)=>a+Number(e.mock_score),0);
+  const mockTotalSum=mocks.reduce((a,e)=>a+Number(e.mock_total),0);
+  return {entries, attAvg, actAvg, hwAvg, mockScoreSum, mockTotalSum, mockCount:mocks.length};
+}
+
+function renderAnalysis(){
+  const gId=document.getElementById('analysisGroup')?.value;
+  const wrap=document.getElementById('analysisGroupWrap');
+  if(!wrap)return;
+  if(!gId){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📊</div><p>Группа таңдаңыз</p></div>'; return; }
+  const [start,end]=analysisDateRange();
+  if(!start){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Кезеңді таңдаңыз</p></div>'; return; }
+  const students=DATA.students.filter(s=>s.group_id===gId);
+  if(!students.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл топта оқушылар жоқ</p></div>'; return; }
+
+  const rows=students.map(s=>{
+    const st=studentStatsForRange(s.id, start, end);
+    const mock=st.mockCount ? `${st.mockScoreSum}/${st.mockTotalSum}` : '—';
+    return `<tr style="cursor:pointer" onclick="openAnalysisStudentDetail('${s.id}','${gId}')">
+      <td class="font-bold">${s.name} ${s.surname||''}</td>
+      <td><span class="badge ${st.attAvg==null?'badge-blue':st.attAvg>=80?'badge-green':st.attAvg>=50?'badge-yellow':'badge-red'}">${st.attAvg!=null?st.attAvg+'%':'—'}</span></td>
+      <td>${st.actAvg??'—'}</td>
+      <td>${st.hwAvg??'—'}</td>
+      <td>${mock}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Оқушы</th><th>Қатысу %</th><th>Белсенділік орт.</th><th>Үй жұмысы орт.</th><th>Мок тест</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="text-muted text-sm" style="margin-top:10px">${start} — ${end} аралығы. Кестедегі оқушыға басып, жеке нәтижесін көре аласыз.</div>`;
+}
+
+function openAnalysisStudentDetail(sId, gId){
+  const s=DATA.students.find(s=>s.id===sId); if(!s)return;
+  const [start,end]=analysisDateRange();
+  const st=studentStatsForRange(sId, start, end);
+  document.getElementById('analysisDetailTitle').textContent=`👤 ${s.name} ${s.surname||''} — ${start} — ${end}`;
+  const rows=[...st.entries].sort((a,b)=>a.lesson_date.localeCompare(b.lesson_date)).map(e=>{
+    const pct=attendancePercent(e);
+    const attLabel={present:'✓ Келді',absent_excused:'Себепті',absent_unexcused:'Себепсіз',late:`⏰ Кешікті (${e.late_minutes||0} мин)`}[e.attendance]||'—';
+    return `<tr>
+      <td>${e.lesson_date}</td>
+      <td>${attLabel}</td>
+      <td>${pct!=null?pct+'%':'—'}</td>
+      <td>${e.activity??'—'}</td>
+      <td>${e.homework??'—'}</td>
+      <td>${e.mock_score!=null&&e.mock_total!=null?e.mock_score+'/'+e.mock_total:'—'}</td>
+      <td class="text-muted text-sm">${e.note||''}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📅</div><p>Бұл кезеңде жазба жоқ</p></div></td></tr>';
+  document.getElementById('analysisDetailContent').innerHTML=
+    `<div class="table-wrap"><table><thead><tr><th>Күні</th><th>Қатысу</th><th>%</th><th>Белс.</th><th>ҮЖ</th><th>Мок</th><th>Заметка</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  document.getElementById('analysisDetailCard').style.display='';
+  document.getElementById('analysisDetailCard').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function closeAnalysisDetail(){
+  document.getElementById('analysisDetailCard').style.display='none';
 }
 
 // ================================================================
@@ -2449,7 +2658,11 @@ create table if not exists journal_entries(
   lesson_date date not null,
   attendance text,        -- 'present' | 'absent_excused' | 'absent_unexcused' | 'late'
   late_minutes int,       -- filled only when attendance = 'late'
-  grade int,               -- single 0-100 grade per cell, optional
+  grade int,               -- legacy, no longer used by the UI
+  activity int,            -- 0-5
+  homework int,            -- 0-10
+  mock_score numeric,      -- points earned in mock test (optional)
+  mock_total numeric,      -- max points for mock test (optional)
   note text,
   created_at timestamptz default now(),
   unique(student_id, lesson_date)
@@ -2461,6 +2674,10 @@ alter table teachers add column if not exists email text;
 alter table teachers add column if not exists balance numeric default 0;
 alter table students add column if not exists next_pay_date date;
 alter table students add column if not exists progress_percent int default 0;
+alter table journal_entries add column if not exists activity int;
+alter table journal_entries add column if not exists homework int;
+alter table journal_entries add column if not exists mock_score numeric;
+alter table journal_entries add column if not exists mock_total numeric;
 
 -- 3. RLS Policies:
 do $$ declare t text; begin
