@@ -289,6 +289,10 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .font-bold{font-weight:700;} .text-sm{font-size:13px;} .text-muted{color:var(--text2);}
 .mt-2{margin-top:8px;} .mt-3{margin-top:12px;}
 @media print{.sidebar,.mobile-header{display:none!important;}.main{margin-left:0;}}
+summary{list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:'▸ ';color:var(--text3);font-size:12px}
+details[open] summary::before{content:'▾ '}
 </style>
 </head>
 <body>
@@ -793,10 +797,15 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   </div>
 </div>
 
-<!-- SALARY -->
+<!-- SALARY / TEACHER PROFILE -->
 <div class="modal-overlay" id="salaryModal">
   <div class="modal modal-lg">
-    <div class="modal-title">💰 Жалақы & Сабақ белгілеу</div>
+    <div class="modal-title">👤 Мұғалім профилі</div>
+    <div id="salaryTeacherHeader" style="margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:12px">
+      <button class="btn btn-sm" id="salaryTabGroupsBtn" onclick="switchSalaryTab('groups')">📋 Топтар мен сабақтар</button>
+      <button class="btn btn-ghost btn-sm" id="salaryTabHistoryBtn" onclick="switchSalaryTab('history')">🕘 Жалақы тарихы</button>
+    </div>
     <div id="salaryContent"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('salaryModal')">Жабу</button>
@@ -1470,7 +1479,7 @@ function renderTeachers(){
           <div class="wallet-label">Виртуалды әмиян</div>
           <div style="font-size:26px;font-weight:800;color:${bal>0?'var(--green)':'var(--text2)'}">${fmt(bal)}₸</div>
           <div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
-            <button class="btn btn-blue btn-sm" onclick="openSalaryModal('${t.id}')">📋 Сабақтар</button>
+            <button class="btn btn-blue btn-sm" onclick="openSalaryModal('${t.id}')">👤 Профиль</button>
             ${bal>0?`<button class="btn btn-green btn-sm" onclick="openSalaryModal('${t.id}')">💸 Жалақы беру</button>`:''}
             <button class="btn btn-ghost btn-sm" onclick='openTeacherModal(${JSON.stringify(t).replace(/'/g,"&#39;")})'>✏️</button>
             <button class="btn btn-red btn-sm" onclick="deleteTeacher('${t.id}')">🗑️</button>
@@ -1481,19 +1490,83 @@ function renderTeachers(){
   }).join(''):'<div class="empty-state card"><div class="empty-icon">👨‍🏫</div><p>Мұғалімдер жоқ</p></div>';
 }
 
-// SALARY MODAL
+// Топтың орташа рейтингі мен қатысуы (жаңа журнал жүйесі бойынша) — мұғалім
+// тиімділігін бағалауға көмектеседі.
+function groupPerformance(gId){
+  const students=DATA.students.filter(s=>s.group_id===gId);
+  const progs=[], atts=[];
+  students.forEach(s=>{
+    const r=calcProgressJournal(s.id,1);
+    if(r){ progs.push(r.prog); if(r.attAvg!=null) atts.push(r.attAvg); }
+  });
+  return {
+    studentCount: students.length,
+    avgProg: progs.length ? Math.round(progs.reduce((a,b)=>a+b,0)/progs.length) : null,
+    avgAtt: atts.length ? Math.round(atts.reduce((a,b)=>a+b,0)/atts.length) : null
+  };
+}
+
+// TEACHER PROFILE / SALARY MODAL
 function openSalaryModal(tId){
   salaryTeacherId=tId;
+  const t=DATA.teachers.find(t=>t.id===tId); if(!t) return;
+  const rate=Number(t.hourly_rate||t.rate||0);
+  const bal=Number(t.balance||0);
+  document.getElementById('salaryTeacherHeader').innerHTML=`
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <div style="width:48px;height:48px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0">${t.name[0]}</div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:17px;font-weight:700">${t.name} ${t.surname||''}</div>
+        <div class="text-muted text-sm">${t.subject||'—'} | ${fmt(rate)}₸/сағ | ${t.phone||'—'}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="wallet-label">Виртуалды әмиян</div>
+        <div style="font-size:22px;font-weight:800;color:${bal>0?'var(--green)':'var(--text2)'}">${fmt(bal)}₸</div>
+      </div>
+    </div>`;
+  const pb=document.getElementById('payoutBtn');
+  pb.style.display=bal>0?'flex':'none';
+  pb.textContent=`💸 Жалақыны беру (${fmt(bal)}₸)`;
+  switchSalaryTab('groups');
+  openModal('salaryModal');
+}
+
+function switchSalaryTab(tab){
+  const gb=document.getElementById('salaryTabGroupsBtn'), hb=document.getElementById('salaryTabHistoryBtn');
+  gb.className = tab==='groups' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  hb.className = tab==='history' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  if(tab==='groups') renderSalaryGroups(salaryTeacherId);
+  else renderSalaryHistory(salaryTeacherId);
+}
+
+function renderSalaryGroups(tId){
   const t=DATA.teachers.find(t=>t.id===tId); if(!t) return;
   const gs=DATA.groups.filter(g=>g.teacher_id===tId);
   const now=new Date(); const m=now.getMonth()+1; const y=now.getFullYear();
   const rate=Number(t.hourly_rate||t.rate||0);
-  let html=`<div style="font-weight:600;margin-bottom:16px">${t.name} ${t.surname||''} — ${fmt(rate)}₸/сағ</div>`;
-  html+=`<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">${MONTHS[m]} ${y} — САБАҚТАР</div>`;
+  let html='';
+  if(!gs.length){
+    document.getElementById('salaryContent').innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>Группалар жоқ</p></div>';
+    return;
+  }
   gs.forEach(g=>{
     const ls=DATA.lessons.filter(l=>l.group_id===g.id);
-    if(!ls.length) return;
-    html+=`<div style="margin-bottom:14px"><div class="font-bold text-sm" style="margin-bottom:8px;color:var(--accent2)">${g.name}</div><div class="sal-cal">`;
+    const perf=groupPerformance(g.id);
+    html+=`<details class="card" style="margin-bottom:12px;padding:14px" open>
+      <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="font-bold" style="color:var(--accent2)">${g.name}</span>
+          <span class="text-muted text-sm">${perf.studentCount} оқушы</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="badge ${perf.avgProg==null?'badge-blue':perf.avgProg>=70?'badge-green':perf.avgProg>=50?'badge-yellow':'badge-red'}">Рейтинг орт: ${perf.avgProg!=null?perf.avgProg+'%':'—'}</span>
+          <span class="badge ${perf.avgAtt==null?'badge-blue':perf.avgAtt>=80?'badge-green':perf.avgAtt>=50?'badge-yellow':'badge-red'}">Қатысу орт: ${perf.avgAtt!=null?perf.avgAtt+'%':'—'}</span>
+        </div>
+      </summary>
+      <div style="margin-top:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">${MONTHS[m]} ${y} — САБАҚТАР</div>
+        <div class="sal-cal">`;
+    if(!ls.length) html+='<div class="text-muted text-sm">Сабақ кестесі жоқ</div>';
     ls.forEach(l=>{
       const d=dur(l.start_time,l.end_time);
       const earned=Math.round(d*rate);
@@ -1513,15 +1586,32 @@ function openSalaryModal(tId){
         </div>`;
       });
     });
-    html+='</div></div>';
+    html+='</div></div></details>';
   });
-  if(!gs.length) html+='<div class="text-muted">Группалар жоқ</div>';
   document.getElementById('salaryContent').innerHTML=html;
-  const bal=Number(t.balance||0);
-  const pb=document.getElementById('payoutBtn');
-  pb.style.display=bal>0?'flex':'none';
-  pb.textContent=`💸 Жалақыны беру (${fmt(bal)}₸)`;
-  openModal('salaryModal');
+}
+
+function renderSalaryHistory(tId){
+  const logs=DATA.salary_logs.filter(sl=>sl.teacher_id===tId&&sl.note==='payout')
+    .sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  if(!logs.length){
+    document.getElementById('salaryContent').innerHTML='<div class="empty-state"><div class="empty-icon">🕘</div><p>Жалақы төлемдері әлі жоқ</p></div>';
+    return;
+  }
+  const rows=logs.map(l=>{
+    const dt=l.created_at?new Date(l.created_at):null;
+    const dateStr=dt?dt.toLocaleDateString('kk-KZ'):(l.date||'—');
+    const timeStr=dt?dt.toLocaleTimeString('kk-KZ',{hour:'2-digit',minute:'2-digit'}):'—';
+    return `<tr>
+      <td>${dateStr}</td>
+      <td>${timeStr}</td>
+      <td class="font-bold" style="color:var(--green)">${fmt(Math.abs(Number(l.amount||0)))}₸</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('salaryContent').innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>Күні</th><th>Уақыты</th><th>Сомасы</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 function getDatesInMonth(year,month,dayOfWeek){
