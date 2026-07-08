@@ -329,9 +329,12 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-section">Негізгі</div>
         <div class="nav-item active" onclick="showPage('dashboard',this)">📊 Дашборд<span class="nav-badge hidden" id="badgeDash">0</span></div>
         <div class="nav-section">Оқу</div>
-        <div class="nav-item dir-admin" onclick="showPage('courses',this)">📚 Курстар</div>
-        <div class="nav-item dir-admin" onclick="showPage('groups',this)">👥 Группалар</div>
-        <div class="nav-item" onclick="showPage('schedule',this)">📅 Кесте</div>
+        <div class="nav-item" onclick="showPage('study',this)">📚 Оқу процесі</div>
+        <div class="nav-section">Журнал</div>
+        <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
+        <div class="nav-item" onclick="showPage('analysis',this)">📊 Анализ</div>
+        <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Рейтинг</div>
+        <div class="nav-item dir-admin" onclick="showPage('holidays',this)">🎉 Демалыс</div>
         <div class="nav-section">Адамдар</div>
         <div class="nav-item" onclick="showPage('students',this)">👩‍🎓 Оқушылар</div>
         <div class="nav-item dir-only" onclick="showPage('teachers',this)">👨‍🏫 Мұғалімдер</div>
@@ -339,11 +342,6 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-item dir-only" onclick="showPage('payments',this)">💳 Төлемдер<span class="nav-badge hidden" id="badgePay">0</span></div>
         <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
         <div class="nav-item teacher-only" onclick="openMySalary()">💰 Жалақым</div>
-        <div class="nav-section">Журнал</div>
-        <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
-        <div class="nav-item" onclick="showPage('analysis',this)">📊 Анализ</div>
-        <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Рейтинг</div>
-        <div class="nav-item dir-admin" onclick="showPage('holidays',this)">🎉 Демалыс</div>
       </nav>
       <div class="sidebar-bottom">
         <button class="theme-toggle" onclick="toggleTheme()" id="sidebarThemeBtn" style="width:100%;justify-content:center">☀️ Күндіз режимі</button>
@@ -387,32 +385,30 @@ details[open] summary::before{content:'▾ '}
         </div>
       </div>
 
-      <!-- ========== COURSES ========== -->
-      <div class="page" id="page-courses">
+      <!-- ========== STUDY HUB (Курстар + Группалар + Кесте) ========== -->
+      <div class="page" id="page-study">
         <div class="page-header">
-          <div><div class="page-title">Курстар</div><div class="page-subtitle">Оқу бағдарламалары</div></div>
-          <button class="btn btn-blue dir-only" onclick="openCourseModal()">+ Курс қосу</button>
+          <div><div class="page-title" id="studyTitle">Курстар</div><div class="page-subtitle" id="studySubtitle">Оқу бағдарламалары</div></div>
+          <button class="btn btn-blue" id="studyAddBtn" onclick="openCourseModal()">+ Курс қосу</button>
         </div>
-        <div id="coursesList"></div>
-      </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+          <button class="btn btn-sm dir-admin" id="studyTabCoursesBtn" onclick="switchStudyTab('courses')">📚 Курстар</button>
+          <button class="btn btn-ghost btn-sm dir-admin" id="studyTabGroupsBtn" onclick="switchStudyTab('groups')">👥 Группалар</button>
+          <button class="btn btn-ghost btn-sm" id="studyTabScheduleBtn" onclick="switchStudyTab('schedule')">📅 Кесте</button>
+        </div>
 
-      <!-- ========== GROUPS ========== -->
-      <div class="page" id="page-groups">
-        <div class="page-header">
-          <div><div class="page-title">Группалар</div><div class="page-subtitle">Барлық оқу топтары</div></div>
-          <button class="btn btn-blue dir-only" onclick="openGroupModal()">+ Группа қосу</button>
+        <div class="study-panel" id="study-courses">
+          <div id="coursesList"></div>
         </div>
-        <div id="groupsList"></div>
-      </div>
 
-      <!-- ========== SCHEDULE ========== -->
-      <div class="page" id="page-schedule">
-        <div class="page-header">
-          <div><div class="page-title">Сабақ Кестесі</div><div class="page-subtitle">Апталық кесте — сабаққа басыңыз</div></div>
-          <button class="btn btn-blue dir-admin" onclick="openLessonModal()">+ Сабақ қосу</button>
+        <div class="study-panel" id="study-groups" style="display:none">
+          <div id="groupsList"></div>
         </div>
-        <div class="card" style="overflow-x:auto;padding:12px"><table class="schedule-table" id="scheduleGrid"></table></div>
-        <div class="card dir-admin"><div class="card-title">📋 Сабақтар тізімі</div><div id="lessonsList"></div></div>
+
+        <div class="study-panel" id="study-schedule" style="display:none">
+          <div class="card" style="overflow-x:auto;padding:12px"><table class="schedule-table" id="scheduleGrid"></table></div>
+          <div class="card dir-admin"><div class="card-title">📋 Сабақтар тізімі</div><div id="lessonsList"></div></div>
+        </div>
       </div>
 
       <!-- ========== STUDENTS ========== -->
@@ -1110,12 +1106,56 @@ function showPage(name, el){
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('mobileOverlay').classList.remove('open');
   const renders={
-    courses:renderCourses, groups:renderGroups, schedule:renderSchedule,
+    study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:renderFinance,
     payments:renderPayments, journal:renderJournal, analysis:renderAnalysis,
     holidays:renderHolidays, reports:renderReports
   };
   renders[name]?.();
+}
+
+// ================================================================
+// STUDY HUB (Курстар / Группалар / Кесте бір бетте)
+// ================================================================
+let studyActiveTab='courses';
+
+const STUDY_TABS={
+  courses:{title:'Курстар', subtitle:'Оқу бағдарламалары', addLabel:'+ Курс қосу', addCls:'dir-only', addFn:()=>openCourseModal(), render:()=>renderCourses()},
+  groups:{title:'Группалар', subtitle:'Барлық оқу топтары', addLabel:'+ Группа қосу', addCls:'dir-only', addFn:()=>openGroupModal(), render:()=>renderGroups()},
+  schedule:{title:'Сабақ Кестесі', subtitle:'Апталық кесте — сабаққа басыңыз', addLabel:'+ Сабақ қосу', addCls:'dir-admin', addFn:()=>openLessonModal(), render:()=>renderSchedule()}
+};
+
+function switchStudyTab(tab){
+  if(!STUDY_TABS[tab]) tab='courses';
+  const r = currentUser.role;
+  // teacher-ге Курстар/Группалар табтары жабық болғандықтан, сол табқа өтуге тырысса Кестеге қайтарамыз
+  if(r==='teacher' && tab!=='schedule') tab='schedule';
+  studyActiveTab=tab;
+
+  ['courses','groups','schedule'].forEach(t=>{
+    const panel=document.getElementById('study-'+t);
+    if(panel) panel.style.display = (t===tab)?'':'none';
+    const btn=document.getElementById('studyTab'+t.charAt(0).toUpperCase()+t.slice(1)+'Btn');
+    if(btn){
+      const keepDirAdmin = btn.classList.contains('dir-admin') ? ' dir-admin' : '';
+      btn.className = (t===tab ? 'btn btn-sm' : 'btn btn-ghost btn-sm') + keepDirAdmin;
+    }
+  });
+
+  const cfg=STUDY_TABS[tab];
+  document.getElementById('studyTitle').textContent=cfg.title;
+  document.getElementById('studySubtitle').textContent=cfg.subtitle;
+  const addBtn=document.getElementById('studyAddBtn');
+  addBtn.textContent=cfg.addLabel;
+  addBtn.onclick=cfg.addFn;
+  const canSeeAdd = cfg.addCls==='dir-only' ? r==='director' : (r==='director'||r==='admin');
+  addBtn.style.display = canSeeAdd ? '' : 'none';
+
+  cfg.render();
+}
+
+function renderStudy(){
+  switchStudyTab(studyActiveTab);
 }
 
 // ================================================================
