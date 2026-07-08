@@ -1527,7 +1527,7 @@ function openSalaryModal(tId){
       if(salaryActiveTab==='groups') renderSalaryGroups(tId);
       else renderSalaryHistory(tId);
       renderTeachers();
-      if(dupCount) toast(`⚠️ ${dupCount} қате/қайталанған жазба табылып, баланс түзетілді`,'error');
+      if(dupCount) toast(`⚠️ ${dupCount} қайталанған жазба табылып, баланс түзетілді`,'error');
       if(changed) toast('📔 Журналға сай сабақтар автоматты белгіленді','success');
     }
   })();
@@ -1536,8 +1536,16 @@ function openSalaryModal(tId){
 function renderSalaryHeader(t){
   const rate=Number(t.hourly_rate||t.rate||0);
   const bal=Number(t.balance||0);
+  const canPayout = currentUser?.role==='director'||currentUser?.role==='admin';
   const now=new Date(); const ym=localDateStr(now).slice(0,7);
-  const monthLogs=DATA.salary_logs.filter(sl=>sl.teacher_id===t.id&&sl.note!=='payout'&&sl.date?.startsWith(ym));
+  // Тек ағымдағы кестеге сай келетін жазбаларды санаймыз (көрсету үшін ғана —
+  // ешбір жазба өшірілмейді, тек дисплейде дәл сан көрсету үшін сүземіз).
+  const monthLogs=DATA.salary_logs.filter(sl=>{
+    if(sl.teacher_id!==t.id||sl.note==='payout'||!sl.date?.startsWith(ym)) return false;
+    const l=DATA.lessons.find(l=>l.id===sl.lesson_id);
+    if(!l) return true; // сабақ жойылған болса, бәрібір нақты төленген деп санаймыз
+    return new Date(sl.date+'T00:00:00').getDay()===Number(l.day);
+  });
   const monthCount=monthLogs.length;
   const monthSum=monthLogs.reduce((s,l)=>s+Number(l.amount||0),0);
   document.getElementById('salaryTeacherHeader').innerHTML=`
@@ -1548,7 +1556,7 @@ function renderSalaryHeader(t){
         <div class="text-muted text-sm">${t.subject||'—'} | ${fmt(rate)}₸/сағ | ${t.phone||'—'}</div>
       </div>
       <div style="text-align:right">
-        <div class="wallet-label">Виртуалды әмиян</div>
+        <div class="wallet-label">Виртуалды әмиян ${canPayout?`<span style="cursor:pointer" onclick="adjustTeacherBalance('${t.id}')" title="Балансты қолмен түзету">✏️</span>`:''}</div>
         <div style="font-size:22px;font-weight:800;color:${bal>0?'var(--green)':'var(--text2)'}">${fmt(bal)}₸</div>
       </div>
     </div>
@@ -1557,7 +1565,6 @@ function renderSalaryHeader(t){
       <span class="badge badge-green">${MONTHS[now.getMonth()+1]} ЗП: ${fmt(monthSum)}₸</span>
     </div>`;
   const pb=document.getElementById('payoutBtn');
-  const canPayout = currentUser?.role==='director'||currentUser?.role==='admin';
   pb.style.display=(bal>0&&canPayout)?'flex':'none';
   pb.textContent=`💸 Жалақыны беру (${fmt(bal)}₸)`;
 }
@@ -1570,48 +1577,54 @@ const salarySyncing=new Set(); // қайталанып (race condition) синх
 // Бір лекция+дата+мұғалім комбинациясына бірнеше salary_logs жазбасы кездейсоқ
 // қосылып қалса (мыс. профиль модалы қатарынан бірнеше рет ашылса), соларды
 // тауып, артығын өшіріп, балансты дұрыс сомаға қайта есептейді.
+// Директор балансты қолмен түзете алатын сақтандыру мүмкіндігі
+// (мыс. автоматты есептеуде күмән туса, нақты соманы өзі енгізе алады).
+async function adjustTeacherBalance(tId){
+  const t=DATA.teachers.find(t=>t.id===tId); if(!t) return;
+  const cur=Number(t.balance||0);
+  const input=prompt(`${t.name} ${t.surname||''} — ағымдағы баланс: ${fmt(cur)}₸\n\nДұрыс балансты (₸) енгізіңіз:`, cur);
+  if(input===null) return;
+  const newBal=Number(input);
+  if(isNaN(newBal)||newBal<0){ toast('Дұрыс сан енгізіңіз','error'); return; }
+  if(newBal===cur) return;
+  const reason=prompt('Түзету себебі (міндетті емес):','')||'';
+  await sb.from('salary_logs').insert({teacher_id:tId, lesson_id:null, date:localDateStr(new Date()), amount:newBal-cur, note:'adjustment'+(reason?': '+reason:'')});
+  await sb.from('teachers').update({balance:newBal}).eq('id',tId);
+  t.balance=newBal;
+  try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
+  renderSalaryHeader(t);
+  if(salaryActiveTab==='history') renderSalaryHistory(tId);
+  renderTeachers();
+  toast('✅ Баланс түзетілді','success');
+}
+
 async function dedupeAndRecalcSalary(tId){
   const t=DATA.teachers.find(t=>t.id===tId); if(!t) return 0;
   const all=DATA.salary_logs.filter(sl=>sl.teacher_id===tId);
-  let earnings=all.filter(sl=>sl.note!=='payout' && sl.lesson_id);
+  const earnings=all.filter(sl=>sl.note!=='payout' && sl.lesson_id)
+    .sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
   const payouts=all.filter(sl=>sl.note==='payout');
-
-  // 1) Апта күні сабақтың нақты кестесіне сай келмейтін "елес" жазбаларды табу.
-  //    (Бұрынғы уақыт белдеуі қатесі кезінде дата 1 күнге жылжып сақталып қалуы
-  //    мүмкін еді — сабақ, мыс., Дүйсенбіде ғана өтетін болса, сол датаға сай
-  //    келмейтін жазба міндетті түрде қате.)
-  const badIds=[];
-  earnings=earnings.filter(e=>{
-    const l=DATA.lessons.find(l=>l.id===e.lesson_id);
-    if(!l){ badIds.push(e.id); return false; } // сабақ өшірілген
-    const dow=new Date(e.date+'T00:00:00').getDay();
-    if(dow!==Number(l.day)){ badIds.push(e.id); return false; }
-    return true;
-  });
-
-  // 2) Қалғандарынан (lesson_id+date) бойынша нақты дубликаттарды тазалау
-  earnings.sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+  // ТЕК нақты дубликаттарды (дәл сол лекция+дәл сол дата екі рет жазылған
+  // жағдайды) тазалаймыз. Ешқашан "апта күні сай келмейді" деген болжаммен
+  // жазба өшірмейміз — сабақ уақыты/күні кейін өзгертілген болса, бұл шынайы
+  // төленбеген жалақыны да өшіріп жіберуі мүмкін еді.
   const seen=new Map(); const dupIds=[];
   earnings.forEach(e=>{
     const key=e.lesson_id+'|'+e.date;
     if(seen.has(key)) dupIds.push(e.id); else seen.set(key,e);
   });
-
-  const toDelete=[...badIds, ...dupIds];
-  if(toDelete.length){
-    for(const id of toDelete){ await sb.from('salary_logs').delete().eq('id',id); }
+  if(dupIds.length){
+    for(const id of dupIds){ await sb.from('salary_logs').delete().eq('id',id); }
   }
   const uniqueEarnSum=[...seen.values()].reduce((s,e)=>s+Number(e.amount||0),0);
   const payoutSum=payouts.reduce((s,p)=>s+Number(p.amount||0),0); // теріс сан
   const correctBalance=Math.max(0, Math.round(uniqueEarnSum+payoutSum));
-  if(toDelete.length || correctBalance!==Number(t.balance||0)){
+  if(dupIds.length){
     await sb.from('teachers').update({balance:correctBalance}).eq('id',tId);
     t.balance=correctBalance;
-  }
-  if(toDelete.length){
     try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
   }
-  return toDelete.length;
+  return dupIds.length;
 }
 
 async function autoSyncSalaryFromJournal(tId){
@@ -1724,7 +1737,7 @@ function renderSalaryGroups(tId){
 }
 
 function renderSalaryHistory(tId){
-  const logs=DATA.salary_logs.filter(sl=>sl.teacher_id===tId&&sl.note==='payout')
+  const logs=DATA.salary_logs.filter(sl=>sl.teacher_id===tId&&(sl.note==='payout'||sl.note?.startsWith('adjustment')))
     .sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
   if(!logs.length){
     document.getElementById('salaryContent').innerHTML='<div class="empty-state"><div class="empty-icon">🕘</div><p>Жалақы төлемдері әлі жоқ</p></div>';
@@ -1734,14 +1747,18 @@ function renderSalaryHistory(tId){
     const dt=l.created_at?new Date(l.created_at):null;
     const dateStr=dt?dt.toLocaleDateString('kk-KZ'):(l.date||'—');
     const timeStr=dt?dt.toLocaleTimeString('kk-KZ',{hour:'2-digit',minute:'2-digit'}):'—';
+    const isAdjust=l.note?.startsWith('adjustment');
+    const amt=Number(l.amount||0);
     return `<tr>
       <td>${dateStr}</td>
       <td>${timeStr}</td>
-      <td class="font-bold" style="color:var(--green)">${fmt(Math.abs(Number(l.amount||0)))}₸</td>
+      <td>${isAdjust?'<span class="badge badge-yellow">Түзету</span>':'<span class="badge badge-green">Төлем</span>'}</td>
+      <td class="font-bold" style="color:${amt<0?'var(--red)':'var(--green)'}">${amt>0?'+':''}${fmt(amt)}₸</td>
+      <td class="text-muted text-sm">${isAdjust?(l.note.replace('adjustment: ','').replace('adjustment','')||'—'):''}</td>
     </tr>`;
   }).join('');
   document.getElementById('salaryContent').innerHTML=`<div class="table-wrap"><table>
-    <thead><tr><th>Күні</th><th>Уақыты</th><th>Сомасы</th></tr></thead>
+    <thead><tr><th>Күні</th><th>Уақыты</th><th>Түрі</th><th>Сомасы</th><th>Ескертпе</th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
