@@ -918,16 +918,27 @@ let payFilter = '';
 // THEME
 // ================================================================
 function initTheme(){
-  const saved = localStorage.getItem('academy_theme') || 'dark';
-  setTheme(saved);
+  const saved = localStorage.getItem('academy_theme');
+  if(saved){ setTheme(saved, false); }
+  else {
+    // Сақталған таңдау жоқ болса — құрылғының жүйелік режимін анықтаймыз (сақтамай)
+    const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    setTheme(mq && mq.matches ? 'dark' : 'light', false);
+  }
+  // Пайдаланушы әлі қолмен таңдамаса, құрылғының режимі өзгерген сәтте сайт та соған сай ауысады
+  if(window.matchMedia){
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e=>{
+      if(!localStorage.getItem('academy_theme')) setTheme(e.matches ? 'dark' : 'light', false);
+    });
+  }
 }
 function toggleTheme(){
   const cur = document.documentElement.getAttribute('data-theme');
-  setTheme(cur === 'dark' ? 'light' : 'dark');
+  setTheme(cur === 'dark' ? 'light' : 'dark', true);
 }
-function setTheme(t){
+function setTheme(t, persist){
   document.documentElement.setAttribute('data-theme', t);
-  localStorage.setItem('academy_theme', t);
+  if(persist) localStorage.setItem('academy_theme', t);
   const icon = t === 'light' ? '🌙 Түнгі' : '☀️ Күндіз';
   const iconShort = t === 'light' ? '🌙' : '☀️';
   document.querySelectorAll('.theme-toggle').forEach(btn => {
@@ -2111,22 +2122,23 @@ function calcProgressJournal(studentId, minLessons=3){
   const actAvg = acts.length ? acts.reduce((a,b)=>a+b,0)/acts.length : null; // 0-5
 
   const hws = entries.filter(e=>e.homework!=null).map(e=>Number(e.homework));
-  const hwAvg = hws.length ? hws.reduce((a,b)=>a+b,0)/hws.length : null; // 0-5
+  const hwAvg = hws.length ? hws.reduce((a,b)=>a+b,0)/hws.length : null; // 0-10
 
+  // Әр мок тесттің пайызын (score/total) есептеп, содан кейін орташасын аламыз —
+  // басқа бағандар (Белс., ҮЖ) сияқты "орташа балл" логикасына сай болу үшін.
   const mocks = entries.filter(e=>e.mock_score!=null && e.mock_total!=null && Number(e.mock_total)>0);
-  const mockScoreSum = mocks.reduce((a,e)=>a+Number(e.mock_score),0);
-  const mockTotalSum = mocks.reduce((a,e)=>a+Number(e.mock_total),0);
-  const mockPct = mocks.length ? (mockScoreSum/mockTotalSum*100) : null; // 0-100
+  const mockPcts = mocks.map(e=>Number(e.mock_score)/Number(e.mock_total)*100);
+  const mockPct = mockPcts.length ? mockPcts.reduce((a,b)=>a+b,0)/mockPcts.length : null; // 0-100
 
   const parts=[];
   if(attAvg!=null)  parts.push({v:attAvg,        w:0.10});
-  if(actAvg!=null)  parts.push({v:actAvg/5*100,  w:0.30});
-  if(hwAvg!=null)   parts.push({v:hwAvg/5*100,   w:0.30});
+  if(actAvg!=null)  parts.push({v:actAvg/5*100,  w:0.30});   // Белсенділік шкаласы: 0-5
+  if(hwAvg!=null)   parts.push({v:hwAvg/10*100,  w:0.30});   // ҮЖ шкаласы: 0-10 (journal_entries.homework)
   if(mockPct!=null) parts.push({v:mockPct,       w:0.30});
   if(!parts.length) return null;
 
   const totalW = parts.reduce((a,p)=>a+p.w,0);
-  const prog = Math.round(parts.reduce((a,p)=>a+p.v*p.w,0)/totalW);
+  const prog = Math.max(0, Math.min(100, Math.round(parts.reduce((a,p)=>a+p.v*p.w,0)/totalW)));
   return { prog, attAvg: attAvg!=null?Math.round(attAvg):null, lessons: entries.length };
 }
 
@@ -2329,10 +2341,12 @@ function studentStatsForRange(sId, start, end){
   const actAvg=acts.length?(acts.reduce((a,b)=>a+b,0)/acts.length).toFixed(1):null;
   const hws=entries.filter(e=>e.homework!=null).map(e=>Number(e.homework));
   const hwAvg=hws.length?(hws.reduce((a,b)=>a+b,0)/hws.length).toFixed(1):null;
-  const mocks=entries.filter(e=>e.mock_score!=null&&e.mock_total!=null);
-  const mockScoreSum=mocks.reduce((a,e)=>a+Number(e.mock_score),0);
-  const mockTotalSum=mocks.reduce((a,e)=>a+Number(e.mock_total),0);
-  return {entries, attAvg, actAvg, hwAvg, mockScoreSum, mockTotalSum, mockCount:mocks.length};
+  // Мок тест: әр тесттің пайызының (score/total) орташасы — Белс./ҮЖ баған-
+  // дарымен бірдей "орташа балл" логикасы.
+  const mocks=entries.filter(e=>e.mock_score!=null&&e.mock_total!=null&&Number(e.mock_total)>0);
+  const mockPcts=mocks.map(e=>Number(e.mock_score)/Number(e.mock_total)*100);
+  const mockAvgPct=mockPcts.length?Math.round(mockPcts.reduce((a,b)=>a+b,0)/mockPcts.length):null;
+  return {entries, attAvg, actAvg, hwAvg, mockAvgPct, mockCount:mocks.length};
 }
 
 function renderAnalysis(){
@@ -2347,7 +2361,7 @@ function renderAnalysis(){
 
   const rows=students.map(s=>{
     const st=studentStatsForRange(s.id, start, end);
-    const mock=st.mockCount ? `${st.mockScoreSum}/${st.mockTotalSum}` : '—';
+    const mock=st.mockCount ? `${st.mockAvgPct}%` : '—';
     return `<tr style="cursor:pointer" onclick="openAnalysisStudentDetail('${s.id}','${gId}')">
       <td class="font-bold">${s.name} ${s.surname||''}</td>
       <td><span class="badge ${st.attAvg==null?'badge-blue':st.attAvg>=80?'badge-green':st.attAvg>=50?'badge-yellow':'badge-red'}">${st.attAvg!=null?st.attAvg+'%':'—'}</span></td>
@@ -2357,7 +2371,7 @@ function renderAnalysis(){
     </tr>`;
   }).join('');
 
-  wrap.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Оқушы</th><th>Қатысу %</th><th>Белсенділік орт.</th><th>Үй жұмысы орт.</th><th>Мок тест</th></tr></thead><tbody>${rows}</tbody></table></div>
+  wrap.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Оқушы</th><th>Қатысу %</th><th>Белсенділік орт.</th><th>Үй жұмысы орт.</th><th>Мок тест орт.</th></tr></thead><tbody>${rows}</tbody></table></div>
   <div class="text-muted text-sm" style="margin-top:10px">${start} — ${end} аралығы. Кестедегі оқушыға басып, жеке нәтижесін көре аласыз.</div>`;
 }
 
