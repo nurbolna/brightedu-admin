@@ -180,6 +180,30 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .att-btn.absent{background:var(--red);border-color:var(--red);color:#fff;}
 .att-btn.excused{background:var(--yellow);border-color:var(--yellow);color:#fff;}
 
+/* ===================== JOURNAL GRID ===================== */
+.journal-toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:flex-end;}
+.journal-table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);}
+.journal-table{width:100%;border-collapse:collapse;font-size:12px;}
+.journal-table thead{background:var(--surface2);}
+.journal-table th{padding:8px 6px;text-align:center;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;border-bottom:1px solid var(--border);}
+.journal-table th.j-student-col{text-align:left;position:sticky;left:0;background:var(--surface2);z-index:2;min-width:150px;padding-left:12px;}
+.journal-table td{padding:0;text-align:center;border-top:1px solid var(--border);border-left:1px solid var(--border);}
+.journal-table td.j-student-cell{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1;padding:8px 12px;font-weight:600;font-size:13px;white-space:nowrap;}
+.journal-table td.j-avg-cell{padding:8px 6px;font-weight:700;font-size:12px;}
+.j-cell{width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex-direction:column;line-height:1;cursor:pointer;transition:all .15s;font-weight:700;font-size:12px;color:var(--text2);}
+.j-cell:hover{outline:2px solid var(--accent);outline-offset:-2px;}
+.j-cell.empty{color:var(--border);font-weight:400;}
+.j-cell .j-grade{font-size:10px;font-weight:600;margin-top:1px;opacity:.85;}
+.j-cell.present{background:rgba(52,211,153,0.18);color:var(--green);}
+.j-cell.absent_excused{background:rgba(251,146,60,0.18);color:var(--orange);}
+.j-cell.absent_unexcused{background:rgba(248,113,113,0.18);color:var(--red);}
+.j-cell.late{background:rgba(251,191,36,0.18);color:var(--yellow);}
+.j-status-btn{flex:1;padding:10px 6px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;}
+.j-status-btn.active.present{background:var(--green);border-color:var(--green);color:#fff;}
+.j-status-btn.active.absent_excused{background:var(--orange);border-color:var(--orange);color:#fff;}
+.j-status-btn.active.absent_unexcused{background:var(--red);border-color:var(--red);color:#fff;}
+.j-status-btn.active.late{background:var(--yellow);border-color:var(--yellow);color:#fff;}
+
 /* ===================== FINANCE ===================== */
 .finance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;}
 .fin-card{border-radius:var(--radius);padding:20px;text-align:center;}
@@ -307,8 +331,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
         <div class="nav-item dir-only" onclick="showPage('payments',this)">💳 Төлемдер<span class="nav-badge hidden" id="badgePay">0</span></div>
         <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
         <div class="nav-section">Журнал</div>
-        <div class="nav-item" onclick="showPage('attendance',this)">✅ Қатысу</div>
-        <div class="nav-item" onclick="showPage('grades',this)">📝 Бағалар</div>
+        <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
         <div class="nav-item dir-admin" onclick="showPage('holidays',this)">🎉 Демалыс</div>
         <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Есептер</div>
       </nav>
@@ -483,28 +506,22 @@ tr:hover td{background:rgba(255,255,255,0.02);}
         <div class="card"><div class="card-title">📤 Жалақы тарихы</div><div id="salaryHistory"></div></div>
       </div>
 
-      <!-- ========== ATTENDANCE ========== -->
-      <div class="page" id="page-attendance">
-        <div class="page-header"><div><div class="page-title">Қатысу журналы</div><div class="page-subtitle">Сабаққа қатысуды белгілеу</div></div></div>
+      <!-- ========== JOURNAL ========== -->
+      <div class="page" id="page-journal">
+        <div class="page-header"><div><div class="page-title">Журнал</div><div class="page-subtitle">Қатысу мен бағалар — бір кестеде</div></div></div>
         <div class="card">
-          <div class="form-row" style="margin-bottom:14px">
-            <div class="form-group" style="margin:0"><label>Күн</label><input type="date" id="attendDate" onchange="renderAttendance()" /></div>
-            <div class="form-group" style="margin:0"><label>Группа</label><select id="attendGroup" onchange="renderAttendance()"><option value="">— Таңдаңыз —</option></select></div>
+          <div class="journal-toolbar">
+            <div class="form-group" style="margin:0"><label>Группа</label><select id="journalGroup" onchange="renderJournal()"><option value="">— Таңдаңыз —</option></select></div>
+            <div class="form-group" style="margin:0"><label>Ай</label><input type="month" id="journalMonth" onchange="renderJournal()" /></div>
+            <div style="display:flex;gap:14px;margin-left:auto;flex-wrap:wrap;font-size:12px;color:var(--text2);align-items:center">
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--green);margin-right:4px"></span>Келді</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--orange);margin-right:4px"></span>Себепті</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--red);margin-right:4px"></span>Себепсіз</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--yellow);margin-right:4px"></span>Кешікті</span>
+            </div>
           </div>
-          <div id="attendanceList"><div class="empty-state"><div class="empty-icon">👥</div><p>Группа таңдаңыз</p></div></div>
+          <div id="journalGridWrap"><div class="empty-state"><div class="empty-icon">📔</div><p>Группа мен айды таңдаңыз</p></div></div>
         </div>
-      </div>
-
-      <!-- ========== GRADES ========== -->
-      <div class="page" id="page-grades">
-        <div class="page-header">
-          <div><div class="page-title">Бағалар журналы</div><div class="page-subtitle">Үй тапсырмасы, белсенділік, емтихан</div></div>
-          <button class="btn btn-blue" onclick="openGradeModal()">+ Баға қою</button>
-        </div>
-        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-          <select id="gradeGroupFilter" onchange="renderGrades()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">— Барлық группа —</option></select>
-        </div>
-        <div class="table-wrap"><table><thead><tr><th>Оқушы</th><th>Топ</th><th>Күні</th><th>Үй тапс. (0-5)</th><th>Белсенділік (0-5)</th><th>Емтихан</th><th>Үлгерім %</th><th>Заметка</th><th>Әрекет</th></tr></thead><tbody id="gradesTable"></tbody></table></div>
       </div>
 
       <!-- ========== HOLIDAYS ========== -->
@@ -785,6 +802,29 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   </div>
 </div>
 
+<!-- JOURNAL ENTRY -->
+<div class="modal-overlay" id="journalEntryModal">
+  <div class="modal">
+    <div class="modal-title" id="jeTitle">📔 Журнал жазуы</div>
+    <div class="form-group"><label>Қатысу</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="j-status-btn present" data-status="present" onclick="setJournalStatus('present')">✓ Келді</button>
+        <button type="button" class="j-status-btn absent_excused" data-status="absent_excused" onclick="setJournalStatus('absent_excused')">Себепті</button>
+        <button type="button" class="j-status-btn absent_unexcused" data-status="absent_unexcused" onclick="setJournalStatus('absent_unexcused')">Себепсіз</button>
+        <button type="button" class="j-status-btn late" data-status="late" onclick="setJournalStatus('late')">⏰ Кешікті</button>
+      </div>
+    </div>
+    <div class="form-group" id="jeLateWrap" style="display:none"><label>Неше минут кешікті?</label><input type="number" id="jeLateMinutes" min="1" placeholder="мыс. 10" /></div>
+    <div class="form-group"><label>Баға (0-100, міндетті емес)</label><input type="number" id="jeGrade" min="0" max="100" /></div>
+    <div class="form-group"><label>Заметка</label><textarea id="jeNote" rows="2" placeholder="Ескертпе (мыс. себебі)"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="jeDeleteBtn" onclick="deleteJournalEntry()" style="display:none;margin-right:auto">🗑️ Өшіру</button>
+      <button class="btn btn-ghost" onclick="closeModal('journalEntryModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveJournalEntry()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
 <!-- HOLIDAY -->
 <div class="modal-overlay" id="holidayModal">
   <div class="modal">
@@ -847,11 +887,14 @@ let currentUser = null; // { email, role, name }
 let DATA = {
   courses:[], teachers:[], groups:[], students:[],
   lessons:[], payments:[], grades:[], holidays:[],
-  achievements:[], attendance:[], salary_logs:[], expenses:[]
+  achievements:[], attendance:[], salary_logs:[], expenses:[],
+  journal_entries:[]
 };
 let quickPayStudent = null;
 let salaryTeacherId = null;
 let currentLessonDetail = null; // for lesson journal modal
+let currentJournalEntry = null; // {studentId, groupId, date, id} for journal modal
+let journalStatus = null; // selected status in journal modal
 let studentFilter = '';
 let payFilter = '';
 
@@ -1046,7 +1089,7 @@ function showPage(name, el){
   const renders={
     courses:renderCourses, groups:renderGroups, schedule:renderSchedule,
     students:renderStudents, teachers:renderTeachers, finance:renderFinance,
-    payments:renderPayments, attendance:renderAttendance, grades:renderGrades,
+    payments:renderPayments, journal:renderJournal,
     holidays:renderHolidays, reports:renderReports
   };
   renders[name]?.();
@@ -1057,7 +1100,7 @@ function showPage(name, el){
 // ================================================================
 async function loadAll(){
   if(!sb) return;
-  const tables = ['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance'];
+  const tables = ['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance','journal_entries'];
   await Promise.all(tables.map(async t=>{
     const {data,error}=await sb.from(t).select('*').order('created_at',{ascending:true});
     if(!error&&data) DATA[t]=data;
@@ -1073,7 +1116,7 @@ async function loadAll(){
 
   renderDashboard();
   updateBadges();
-  populateAttendGroups();
+  populateJournalGroups();
   populateStudentGroupFilter();
 }
 
@@ -2026,7 +2069,135 @@ function renderFinancePayments(){
 }
 
 // ================================================================
-// ATTENDANCE
+// JOURNAL (unified attendance + grade grid)
+// ================================================================
+const J_STATUS_LABEL={present:'✓',absent_excused:'С',absent_unexcused:'Қ',late:'⏰'};
+
+function populateJournalGroups(){
+  const s=document.getElementById('journalGroup'); if(!s)return;
+  const v=s.value;
+  let groups=DATA.groups;
+  if(currentUser?.role==='teacher'&&currentUser.teacherId){
+    groups=groups.filter(g=>g.teacher_id===currentUser.teacherId);
+  }
+  s.innerHTML='<option value="">— Таңдаңыз —</option>'+groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  if(v)s.value=v;
+  const mEl=document.getElementById('journalMonth');
+  if(mEl && !mEl.value) mEl.value=new Date().toISOString().slice(0,7);
+}
+
+function isHolidayDate(dateStr){
+  return DATA.holidays.some(h=>h.start_date&&h.end_date&&dateStr>=h.start_date&&dateStr<=h.end_date);
+}
+
+// Builds the list of 'YYYY-MM-DD' dates in the given month that this group has lessons on.
+// Falls back to every day of the month if the group has no lessons scheduled yet.
+function journalDatesForGroup(gId, monthStr){
+  const [y,m]=monthStr.split('-').map(Number);
+  const daysInMonth=new Date(y,m,0).getDate();
+  const lessonDays=new Set(DATA.lessons.filter(l=>l.group_id===gId).map(l=>Number(l.day)));
+  const dates=[];
+  for(let d=1; d<=daysInMonth; d++){
+    const dt=new Date(y,m-1,d);
+    const dateStr=dt.toISOString().slice(0,10);
+    if(isHolidayDate(dateStr)) continue;
+    if(lessonDays.size===0 || lessonDays.has(dt.getDay())) dates.push(dateStr);
+  }
+  return dates;
+}
+
+function renderJournal(){
+  const gId=document.getElementById('journalGroup')?.value;
+  const monthStr=document.getElementById('journalMonth')?.value;
+  const wrap=document.getElementById('journalGridWrap');
+  if(!wrap)return;
+  if(!gId || !monthStr){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📔</div><p>Группа мен айды таңдаңыз</p></div>'; return; }
+  const students=DATA.students.filter(s=>s.group_id===gId);
+  if(!students.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл топта оқушылар жоқ</p></div>'; return; }
+  const dates=journalDatesForGroup(gId, monthStr);
+  if(!dates.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Бұл айда сабақ күндері жоқ</p></div>'; return; }
+
+  const head=`<th class="j-student-col">Оқушы</th>`+dates.map(d=>{
+    const day=Number(d.slice(8,10));
+    const wd=['Жк','Дс','Сс','Ср','Бс','Жм','Сб'][new Date(d).getDay()];
+    return `<th>${day}<br>${wd}</th>`;
+  }).join('')+`<th>Орташа</th>`;
+
+  const rows=students.map(s=>{
+    const cells=dates.map(d=>{
+      const e=DATA.journal_entries.find(je=>je.student_id===s.id&&je.lesson_date===d);
+      if(!e || !e.attendance) return `<td><div class="j-cell empty" onclick="openJournalEntry('${s.id}','${gId}','${d}')">—</div></td>`;
+      const label=e.attendance==='late'&&e.late_minutes?`${e.late_minutes}м`:J_STATUS_LABEL[e.attendance]||'';
+      const gradeHtml=e.grade!=null?`<div class="j-grade">${e.grade}</div>`:'';
+      return `<td><div class="j-cell ${e.attendance}" onclick="openJournalEntry('${s.id}','${gId}','${d}')" title="${e.note||''}">${label}${gradeHtml}</div></td>`;
+    }).join('');
+    const grades=dates.map(d=>DATA.journal_entries.find(je=>je.student_id===s.id&&je.lesson_date===d)).filter(e=>e&&e.grade!=null).map(e=>Number(e.grade));
+    const avg=grades.length?Math.round(grades.reduce((a,b)=>a+b,0)/grades.length):null;
+    return `<tr><td class="j-student-cell">${s.name} ${s.surname||''}</td>${cells}<td class="j-avg-cell">${avg!=null?avg:'—'}</td></tr>`;
+  }).join('');
+
+  wrap.innerHTML=`<div class="journal-table-wrap"><table class="journal-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function openJournalEntry(sId, gId, date){
+  const s=DATA.students.find(s=>s.id===sId); if(!s)return;
+  const e=DATA.journal_entries.find(je=>je.student_id===sId&&je.lesson_date===date);
+  currentJournalEntry={studentId:sId, groupId:gId, date, id:e?.id||null};
+  journalStatus=e?.attendance||null;
+  document.getElementById('jeTitle').textContent=`📔 ${s.name} ${s.surname||''} — ${date}`;
+  document.getElementById('jeGrade').value=e?.grade??'';
+  document.getElementById('jeNote').value=e?.note||'';
+  document.getElementById('jeLateMinutes').value=e?.late_minutes??'';
+  document.getElementById('jeDeleteBtn').style.display=e?'inline-flex':'none';
+  applyJournalStatusUI();
+  openModal('journalEntryModal');
+}
+
+function setJournalStatus(status){
+  journalStatus = (journalStatus===status) ? null : status;
+  applyJournalStatusUI();
+}
+
+function applyJournalStatusUI(){
+  document.querySelectorAll('#journalEntryModal .j-status-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.status===journalStatus);
+  });
+  document.getElementById('jeLateWrap').style.display = journalStatus==='late' ? 'block' : 'none';
+}
+
+async function saveJournalEntry(){
+  if(!currentJournalEntry) return;
+  const {studentId,groupId,date,id}=currentJournalEntry;
+  if(!journalStatus){ return alert('Қатысу түрін таңдаңыз'); }
+  if(journalStatus==='late' && !document.getElementById('jeLateMinutes').value){ return alert('Кешіккен минут санын енгізіңіз'); }
+  const gradeVal=document.getElementById('jeGrade').value;
+  const row={
+    student_id:studentId, group_id:groupId, lesson_date:date,
+    attendance:journalStatus,
+    late_minutes: journalStatus==='late' ? Number(document.getElementById('jeLateMinutes').value) : null,
+    grade: gradeVal===''?null:Number(gradeVal),
+    note: document.getElementById('jeNote').value||null
+  };
+  if(id) await sb.from('journal_entries').update(row).eq('id',id);
+  else await sb.from('journal_entries').insert(row);
+  closeModal('journalEntryModal');
+  await loadAll();
+  renderJournal();
+  toast('✅ Сақталды!');
+}
+
+async function deleteJournalEntry(){
+  if(!currentJournalEntry?.id) return;
+  await sb.from('journal_entries').delete().eq('id',currentJournalEntry.id);
+  closeModal('journalEntryModal');
+  await loadAll();
+  renderJournal();
+  toast('🗑️ Өшірілді');
+}
+
+// ================================================================
+// ATTENDANCE (legacy — kept for backward compatibility, no longer
+// linked from the nav; replaced by the JOURNAL grid above)
 // ================================================================
 function populateAttendGroups(){
   const s=document.getElementById('attendGroup'); if(!s)return;
@@ -2272,6 +2443,18 @@ create table if not exists achievements(id uuid primary key default gen_random_u
 create table if not exists attendance(id uuid primary key default gen_random_uuid(),student_id uuid,group_id uuid,attend_date date,status text,created_at timestamptz default now());
 create table if not exists salary_logs(id uuid primary key default gen_random_uuid(),teacher_id uuid,lesson_id uuid,date date,amount numeric,note text,created_at timestamptz default now());
 create table if not exists expenses(id uuid primary key default gen_random_uuid(),amount numeric,category text,notes text,date date,created_at timestamptz default now());
+create table if not exists journal_entries(
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id) on delete cascade,
+  group_id uuid not null references groups(id) on delete cascade,
+  lesson_date date not null,
+  attendance text,        -- 'present' | 'absent_excused' | 'absent_unexcused' | 'late'
+  late_minutes int,       -- filled only when attendance = 'late'
+  grade int,               -- single 0-100 grade per cell, optional
+  note text,
+  created_at timestamptz default now(),
+  unique(student_id, lesson_date)
+);
 
 -- 2. Alter existing tables (add missing columns):
 alter table teachers add column if not exists hourly_rate numeric;
@@ -2282,13 +2465,42 @@ alter table students add column if not exists progress_percent int default 0;
 
 -- 3. RLS Policies:
 do $$ declare t text; begin
-  foreach t in array array['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance','salary_logs','expenses']
+  foreach t in array array['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance','salary_logs','expenses','journal_entries']
   loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "allow all" on %I', t);
     execute format('create policy "allow all" on %I for all using(true) with check(true)', t);
   end loop;
 end $$;
+
+-- 4. ONE-TIME (optional): migrate existing 'attendance' + 'grades' rows into
+--    the new unified 'journal_entries' table. Run once after creating the
+--    table above. Old tables are left untouched as a backup.
+insert into journal_entries(student_id, group_id, lesson_date, attendance, grade, note)
+select
+  a.student_id, a.group_id, a.attend_date,
+  case a.status
+    when 'present' then 'present'
+    when 'excused' then 'absent_excused'
+    when 'absent'  then 'absent_unexcused'
+    else null
+  end,
+  null, null
+from attendance a
+on conflict (student_id, lesson_date) do update
+  set attendance = excluded.attendance;
+
+insert into journal_entries(student_id, group_id, lesson_date, grade, note)
+select
+  g.student_id,
+  (select group_id from students where id = g.student_id),
+  g.grade_date,
+  coalesce(g.exam_score, round((coalesce(g.homework_score,0)/5.0*30)+(coalesce(g.activity_score,0)/5.0*20)+(coalesce(g.exam_score,0)/100.0*40))),
+  g.note
+from grades g
+where g.grade_date is not null
+on conflict (student_id, lesson_date) do update
+  set grade = excluded.grade, note = coalesce(excluded.note, journal_entries.note);
 =================================================================
 */
 </script>
