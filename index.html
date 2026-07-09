@@ -434,10 +434,9 @@ details[open] summary::before{content:'▾ '}
           <table>
             <thead>
               <tr>
-                <th>#</th><th>Аты-жөні</th><th>Группа</th><th>Мұғалім</th>
-                <th class="admin-hidden">Төлем мерзімі</th>
+                <th>#</th><th>Аты-жөні</th><th>Группа</th>
                 <th>Үлгерім</th>
-                <th class="admin-hidden">Статус</th>
+                <th class="admin-hidden">Төлем статусы</th>
                 <th>Ата-ана</th><th>Әрекет</th>
               </tr>
             </thead>
@@ -681,7 +680,7 @@ details[open] summary::before{content:'▾ '}
       <div class="form-group"><label>Телефон</label><input type="text" id="studentPhone" /></div>
       <div class="form-group"><label>Туған күні</label><input type="date" id="studentBirth" /></div>
     </div>
-    <div class="form-group"><label>Группа</label><select id="studentGroup"><option value="">—</option></select></div>
+    <div class="form-group"><label>Группалар (бірнешеуін таңдауға болады)</label><div id="studentGroupsChecks" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface2);display:flex;flex-direction:column;gap:8px"></div></div>
     <div class="form-group"><label>Келесі төлем күні</label><input type="date" id="studentNextPayDate" /></div>
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">👨‍👩‍👧 Ата-ана</div>
@@ -888,14 +887,14 @@ const SB_KEY = 'sb_publishable_bsFB2bPrgFykLSXdKtL28A_bV5K181Y';
 
 // Жергілікті аккаунттар
 const LOCAL_ACCOUNTS = [
-  { login:'director', pass:'MyPass2025', role:'director', name:'Директор' },
+  { login:'director', pass:'009900', role:'director', name:'Директор' },
   { login:'admin',    pass:'Qwerty123',  role:'admin',    name:'Администратор' }
 ];
 
 let sb = null;
 let currentUser = null; // { email, role, name }
 let DATA = {
-  courses:[], teachers:[], groups:[], students:[],
+  courses:[], teachers:[], groups:[], students:[], student_groups:[],
   lessons:[], payments:[], holidays:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
   journal_entries:[]
@@ -1163,7 +1162,7 @@ function renderStudy(){
 // ================================================================
 async function loadAll(){
   if(!sb) return;
-  const tables = ['courses','teachers','groups','students','lessons','payments','holidays','achievements','attendance','journal_entries'];
+  const tables = ['courses','teachers','groups','students','student_groups','lessons','payments','holidays','achievements','attendance','journal_entries'];
   await Promise.all(tables.map(async t=>{
     const {data,error}=await sb.from(t).select('*').order('created_at',{ascending:true});
     if(!error&&data) DATA[t]=data;
@@ -1187,6 +1186,17 @@ async function loadAll(){
 // ================================================================
 // HELPERS
 // ================================================================
+// ---- Оқушы <-> Группа (көп-көпке) көмекші функциялары ----
+function getStudentGroupIds(sId){
+  return DATA.student_groups.filter(sg=>sg.student_id===sId).map(sg=>sg.group_id);
+}
+function getStudentGroups(sId){
+  const ids=new Set(getStudentGroupIds(sId));
+  return DATA.groups.filter(g=>ids.has(g.id));
+}
+function studentInGroup(sId,gId){
+  return DATA.student_groups.some(sg=>sg.student_id===sId&&sg.group_id===gId);
+}
 const MONTHS=['','Қаңтар','Ақпан','Наурыз','Сәуір','Мамыр','Маусым','Шілде','Тамыз','Қыркүйек','Қазан','Қараша','Желтоқсан'];
 const DAYS=['Жексенбі','Дүйсенбі','Сейсенбі','Сәрсенбі','Бейсенбі','Жұма','Сенбі'];
 // UTC-ге түрлендірместен, ЖЕРГІЛІКТІ күнді 'YYYY-MM-DD' форматында қайтарады.
@@ -1305,14 +1315,14 @@ function renderDashboard(){
       qpEl.innerHTML='<div class="empty-state"><div class="empty-icon">✅</div><p>Барлығы төледі!</p></div>';
     } else {
       qpEl.innerHTML=needPay.map(s=>{
-        const g=DATA.groups.find(g=>g.id===s.group_id);
+        const sGroups=getStudentGroups(s.id);
+        const gNames=sGroups.map(g=>g.name).join(', ');
         const st=getPayStatus(s);
         const dl=s.next_pay_date?daysUntil(s.next_pay_date):null;
         const dInfo=dl!==null?(dl<0?`${Math.abs(dl)} күн өтті`:`${dl} күн қалды`):'';
         return`<div class="quick-pay-item ${st}" onclick="openQuickPay('${s.id}')">
-          <div><div class="qp-name">${s.name} ${s.surname||''}</div><div class="qp-info">${g?g.name:'—'} ${dInfo?'| '+dInfo:''}</div></div>
+          <div><div class="qp-name">${s.name} ${s.surname||''}</div><div class="qp-info">${gNames||'—'} ${dInfo?'| '+dInfo:''}</div></div>
           <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-weight:700;font-size:13px">${g&&g.fee?fmt(g.fee)+'₸':''}</span>
             <button class="btn btn-green btn-sm" onclick="event.stopPropagation();openQuickPay('${s.id}')">💳</button>
           </div>
         </div>`;
@@ -1345,15 +1355,15 @@ function renderDashboard(){
 // ================================================================
 function openQuickPay(sId){
   quickPayStudent=DATA.students.find(s=>s.id===sId); if(!quickPayStudent) return;
-  const g=DATA.groups.find(g=>g.id===quickPayStudent.group_id);
-  const fee=g?.fee||0;
+  const sGroups=getStudentGroups(quickPayStudent.id);
+  const gNames=sGroups.map(g=>g.name).join(', ');
   document.getElementById('quickPayModalContent').innerHTML=`
     <div class="wallet-card" style="margin-bottom:16px">
       <div class="wallet-label">Оқушы</div>
       <div style="font-size:18px;font-weight:700;margin:6px 0">${quickPayStudent.name} ${quickPayStudent.surname||''}</div>
-      <div class="wallet-label">${g?g.name:'—'} | Мерзім: ${quickPayStudent.next_pay_date||'—'}</div>
+      <div class="wallet-label">${gNames||'—'} | Мерзім: ${quickPayStudent.next_pay_date||'—'}</div>
     </div>
-    <div class="form-group"><label>Төлем сомасы (₸)</label><input type="number" id="qpAmount" value="${fee}" /></div>
+    <div class="form-group"><label>Төлем сомасы (₸)</label><input type="number" id="qpAmount" placeholder="Сомасын енгізіңіз" /></div>
     <div class="form-group"><label>Төлем түрі</label>
       <select id="qpType"><option value="cash">💵 Қолма-қол</option><option value="card">💳 Карта</option><option value="transfer">📲 Аударым</option></select>
     </div>
@@ -1464,7 +1474,7 @@ function renderGroups(){
     DATA.groups.map((g,i)=>{
       const c=DATA.courses.find(c=>c.id===g.course_id);
       const t=DATA.teachers.find(t=>t.id===g.teacher_id);
-      const sc=DATA.students.filter(s=>s.group_id===g.id).length;
+      const sc=DATA.student_groups.filter(sg=>sg.group_id===g.id).length;
       return`<tr><td>${i+1}</td><td class="font-bold">${g.name}</td><td>${c?c.name:'—'}</td><td><span class="badge badge-purple">${g.level||'—'}</span></td><td>${t?t.name+' '+(t.surname||''):'—'}</td><td><span class="badge badge-blue">${sc}/${g.max_students||'∞'}</span></td><td>${g.room||'—'}</td><td>${g.fee?fmt(g.fee)+'₸':'—'}</td>
       <td><div style="display:flex;gap:5px"><button class="btn btn-ghost btn-sm" onclick='openGroupModal(${JSON.stringify(g).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-red btn-sm" onclick="deleteGroup('${g.id}')">🗑️</button></div></td></tr>`;
     }).join('')
@@ -1528,7 +1538,8 @@ function renderTeachers(){
 // Топтың орташа рейтингі мен қатысуы (жаңа журнал жүйесі бойынша) — мұғалім
 // тиімділігін бағалауға көмектеседі.
 function groupPerformance(gId){
-  const students=DATA.students.filter(s=>s.group_id===gId);
+  const memberIds=new Set(DATA.student_groups.filter(sg=>sg.group_id===gId).map(sg=>sg.student_id));
+  const students=DATA.students.filter(s=>memberIds.has(s.id));
   const progs=[], atts=[];
   students.forEach(s=>{
     const r=calcProgressJournal(s.id,1);
@@ -1902,14 +1913,33 @@ function openStudentModal(s=null){
   document.getElementById('parentPhone').value=s?.parent_phone||'';
   document.getElementById('studentNote').value=s?.note||'';
   document.getElementById('studentNextPayDate').value=s?.next_pay_date||'';
-  sel('studentGroup',DATA.groups.map(g=>({id:g.id,name:g.name})),s?.group_id||'');
+  const selectedIds=new Set(s?.id?getStudentGroupIds(s.id):[]);
+  const cWrap=document.getElementById('studentGroupsChecks');
+  cWrap.innerHTML=DATA.groups.length?DATA.groups.map(g=>`
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;font-weight:400">
+      <input type="checkbox" class="studentGroupChk" value="${g.id}" ${selectedIds.has(g.id)?'checked':''} style="width:auto" />
+      ${g.name}
+    </label>`).join(''):'<div class="text-muted text-sm">Группалар жоқ</div>';
   openModal('studentModal');
 }
 async function saveStudent(){
   const name=document.getElementById('studentName').value.trim(); if(!name)return alert('Атын енгізіңіз');
-  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:document.getElementById('studentGroup').value||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:document.getElementById('studentNextPayDate').value||null};
-  const id=document.getElementById('studentId').value;
-  if(id) await sb.from('students').update(row).eq('id',id); else await sb.from('students').insert(row);
+  const selectedGroupIds=[...document.querySelectorAll('.studentGroupChk:checked')].map(c=>c.value);
+  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:document.getElementById('studentNextPayDate').value||null};
+  let id=document.getElementById('studentId').value;
+  if(id){
+    await sb.from('students').update(row).eq('id',id);
+  } else {
+    const {data:inserted}=await sb.from('students').insert(row).select('id').single();
+    id=inserted?.id;
+  }
+  if(id){
+    // Группалар байланысын жаңарту: ескісін өшіріп, жаңасын жазу
+    await sb.from('student_groups').delete().eq('student_id',id);
+    if(selectedGroupIds.length){
+      await sb.from('student_groups').insert(selectedGroupIds.map(gId=>({student_id:id,group_id:gId})));
+    }
+  }
   closeModal('studentModal'); await loadAll(); renderStudents(); toast('✅ Сақталды!');
 }
 async function deleteStudent(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('students').delete().eq('id',id); await loadAll(); renderStudents(); }
@@ -1925,12 +1955,12 @@ function renderStudents(){
     const q=studentFilter.toLowerCase();
     const match=!q||(s.name+' '+(s.surname||'')).toLowerCase().includes(q);
     if(!match)return false;
-    if(gFilter&&s.group_id!==gFilter)return false;
+    if(gFilter&&!studentInGroup(s.id,gFilter))return false;
     if(statusFilter&&getPayStatus(s)!==statusFilter)return false;
-    // Teacher: only show own group students
+    // Teacher: only show students who have at least one group with this teacher
     if(role==='teacher'&&currentUser.teacherId){
-      const g=DATA.groups.find(g=>g.id===s.group_id);
-      if(!g||g.teacher_id!==currentUser.teacherId)return false;
+      const myGroups=getStudentGroups(s.id);
+      if(!myGroups.some(g=>g.teacher_id===currentUser.teacherId))return false;
     }
     return true;
   });
@@ -1939,15 +1969,12 @@ function renderStudents(){
   const showFinance = role==='director';
 
   document.getElementById('studentsTable').innerHTML=list.map((s,i)=>{
-    const g=DATA.groups.find(g=>g.id===s.group_id);
-    const t=DATA.teachers.find(t=>g&&t.id===g.teacher_id);
+    const sGroups=getStudentGroups(s.id);
     const prog=calcProgress(s.id);
     return`<tr>
       <td>${i+1}</td>
       <td><span class="font-bold" style="cursor:pointer;color:var(--accent)" onclick="showStudentDetail('${s.id}')">${s.name} ${s.surname||''}</span></td>
-      <td>${g?g.name:'—'}</td>
-      <td>${t?t.name+' '+(t.surname||''):'—'}</td>
-      ${showFinance?`<td style="white-space:nowrap">${s.next_pay_date||'—'}</td>`:''}
+      <td>${sGroups.length?sGroups.map(g=>g.name).join(', '):'—'}</td>
       <td>
         <div class="progress-bar" style="width:70px;display:inline-block;margin-right:6px"><div class="progress-fill" style="width:${prog}%;background:${prog>=80?'var(--green)':prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
         <span class="text-sm">${prog}%</span>
@@ -1960,44 +1987,32 @@ function renderStudents(){
         <button class="btn btn-red btn-sm dir-only" onclick="deleteStudent('${s.id}')">🗑️</button>
       </div></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div></td></tr>';
+  }).join('')||'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div></td></tr>';
 }
 
 function showStudentDetail(id){
   const s=DATA.students.find(s=>s.id===id); if(!s)return;
-  const g=DATA.groups.find(g=>g.id===s.group_id);
-  const t=DATA.teachers.find(t=>g&&t.id===g.teacher_id);
-  const c=DATA.courses.find(c=>g&&c.id===g.course_id);
-  const jEntries=DATA.journal_entries.filter(je=>je.student_id===s.id).sort((a,b)=>b.lesson_date.localeCompare(a.lesson_date));
-  const achs=DATA.achievements.filter(a=>a.student_id===s.id);
+  const sGroups=getStudentGroups(s.id);
+  const gNames=sGroups.map(g=>g.name).join(', ')||'—';
+  const tNames=[...new Set(sGroups.map(g=>DATA.teachers.find(t=>t.id===g.teacher_id)).filter(Boolean).map(t=>t.name+' '+(t.surname||'')))].join(', ')||'—';
+  const cNames=[...new Set(sGroups.map(g=>DATA.courses.find(c=>c.id===g.course_id)).filter(Boolean).map(c=>c.name))].join(', ')||'—';
   const pmts=[...DATA.payments].filter(p=>p.student_id===s.id).reverse().slice(0,5);
   const prog=calcProgress(s.id);
   const role=currentUser?.role;
   document.getElementById('sdTitle').textContent=s.name+' '+(s.surname||'');
   document.getElementById('sdContent').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Группа</div><div class="font-bold">${g?g.name:'—'}</div></div>
-      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Мұғалім</div><div class="font-bold">${t?t.name+' '+(t.surname||''):'—'}</div></div>
-      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Курс</div><div class="font-bold">${c?c.name:'—'}</div></div>
+      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Группалар</div><div class="font-bold">${gNames}</div></div>
+      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Мұғалімдер</div><div class="font-bold">${tNames}</div></div>
+      <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Курстар</div><div class="font-bold">${cNames}</div></div>
       ${role!=='admin'?`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келесі төлем</div><div class="font-bold">${s.next_pay_date||'—'}</div>${payStatusBadge(s)}</div>`:'<div></div>'}
     </div>
     <div style="margin-bottom:12px">
       <div class="text-muted text-sm" style="margin-bottom:4px">📊 Үлгерім</div>
       <div class="progress-bar"><div class="progress-fill" style="width:${prog}%;background:${prog>=80?'var(--green)':prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
-      <div class="text-sm" style="margin-top:4px">${prog}%</div>
+      <div class="text-sm" style="margin-top:4px">${prog}% — толық статистика «Анализ» бетінде</div>
     </div>
     ${s.parent_name?`<div class="text-sm" style="margin-bottom:10px">📞 <b>${s.parent_name}</b> — ${s.parent_phone||''}</div>`:''}
-    <div style="margin-bottom:12px"><b>📔 Соңғы журнал жазбалары:</b>
-      <div style="margin-top:8px">${jEntries.slice(0,5).map(e=>{
-        const attLabel={present:'✓',absent_excused:'Себепті',absent_unexcused:'Себепсіз',late:'⏰'}[e.attendance]||'—';
-        return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-          <span class="text-sm">${e.lesson_date||'—'} (${attLabel})</span>
-          <span class="text-sm">Белс:${e.activity??'—'} ҮЖ:${e.homework??'—'} Мок:${e.mock_score!=null&&e.mock_total!=null?e.mock_score+'/'+e.mock_total:'—'}</span>
-          <span class="text-sm text-muted">${e.note||''}</span>
-        </div>`;}).join('')||'<span class="text-muted text-sm">Жоқ</span>'}
-      </div>
-    </div>
-    <div style="margin-bottom:12px"><b>🏆 Марапаттар:</b> ${achs.map(a=>`<span class="badge badge-yellow" style="margin:0 3px">${a.icon||'🏆'} ${a.name}</span>`).join('')||'<span class="text-muted text-sm">Жоқ</span>'}</div>
     ${role!=='admin'?`<div><b>💳 Төлем тарихы:</b><div style="margin-top:8px">${pmts.map(p=>`<div class="text-sm" style="padding:5px 0;border-bottom:1px solid var(--border)">${MONTHS[p.month]} ${p.year} — <b>${fmt(p.amount)}₸</b> (${p.pay_date||''})</div>`).join('')||'<span class="text-muted text-sm">Жоқ</span>'}</div></div>`:''}`;
   openModal('studentDetailModal');
 }
@@ -2130,9 +2145,7 @@ function openPaymentModal(){
 function fillPaymentAmount(){
   const sId=document.getElementById('paymentStudent').value;
   const s=DATA.students.find(s=>s.id===sId); if(!s)return;
-  const g=DATA.groups.find(g=>g.id===s.group_id);
-  // Сома автоматты
-  if(g?.fee) document.getElementById('paymentAmount').value=g.fee;
+  // Сома әрдайым қолмен енгізіледі (оқушы бірнеше топқа қатысуы мүмкін болғандықтан автоматты есептелмейді)
   // Ай/жыл: next_pay_date негізінде
   if(s.next_pay_date){
     const d=parseLocalDate(s.next_pay_date);
@@ -2171,7 +2184,6 @@ function renderPayments(){
   if(payFilter)sorted=sorted.filter(p=>{const s=DATA.students.find(s=>s.id===p.student_id);return(s?s.name+' '+(s.surname||''):'').toLowerCase().includes(payFilter.toLowerCase());});
   document.getElementById('paymentsTable').innerHTML=sorted.map((p,i)=>{
     const s=DATA.students.find(s=>s.id===p.student_id);
-    const g=DATA.groups.find(g=>s&&g.id===s.group_id);
     // Келесі мерзімді есептеу
     const payD=p.pay_date?parseLocalDate(p.pay_date):null;
     const nextD=payD?new Date(payD.getFullYear(),payD.getMonth()+1,payD.getDate()):null;
@@ -2290,11 +2302,11 @@ function renderFinancePayments(){
 
   tbody.innerHTML=pays.map((p,i)=>{
     const s=DATA.students.find(s=>s.id===p.student_id);
-    const g=DATA.groups.find(g=>s&&g.id===s.group_id);
+    const gNames=s?getStudentGroups(s.id).map(g=>g.name).join(', '):'';
     return`<tr>
       <td>${i+1}</td>
       <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
-      <td>${g?g.name:'—'}</td>
+      <td>${gNames||'—'}</td>
       <td><span class="badge badge-blue">${MONTHS[p.month]||p.month} ${p.year}</span></td>
       <td class="font-bold" style="color:var(--green)">${fmt(p.amount)}₸</td>
       <td>${p.pay_date||'—'}</td>
@@ -2432,7 +2444,8 @@ function renderJournal(){
   const wrap=document.getElementById('journalGridWrap');
   if(!wrap)return;
   if(!gId || !monthStr){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📔</div><p>Группа мен айды таңдаңыз</p></div>'; return; }
-  const students=DATA.students.filter(s=>s.group_id===gId);
+  const jMemberIds=new Set(DATA.student_groups.filter(sg=>sg.group_id===gId).map(sg=>sg.student_id));
+  const students=DATA.students.filter(s=>jMemberIds.has(s.id));
   if(!students.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл топта оқушылар жоқ</p></div>'; return; }
   const dates=journalDatesForGroup(gId, monthStr);
   if(!dates.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Бұл айда сабақ күндері жоқ</p></div>'; return; }
@@ -2616,7 +2629,8 @@ function renderAnalysis(){
   if(!gId){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📊</div><p>Группа таңдаңыз</p></div>'; return; }
   const [start,end]=analysisDateRange();
   if(!start){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Кезеңді таңдаңыз</p></div>'; return; }
-  const students=DATA.students.filter(s=>s.group_id===gId);
+  const aMemberIds=new Set(DATA.student_groups.filter(sg=>sg.group_id===gId).map(sg=>sg.student_id));
+  const students=DATA.students.filter(s=>aMemberIds.has(s.id));
   if(!students.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл топта оқушылар жоқ</p></div>'; return; }
 
   const rows=students.map(s=>{
@@ -2684,7 +2698,8 @@ async function renderAttendance(){
   const el=document.getElementById('attendanceList');
   if(!gId){el.innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>Группа таңдаңыз</p></div>';return;}
   const{data:attData}=await sb.from('attendance').select('*').eq('group_id',gId).eq('attend_date',date);
-  const students=DATA.students.filter(s=>s.group_id===gId);
+  const attMemberIds=new Set(DATA.student_groups.filter(sg=>sg.group_id===gId).map(sg=>sg.student_id));
+  const students=DATA.students.filter(s=>attMemberIds.has(s.id));
   if(!students.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div>';return;}
   el.innerHTML=students.map(s=>{
     const rec=attData?.find(a=>a.student_id===s.id);
@@ -2767,7 +2782,8 @@ document.querySelectorAll('.modal-overlay').forEach(o=>{
 function renderTeacherDashboard(){
   const tid=currentUser.teacherId;
   const myGroups=DATA.groups.filter(g=>g.teacher_id===tid);
-  const myStudents=DATA.students.filter(s=>myGroups.some(g=>g.id===s.group_id));
+  const myGroupIdSet=new Set(myGroups.map(g=>g.id));
+  const myStudents=DATA.students.filter(s=>getStudentGroupIds(s.id).some(gid=>myGroupIdSet.has(gid)));
   const myLessons=DATA.lessons.filter(l=>l.teacher_id===tid);
   const now=new Date();
   const today=now.getDay();
@@ -2795,7 +2811,7 @@ function renderTeacherDashboard(){
       aEl.innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>Сізге топ тағайындалмаған</p></div>';
     } else {
       aEl.innerHTML=myGroups.map(g=>{
-        const sc=DATA.students.filter(s=>s.group_id===g.id).length;
+        const sc=DATA.student_groups.filter(sg=>sg.group_id===g.id).length;
         const c=DATA.courses.find(c=>c.id===g.course_id);
         return`<div class="attend-row">
           <div>
@@ -2853,6 +2869,9 @@ create table if not exists courses(id uuid primary key default gen_random_uuid()
 create table if not exists teachers(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,subject text,hourly_rate numeric,email text,balance numeric default 0,note text,created_at timestamptz default now());
 create table if not exists groups(id uuid primary key default gen_random_uuid(),name text,course_id uuid,level text,teacher_id uuid,room text,fee numeric,max_students int,created_at timestamptz default now());
 create table if not exists students(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,birth_date date,group_id uuid,parent_name text,parent_phone text,note text,next_pay_date date,progress_percent int default 0,created_at timestamptz default now());
+-- group_id жоғарыда ЕСКІ (deprecated) баған, тек кейбір ескі жазбалармен үйлесімділік үшін қалдырылған.
+-- Оқушының нақты топтары төмендегі student_groups кестесінде сақталады (1 оқушы — бірнеше топ).
+create table if not exists student_groups(id uuid primary key default gen_random_uuid(),student_id uuid not null references students(id) on delete cascade,group_id uuid not null references groups(id) on delete cascade,created_at timestamptz default now(),unique(student_id, group_id));
 create table if not exists lessons(id uuid primary key default gen_random_uuid(),group_id uuid,teacher_id uuid,day int,start_time text,end_time text,room text,created_at timestamptz default now());
 create table if not exists payments(id uuid primary key default gen_random_uuid(),student_id uuid,amount numeric,month int,year int,pay_date date,pay_type text,note text,created_at timestamptz default now());
 -- DEPRECATED: 'grades' table is no longer used by the app (fully replaced by
