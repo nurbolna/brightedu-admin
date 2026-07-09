@@ -2042,7 +2042,20 @@ async function saveStudent(){
   }
   closeModal('studentModal'); await loadAll(); renderStudents(); toast('✅ Сақталды!');
 }
-async function deleteStudent(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('students').delete().eq('id',id); await loadAll(); renderStudents(); }
+async function deleteStudent(id){
+  if(!confirm('Өшіресіз бе? Оқушының журнал/қатысу жазбалары бірге өшіріледі, ал төлем тарихы қаржы есебінде сақталып қалады.'))return;
+  // journal_entries кестесінде RESTRICT FK бар болғандықтан, алдымен соны (және
+  // байланысты ескі attendance/grades/achievements жазбаларын) тазалаймыз —
+  // әйтпесе students.delete() қатемен сынып, ештеңе өшпей қалады.
+  await sb.from('journal_entries').delete().eq('student_id',id);
+  await sb.from('attendance').delete().eq('student_id',id);
+  await sb.from('grades').delete().eq('student_id',id);
+  await sb.from('achievements').delete().eq('student_id',id);
+  // Төлемдер (payments) әдейі өшірілмейді — қаржы тарихы сол бойы дұрыс қалуы үшін.
+  const {error}=await sb.from('students').delete().eq('id',id);
+  if(error){ toast('❌ Өшіру кезінде қате: '+error.message,'error'); return; }
+  await loadAll(); renderStudents(); toast('✅ Оқушы өшірілді');
+}
 
 function filterStudents(val){ studentFilter=val; renderStudents(); }
 
