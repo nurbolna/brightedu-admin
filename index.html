@@ -1157,6 +1157,11 @@ function setupUI(){
       }
     });
   });
+  // ue (Юнит-экономика) опциялары fm-нен cloneNode арқылы жасалады, бірақ
+  // cloneNode кезінде "таңдалған" күй әрдайым дұрыс көшірілмейді (браузер
+  // алғашқы опцияны әдепкі етіп қалдырып қоюы мүмкін) — сондықтан соңында
+  // мәнін нақты бір рет тікелей теңестіреміз.
+  if(ue) ue.value = fm.value;
 }
 
 // ================================================================
@@ -1179,7 +1184,7 @@ function showPage(name, el){
   document.getElementById('mobileOverlay').classList.remove('open');
   const renders={
     study:renderStudy,
-    students:renderStudents, teachers:renderTeachers, finance:renderFinance,
+    students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
     payments:renderPayments, journal:renderJournal, analysis:renderAnalysis,
     holidays:renderHolidays, reports:renderReports, 'unit-economics':renderUnitEconomics
   };
@@ -1300,6 +1305,9 @@ function calcPaymentBreakdown(amount, payType){
 }
 
 function fmt(n){ return Number(n||0).toLocaleString('kk-KZ'); }
+// Санды 1 ондық бөлшекке дейін қысқартып көрсетеді, бірақ бүтін сан болса
+// ".0" қосылмайды (мыс. 20.75 -> "20.8", 30 -> "30").
+function fmtDec1(n){ const r=Math.round(n*10)/10; return (r%1===0)?String(r):r.toFixed(1); }
 function dur(s,e){ if(!s||!e) return 1; const[sh,sm]=s.split(':').map(Number);const[eh,em]=e.split(':').map(Number); return Math.max(((eh*60+em)-(sh*60+sm))/60,0.5); }
 function toast(msg,type='success'){ const t=document.createElement('div'); t.className=`toast ${type}`; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3000); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
@@ -1936,6 +1944,7 @@ async function voidSalaryHistoryEntry(id, tId){
   if(t) renderSalaryHeader(t);
   renderSalaryHistory(tId);
   renderTeachers();
+  if(document.getElementById('finMonth')) renderFinance();
   toast('✅ Жазба өшірілді, баланс жаңартылды','success');
 }
 
@@ -2400,11 +2409,26 @@ function renderFinance(){
       <div class="expense-bar-track"><div class="expense-bar-fill" style="width:${(amt/maxVal*100).toFixed(1)}%;background:${EXPENSE_COLORS[cat]||'var(--accent)'}"></div></div>
     </div>`).join(''):'<div class="empty-state"><div class="empty-icon">📊</div><p>Шығыстар жоқ</p></div>';
 
-  // Expenses table
-  document.getElementById('expensesTable').innerHTML=monthExp.map(e=>`
+  // Expenses table — нақты шығыстармен қатар, осы айдағы жалақы төлемдерін де
+  // (salary_logs, note='payout') бір тізімге қосамыз, себебі олар да нақты
+  // шығын болғанымен бөлек кестеде (Жалақы тарихы) сақталады. Сомалар мұнда
+  // тек КӨРСЕТУ үшін қосылады — жоғарыдағы totalExpense есебі бұрынғыдай
+  // salExp+otherExp түрінде бөлек есептеледі, сондықтан қосарланып саналмайды.
+  const salPayoutsForExp=DATA.salary_logs.filter(sl=>sl.note==='payout'&&sl.date?.startsWith(`${y}-${mPad}`));
+  const expenseRows=[
+    ...monthExp.map(e=>({date:e.date, category:e.category, amount:Number(e.amount||0),
+      notes:e.notes||'', del:`deleteExpense('${e.id}')`})),
+    ...salPayoutsForExp.map(sl=>{
+      const t=DATA.teachers.find(t=>t.id===sl.teacher_id);
+      return {date:sl.date, category:'Жалақы', amount:Math.abs(Number(sl.amount||0)),
+        notes:(t?t.name+' '+(t.surname||''):'—')+' — жалақы төлемі',
+        del:`voidSalaryHistoryEntry('${sl.id}','${sl.teacher_id}')`};
+    })
+  ].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  document.getElementById('expensesTable').innerHTML=expenseRows.map(e=>`
     <tr><td>${e.date}</td><td><span class="badge" style="background:${EXPENSE_COLORS[e.category]||'var(--surface2)'}20;color:${EXPENSE_COLORS[e.category]||'var(--text2)'}">${e.category}</span></td>
     <td style="color:var(--red);font-weight:700">${fmt(e.amount)}₸</td><td class="text-muted text-sm">${e.notes||''}</td>
-    <td><button class="btn btn-red btn-sm" onclick="deleteExpense('${e.id}')">🗑️</button></td></tr>`).join('')||'<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🧾</div><p>Шығыстар жоқ</p></div></td></tr>';
+    <td><button class="btn btn-red btn-sm" onclick="${e.del}">🗑️</button></td></tr>`).join('')||'<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🧾</div><p>Шығыстар жоқ</p></div></td></tr>';
 
   // Salary history
   const payouts=DATA.salary_logs.filter(sl=>sl.note==='payout').slice(0,10);
@@ -2573,17 +2597,22 @@ function calcProgressJournal(studentId, minLessons=3){
   const pcts = entries.map(attendancePercent).filter(p=>p!=null);
   const attAvg = pcts.length ? pcts.reduce((a,b)=>a+b,0)/pcts.length : null; // 0-100
 
-  const acts = entries.filter(e=>e.activity!=null).map(e=>Number(e.activity));
+  // Белсенділік тек оқушы сабаққа НАҚТЫ келген күндер бойынша есептеледі —
+  // себепті/себепсіз қатыспаған күнге белсенділік үлгерімге қосылмайды.
+  const acts = entries.filter(e=>e.activity!=null && e.attendance!=='absent_excused' && e.attendance!=='absent_unexcused').map(e=>Number(e.activity));
   const actAvg = acts.length ? acts.reduce((a,b)=>a+b,0)/acts.length : null; // 0-5
 
+  // Үй жұмысы қатыспаған күнде де есептеледі — оқушы сабаққа келмесе де
+  // үй тапсырмасын орындап, мұғалімге жіберуі мүмкін.
   const hws = entries.filter(e=>e.homework!=null).map(e=>Number(e.homework));
   const hwAvg = hws.length ? hws.reduce((a,b)=>a+b,0)/hws.length : null; // 0-10
 
-  // Әр мок тесттің пайызын (score/total) есептеп, содан кейін орташасын аламыз —
-  // басқа бағандар (Белс., ҮЖ) сияқты "орташа балл" логикасына сай болу үшін.
+  // Мок тест: балл мен максимумның орташасын бөлек есептеп, содан кейін
+  // пайызын аламыз (мыс. 23,19,20,21 / 30 -> орташа балл 20.75/30 -> ~69%).
   const mocks = entries.filter(e=>e.mock_score!=null && e.mock_total!=null && Number(e.mock_total)>0);
-  const mockPcts = mocks.map(e=>Number(e.mock_score)/Number(e.mock_total)*100);
-  const mockPct = mockPcts.length ? mockPcts.reduce((a,b)=>a+b,0)/mockPcts.length : null; // 0-100
+  const mockAvgScore = mocks.length ? mocks.reduce((a,e)=>a+Number(e.mock_score),0)/mocks.length : null;
+  const mockAvgTotal = mocks.length ? mocks.reduce((a,e)=>a+Number(e.mock_total),0)/mocks.length : null;
+  const mockPct = (mockAvgScore!=null && mockAvgTotal>0) ? (mockAvgScore/mockAvgTotal*100) : null; // 0-100
 
   const parts=[];
   if(attAvg!=null)  parts.push({v:attAvg,        w:0.10});
@@ -2793,16 +2822,17 @@ function studentStatsForRange(sId, start, end){
   const entries=DATA.journal_entries.filter(je=>je.student_id===sId&&je.lesson_date>=start&&je.lesson_date<=end&&je.attendance);
   const pcts=entries.map(attendancePercent);
   const attAvg=pcts.length?Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length):null;
-  const acts=entries.filter(e=>e.activity!=null).map(e=>Number(e.activity));
+  // Себепті/себепсіз қатыспаған күнгі белсенділік үлгерімге қосылмайды.
+  const acts=entries.filter(e=>e.activity!=null && e.attendance!=='absent_excused' && e.attendance!=='absent_unexcused').map(e=>Number(e.activity));
   const actAvg=acts.length?(acts.reduce((a,b)=>a+b,0)/acts.length).toFixed(1):null;
   const hws=entries.filter(e=>e.homework!=null).map(e=>Number(e.homework));
   const hwAvg=hws.length?(hws.reduce((a,b)=>a+b,0)/hws.length).toFixed(1):null;
-  // Мок тест: әр тесттің пайызының (score/total) орташасы — Белс./ҮЖ баған-
-  // дарымен бірдей "орташа балл" логикасы.
+  // Мок тест: пайызбен емес, нақты баллдың орташасын көрсетеміз (мыс. "20.8/30").
   const mocks=entries.filter(e=>e.mock_score!=null&&e.mock_total!=null&&Number(e.mock_total)>0);
-  const mockPcts=mocks.map(e=>Number(e.mock_score)/Number(e.mock_total)*100);
-  const mockAvgPct=mockPcts.length?Math.round(mockPcts.reduce((a,b)=>a+b,0)/mockPcts.length):null;
-  return {entries, attAvg, actAvg, hwAvg, mockAvgPct, mockCount:mocks.length};
+  const mockAvgScore=mocks.length?mocks.reduce((a,e)=>a+Number(e.mock_score),0)/mocks.length:null;
+  const mockAvgTotal=mocks.length?mocks.reduce((a,e)=>a+Number(e.mock_total),0)/mocks.length:null;
+  const mockDisplay=mocks.length?`${fmtDec1(mockAvgScore)}/${fmtDec1(mockAvgTotal)}`:null;
+  return {entries, attAvg, actAvg, hwAvg, mockAvgScore, mockAvgTotal, mockDisplay, mockCount:mocks.length};
 }
 
 function renderAnalysis(){
@@ -2818,7 +2848,7 @@ function renderAnalysis(){
 
   const rows=students.map(s=>{
     const st=studentStatsForRange(s.id, start, end);
-    const mock=st.mockCount ? `${st.mockAvgPct}%` : '—';
+    const mock=st.mockCount ? st.mockDisplay : '—';
     return `<tr style="cursor:pointer" onclick="openAnalysisStudentDetail('${s.id}','${gId}')">
       <td class="font-bold">${s.name} ${s.surname||''}</td>
       <td><span class="badge ${st.attAvg==null?'badge-blue':st.attAvg>=80?'badge-green':st.attAvg>=50?'badge-yellow':'badge-red'}">${st.attAvg!=null?st.attAvg+'%':'—'}</span></td>
