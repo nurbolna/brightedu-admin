@@ -6,6 +6,7 @@
 <title>Академия Басқару Жүйесі</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 /* ===================== DARK THEME (default) ===================== */
 :root {
@@ -496,12 +497,20 @@ details[open] summary::before{content:'▾ '}
         </div>
         <div class="text-muted text-sm" style="margin:-12px 0 16px">💡 Салық — есептелген сома ғана (әлі төленбеген). Нақты төлеген кезде (жылына 2 рет) «Шығыс қосу → Салық» арқылы жазыңыз.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="card"><div class="card-title">👨‍🏫 Мұғалім жалақылары</div><div id="finTeachers"></div></div>
-          <div class="card"><div class="card-title">💳 Оқушы төлемдері</div><div id="finStudents"></div></div>
-        </div>
-        <div class="card">
-          <div class="card-title">📊 Шығыстар диаграммасы</div>
-          <div id="expenseChart"></div>
+          <div class="card">
+            <div class="card-title">📊 Шығыстар диаграммасы</div>
+            <div style="position:relative;height:240px"><canvas id="expenseChartCanvas" role="img" aria-label="Осы айдағы шығыстардың категория бойынша үлесі"></canvas></div>
+            <div id="expenseChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">🎓 Оқушылар</div>
+            <div style="display:flex;gap:24px;margin-bottom:14px">
+              <div><div class="fin-value" id="stuTotalCount">0</div><div class="fin-label">Барлық оқушы</div></div>
+              <div><div class="fin-value" id="stuNewCount">0</div><div class="fin-label">Осы ай жаңа келген</div></div>
+            </div>
+            <div style="position:relative;height:190px"><canvas id="leadSourceChartCanvas" role="img" aria-label="Осы ай жаңа оқушылардың маркетинг каналы бойынша үлесі"></canvas></div>
+            <div id="leadSourceLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+          </div>
         </div>
         <div class="card">
           <div class="card-title">🧾 Шығыстар журналы</div>
@@ -522,6 +531,7 @@ details[open] summary::before{content:'▾ '}
             </table>
           </div>
         </div>
+        <div class="card"><div class="card-title">👨‍🏫 Мұғалім жалақылары</div><div id="finTeachers"></div></div>
         <div class="card"><div class="card-title">📤 Жалақы тарихы</div><div id="salaryHistory"></div></div>
       </div>
 
@@ -543,6 +553,13 @@ details[open] summary::before{content:'▾ '}
 
         <div class="card">
           <div class="card-title">⚖️ ТБУ — Точка безубыточности</div>
+          <div class="form-group" style="max-width:340px">
+            <label>Жоспарланған айлық шығын (₸) <span class="text-muted" style="font-weight:400">— толтырсаңыз, есеп содан алынады</span></label>
+            <div style="display:flex;gap:8px">
+              <input type="number" id="uePlannedExpense" placeholder="мыс. 250000" style="flex:1" />
+              <button class="btn btn-blue btn-sm" onclick="saveUnitEconPlannedExpense()">💾 Сақтау</button>
+            </div>
+          </div>
           <div class="text-sm" id="ueBepDetail" style="margin-bottom:12px"></div>
           <div class="fin-card profit" style="max-width:300px"><div class="fin-value" id="ueBepSales">0</div><div class="fin-label">Айына керек сату саны (нольге шығу үшін)</div></div>
         </div>
@@ -742,6 +759,7 @@ details[open] summary::before{content:'▾ '}
             <option value="Таргет Facebook">Таргет Facebook</option>
             <option value="Таргет Tiktok">Таргет Tiktok</option>
             <option value="Сарафанка">Сарафанка</option>
+            <option value="Амбассадор">Амбассадор</option>
             <option value="Телеграм канал">Телеграм канал</option>
           </select>
         </div>
@@ -965,7 +983,7 @@ let DATA = {
   courses:[], teachers:[], groups:[], students:[], student_groups:[],
   lessons:[], payments:[], holidays:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
-  journal_entries:[]
+  journal_entries:[], unit_econ_settings:[]
 };
 let quickPayStudent = null;
 let salaryTeacherId = null;
@@ -1253,6 +1271,10 @@ async function loadAll(){
     const {data:ex}=await sb.from('expenses').select('*').order('created_at',{ascending:false});
     if(ex) DATA.expenses=ex;
   }catch(e){ DATA.expenses=[]; }
+  try{
+    const {data:ue}=await sb.from('unit_econ_settings').select('*');
+    if(ue) DATA.unit_econ_settings=ue;
+  }catch(e){ DATA.unit_econ_settings=[]; }
 
   renderDashboard();
   updateBadges();
@@ -1287,6 +1309,46 @@ const EXPENSE_COLORS={
   'Аренда':'#4f8ef7','Маркетинг':'#a78bfa','Хозтовары':'#34d399',
   'Жалақы':'#f87171','Салық':'#fbbf24','Басқа':'#fb923c'
 };
+
+// ================================================================
+// PIE / DOUGHNUT CHART HELPER (Chart.js) — Қаржы бетіндегі шығыстар мен
+// маркетинг каналы диаграммалары үшін ортақ қолданылады.
+// ================================================================
+const PIE_PALETTE=['#2a78d6','#1baf7a','#eda100','#4a3aa7','#e34948','#e87ba4','#eb6834','#008300'];
+const pieChartInstances={};
+function renderPieChart(canvasId, legendId, dataObj, emptyMsg, fmtFn){
+  const canvas=document.getElementById(canvasId);
+  const legendEl=document.getElementById(legendId);
+  if(!canvas) return;
+  if(pieChartInstances[canvasId]){ pieChartInstances[canvasId].destroy(); pieChartInstances[canvasId]=null; }
+  const entries=Object.entries(dataObj||{}).filter(([,v])=>Number(v)>0);
+  if(!entries.length){
+    canvas.style.display='none';
+    if(legendEl) legendEl.innerHTML=`<div class="empty-state" style="padding:16px 0"><div class="empty-icon">📊</div><p>${emptyMsg||'Деректер жоқ'}</p></div>`;
+    return;
+  }
+  canvas.style.display='';
+  const total=entries.reduce((s,[,v])=>s+Number(v),0);
+  const colors=entries.map(([cat],i)=>EXPENSE_COLORS[cat]||PIE_PALETTE[i%PIE_PALETTE.length]);
+  const surfaceColor=getComputedStyle(document.documentElement).getPropertyValue('--surface')?.trim()||'#1a1d27';
+  pieChartInstances[canvasId]=new Chart(canvas,{
+    type:'doughnut',
+    data:{ labels:entries.map(([cat])=>cat), datasets:[{ data:entries.map(([,v])=>Number(v)), backgroundColor:colors, borderWidth:2, borderColor:surfaceColor }]},
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'55%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label:ctx=>{ const v=ctx.parsed; const pct=(v/total*100).toFixed(1); return ` ${ctx.label}: ${fmtFn?fmtFn(v):v} (${pct}%)`; } } }
+      }
+    }
+  });
+  if(legendEl){
+    legendEl.innerHTML=entries.map(([cat,v],i)=>{
+      const pct=(Number(v)/total*100).toFixed(0);
+      return `<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:3px;background:${colors[i]};flex-shrink:0"></span>${cat} — ${fmtFn?fmtFn(v):v} (${pct}%)</span>`;
+    }).join('');
+  }
+}
 
 // ================================================================
 // KASPI КОМИССИЯСЫ + УПРОЩЕНКА (3%) ЕСЕБІ
@@ -2391,23 +2453,21 @@ function renderFinance(){
     return`<div class="attend-row"><div><div class="attend-name">${t.name} ${t.surname||''}</div><div class="attend-info">Баланс: ${fmt(bal)}₸</div></div><span class="badge ${bal>0?'badge-yellow':'badge-green'}">${bal>0?'⏳ Берілмеген':'✅ Берілді'}</span></div>`;
   }).join('')||'<div class="empty-state"><div class="empty-icon">👨‍🏫</div><p>Жоқ</p></div>';
 
-  // Student payments
-  const unpaid=DATA.students.filter(s=>getPayStatus(s)==='overdue');
-  document.getElementById('finStudents').innerHTML=`
-    <div class="attend-row"><div class="attend-name">Осы айда төленді</div><span class="badge badge-green">${pms.length}</span></div>
-    <div class="attend-row"><div class="attend-name">Мерзімі өткен</div><span class="badge badge-red">${unpaid.length}</span></div>
-    ${unpaid.slice(0,5).map(s=>`<div class="text-sm text-muted" style="padding:3px 0">⚠️ ${s.name} ${s.surname||''}</div>`).join('')}`;
+  // Оқушылар — жалпы саны, осы ай жаңа келгендер, маркетинг каналы бойынша үлесі
+  document.getElementById('stuTotalCount').textContent=DATA.students.length;
+  const newStudentsThisMonth=DATA.students.filter(s=>s.created_at&&s.created_at.startsWith(`${y}-${mPad}`));
+  document.getElementById('stuNewCount').textContent=newStudentsThisMonth.length;
+  const leadTotals={};
+  newStudentsThisMonth.forEach(s=>{ const src=s.lead_source||'Белгісіз'; leadTotals[src]=(leadTotals[src]||0)+1; });
+  renderPieChart('leadSourceChartCanvas','leadSourceLegend',leadTotals,
+    Object.keys(leadTotals).length?null:'Бұл айда жаңа оқушы жоқ');
 
-  // Expense chart
+  // Expense chart — pie
   const catTotals={};
   monthExp.forEach(e=>{ catTotals[e.category]=(catTotals[e.category]||0)+Number(e.amount||0); });
   if(salExp>0) catTotals['Жалақы']=(catTotals['Жалақы']||0)+salExp;
-  const maxVal=Math.max(...Object.values(catTotals),1);
-  document.getElementById('expenseChart').innerHTML=Object.keys(catTotals).length?Object.entries(catTotals).map(([cat,amt])=>`
-    <div class="expense-bar">
-      <div class="expense-bar-label"><span>${cat}</span><span style="font-weight:700">${fmt(amt)}₸</span></div>
-      <div class="expense-bar-track"><div class="expense-bar-fill" style="width:${(amt/maxVal*100).toFixed(1)}%;background:${EXPENSE_COLORS[cat]||'var(--accent)'}"></div></div>
-    </div>`).join(''):'<div class="empty-state"><div class="empty-icon">📊</div><p>Шығыстар жоқ</p></div>';
+  renderPieChart('expenseChartCanvas','expenseChartLegend',catTotals,
+    Object.keys(catTotals).length?null:'Шығыстар жоқ', v=>fmt(v)+'₸');
 
   // Expenses table — нақты шығыстармен қатар, осы айдағы жалақы төлемдерін де
   // (salary_logs, note='payout') бір тізімге қосамыз, себебі олар да нақты
@@ -2461,7 +2521,17 @@ function renderUnitEconomics(){
   const monthExp=DATA.expenses.filter(e=>e.date?.startsWith(yPad));
   const salExp=DATA.salary_logs.filter(sl=>sl.note==='payout'&&sl.date?.startsWith(yPad)).reduce((s,l)=>s+Math.abs(Number(l.amount||0)),0);
   const otherExp=monthExp.reduce((s,e)=>s+Number(e.amount||0),0);
-  const totalExpense=salExp+otherExp;
+  const actualExpense=salExp+otherExp;
+
+  // Жоспарланған айлық шығын (қолмен енгізіліп, unit_econ_settings-те сақталады).
+  // Айдың басында әлі барлық нақты шығын енгізілмегендіктен, толтырылған
+  // болса, ТБУ/ТЖД осы санды қолданады — толтырылмаса, нақты (әзірге толық
+  // емес) шығынды қолданады.
+  const ueSetting=DATA.unit_econ_settings.find(s=>Number(s.month)===m&&Number(s.year)===y);
+  const plannedExpense=ueSetting&&ueSetting.planned_expense!=null?Number(ueSetting.planned_expense):null;
+  const plannedInput=document.getElementById('uePlannedExpense');
+  if(plannedInput && document.activeElement!==plannedInput) plannedInput.value = plannedExpense!=null?plannedExpense:'';
+  const totalExpense = (plannedExpense!=null && plannedExpense>0) ? plannedExpense : actualExpense;
 
   // --- Орташа таза маржа (1 сатудан, комиссия мен салықтан кейін) ---
   const pms=DATA.payments.filter(p=>p.month==m&&p.year==y);
@@ -2470,8 +2540,11 @@ function renderUnitEconomics(){
   // --- ТБУ ---
   const bepSales=avgMargin>0?Math.ceil(totalExpense/avgMargin):0;
   document.getElementById('ueBepSales').textContent=avgMargin>0?bepSales:'—';
+  const expenseSourceLabel=(plannedExpense!=null && plannedExpense>0)
+    ?`Жоспарланған айлық шығын`
+    :`Нақты енгізілген шығын (әлі толық болмауы мүмкін)`;
   document.getElementById('ueBepDetail').innerHTML=avgMargin>0
-    ?`Жалпы шығын: <b>${fmt(totalExpense)}₸</b> ÷ Орташа таза маржа (1 сатудан): <b>${fmt(Math.round(avgMargin))}₸</b> = <b>${bepSales}</b> сату`
+    ?`${expenseSourceLabel}: <b>${fmt(totalExpense)}₸</b> ÷ Орташа таза маржа (1 сатудан): <b>${fmt(Math.round(avgMargin))}₸</b> = <b>${bepSales}</b> сату`
     :'Осы айда төлем жоқ, орташа маржаны есептеу мүмкін емес.';
 
   // --- ТЖД ---
@@ -2482,6 +2555,24 @@ function renderUnitEconomics(){
   } else {
     document.getElementById('ueTargetSales').textContent='—';
   }
+}
+
+// Жоспарланған айлық шығынды сақтайды (ай/жыл бойынша), ТБУ/ТЖД есебі
+// енді осы санды пайдаланады (нақты, әлі толық енгізілмеген шығынның орнына).
+async function saveUnitEconPlannedExpense(){
+  const ueVal=document.getElementById('ueMonth')?.value; if(!ueVal) return;
+  const [mStr,yStr]=ueVal.split('_'); const m=Number(mStr), y=Number(yStr);
+  const val=document.getElementById('uePlannedExpense').value;
+  const amount=val===''?null:Number(val);
+  const {error}=await sb.from('unit_econ_settings').upsert(
+    {month:m, year:y, planned_expense:amount, updated_at:new Date().toISOString()},
+    {onConflict:'month,year'}
+  );
+  if(error){ toast('❌ Сақталмады: '+error.message,'error'); return; }
+  const {data:ue}=await sb.from('unit_econ_settings').select('*');
+  if(ue) DATA.unit_econ_settings=ue;
+  renderUnitEconomics();
+  toast('✅ Жоспарланған шығын сақталды!');
 }
 
 // ================================================================
@@ -3123,7 +3214,7 @@ alter table journal_entries add column if not exists activity int;
 alter table journal_entries add column if not exists homework int;
 alter table journal_entries add column if not exists mock_score numeric;
 alter table journal_entries add column if not exists mock_total numeric;
-alter table students add column if not exists lead_source text;   -- дереккөз: Таргет FB / Tiktok / Сарафанка / Телеграм канал
+alter table students add column if not exists lead_source text;   -- дереккөз: Таргет FB / Tiktok / Сарафанка / Амбассадор / Телеграм канал
 alter table students add column if not exists sales_manager text; -- сатқан менеджер аты (мыс. "Нұрбол")
 alter table students add column if not exists marketing_note text; -- CRM ескертпесі (мыс. алдын ала төлем/рассрочка жағдайы)
 alter table payments add column if not exists cash_account text default 'Kaspi Pay'; -- касса түрі (қазір тек Kaspi Pay)
