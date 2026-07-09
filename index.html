@@ -41,6 +41,9 @@
 [data-theme="light"] .fin-card.income{background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2);}
 [data-theme="light"] .fin-card.expense{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);}
 [data-theme="light"] .fin-card.profit{background:rgba(37,99,235,0.08);border-color:rgba(37,99,235,0.2);}
+[data-theme="light"] .fin-card.commission{background:rgba(234,88,12,0.08);border-color:rgba(234,88,12,0.2);}
+[data-theme="light"] .fin-card.tax{background:rgba(217,119,6,0.08);border-color:rgba(217,119,6,0.2);}
+[data-theme="light"] .fin-card.netreal{background:rgba(124,58,237,0.08);border-color:rgba(124,58,237,0.2);}
 [data-theme="light"] .quick-pay-item.overdue{background:rgba(239,68,68,0.05);}
 [data-theme="light"] .quick-pay-item.pending{background:rgba(217,119,6,0.05);}
 [data-theme="light"] .modal-overlay{background:rgba(0,0,0,0.3);}
@@ -214,11 +217,17 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .fin-card.income{background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);}
 .fin-card.expense{background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);}
 .fin-card.profit{background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.2);}
+.fin-card.commission{background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.2);}
+.fin-card.tax{background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);}
+.fin-card.netreal{background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);}
 .fin-value{font-size:24px;font-weight:800;margin-bottom:3px;}
 .fin-label{font-size:12px;color:var(--text2);}
 .fin-card.income .fin-value{color:var(--green);}
 .fin-card.expense .fin-value{color:var(--red);}
 .fin-card.profit .fin-value{color:var(--accent);}
+.fin-card.commission .fin-value{color:var(--orange);}
+.fin-card.tax .fin-value{color:var(--yellow);}
+.fin-card.netreal .fin-value{color:var(--accent2);}
 
 /* ===================== EXPENSE CHART ===================== */
 .expense-bar{margin-bottom:12px;}
@@ -341,6 +350,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-section">Қаржы</div>
         <div class="nav-item dir-only" onclick="showPage('payments',this)">💳 Төлемдер<span class="nav-badge hidden" id="badgePay">0</span></div>
         <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
+        <div class="nav-item dir-only" onclick="showPage('unit-economics',this)">📈 Юнит-экономика</div>
         <div class="nav-item teacher-only" onclick="openMySalary()">💰 Жалақым</div>
       </nav>
       <div class="sidebar-bottom">
@@ -463,7 +473,7 @@ details[open] summary::before{content:'▾ '}
         <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <input type="text" placeholder="🔍 Іздеу..." oninput="filterPayments(this.value)" style="flex:1;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
         </div>
-        <div class="table-wrap"><table><thead><tr><th>#</th><th>Оқушы</th><th>Сомасы</th><th>Қай айға</th><th>Төлеген күні</th><th>Келесі төлем</th><th>Түрі</th><th>Ескертпе</th><th>Әрекет</th></tr></thead><tbody id="paymentsTable"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>Оқушы</th><th>Сомасы</th><th>Қай айға</th><th>Төлеген күні</th><th>Келесі төлем</th><th>Касса</th><th>Түрі</th><th>Таза түсім</th><th>Ескертпе</th><th>Әрекет</th></tr></thead><tbody id="paymentsTable"></tbody></table></div>
       </div>
 
       <!-- ========== FINANCE ========== -->
@@ -480,7 +490,11 @@ details[open] summary::before{content:'▾ '}
           <div class="fin-card income"><div class="fin-value" id="finIncome">0₸</div><div class="fin-label">Жалпы кіріс</div></div>
           <div class="fin-card expense"><div class="fin-value" id="finExpense">0₸</div><div class="fin-label">Жалпы шығыс</div></div>
           <div class="fin-card profit"><div class="fin-value" id="finProfit">0₸</div><div class="fin-label">Таза пайда</div></div>
+          <div class="fin-card commission"><div class="fin-value" id="finCommission">0₸</div><div class="fin-label">Kaspi комиссиясы</div></div>
+          <div class="fin-card tax"><div class="fin-value" id="finTax">0₸</div><div class="fin-label">Есептелген салық (3%)</div></div>
+          <div class="fin-card netreal"><div class="fin-value" id="finNetReal">0₸</div><div class="fin-label">Нақты таза пайда</div></div>
         </div>
+        <div class="text-muted text-sm" style="margin:-12px 0 16px">💡 Салық — есептелген сома ғана (әлі төленбеген). Нақты төлеген кезде (жылына 2 рет) «Шығыс қосу → Салық» арқылы жазыңыз.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <div class="card"><div class="card-title">👨‍🏫 Мұғалім жалақылары</div><div id="finTeachers"></div></div>
           <div class="card"><div class="card-title">💳 Оқушы төлемдері</div><div id="finStudents"></div></div>
@@ -503,12 +517,41 @@ details[open] summary::before{content:'▾ '}
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>#</th><th>Оқушы</th><th>Топ</th><th>Қай айға</th><th>Сомасы</th><th>Төлеген күні</th><th>Түрі</th><th>Ескертпе</th><th>Әрекет</th></tr></thead>
+              <thead><tr><th>#</th><th>Оқушы</th><th>Топ</th><th>Қай айға</th><th>Сомасы</th><th>Төлеген күні</th><th>Касса</th><th>Түрі</th><th>Таза түсім</th><th>Ескертпе</th><th>Әрекет</th></tr></thead>
               <tbody id="finPaymentsTable"></tbody>
             </table>
           </div>
         </div>
         <div class="card"><div class="card-title">📤 Жалақы тарихы</div><div id="salaryHistory"></div></div>
+      </div>
+
+      <!-- ========== UNIT ECONOMICS ========== -->
+      <div class="page dir-only" id="page-unit-economics">
+        <div class="page-header">
+          <div><div class="page-title">Юнит-экономика</div><div class="page-subtitle">CAC, безубыточность, табыс жоспары</div></div>
+          <select id="ueMonth" onchange="renderUnitEconomics()" style="padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:13px;outline:none;"></select>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🎯 CAC — клиентті тарту құны</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="fin-card commission"><div class="fin-value" id="ueCacPaid">0₸</div><div class="fin-label">Paid CAC (тек Таргет FB/Tiktok)</div></div>
+            <div class="fin-card tax"><div class="fin-value" id="ueCacBlended">0₸</div><div class="fin-label">Blended CAC (барлық жаңа оқушы)</div></div>
+          </div>
+          <div class="text-muted text-sm" id="ueCacDetail" style="margin-top:10px"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⚖️ ТБУ — Точка безубыточности</div>
+          <div class="text-sm" id="ueBepDetail" style="margin-bottom:12px"></div>
+          <div class="fin-card profit" style="max-width:300px"><div class="fin-value" id="ueBepSales">0</div><div class="fin-label">Айына керек сату саны (нольге шығу үшін)</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🚀 ТЖД — мақсатты табыс нүктесі</div>
+          <div class="form-group" style="max-width:300px"><label>Осы ай алғыңыз келетін таза пайда (₸)</label><input type="number" id="ueTargetProfit" placeholder="мыс. 500000" oninput="renderUnitEconomics()" /></div>
+          <div class="fin-card netreal" style="max-width:300px"><div class="fin-value" id="ueTargetSales">—</div><div class="fin-label">Керек сату саны</div></div>
+        </div>
       </div>
 
       <!-- ========== JOURNAL ========== -->
@@ -690,6 +733,22 @@ details[open] summary::before{content:'▾ '}
       </div>
     </div>
     <div class="form-group"><label>Ескертпе</label><textarea id="studentNote" rows="2"></textarea></div>
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">📈 Сату (CRM)</div>
+      <div class="form-row">
+        <div class="form-group"><label>Дереккөз</label>
+          <select id="studentLeadSource">
+            <option value="">— Таңдау —</option>
+            <option value="Таргет Facebook">Таргет Facebook</option>
+            <option value="Таргет Tiktok">Таргет Tiktok</option>
+            <option value="Сарафанка">Сарафанка</option>
+            <option value="Телеграм канал">Телеграм канал</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Менеджер</label><input type="text" id="studentSalesManager" placeholder="Мыс: Нұрбол" /></div>
+      </div>
+      <div class="form-group"><label>Маркетинг ескертпесі</label><textarea id="studentMarketingNote" rows="2" placeholder="Мыс: 18к предоплата жіберді, қалғанын рассрочкаға алады"></textarea></div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('studentModal')">Бас тарту</button>
       <button class="btn btn-blue" onclick="saveStudent()">Сақтау</button>
@@ -744,8 +803,17 @@ details[open] summary::before{content:'▾ '}
       </div>
       <div class="form-group"><label>Жыл</label><input type="number" id="paymentYear" /></div>
     </div>
-    <div class="form-group"><label>Төлем түрі</label>
-      <select id="paymentType"><option value="cash">💵 Қолма-қол</option><option value="card">💳 Карта</option><option value="transfer">📲 Аударым</option></select>
+    <div class="form-row">
+      <div class="form-group"><label>Касса</label>
+        <select id="paymentCashAccount"><option value="Kaspi Pay">💳 Kaspi Pay</option></select>
+      </div>
+      <div class="form-group"><label>Төлем түрі</label>
+        <select id="paymentType">
+          <option value="normal">✅ Қалыпты төлем</option>
+          <option value="installment_12">📆 Каспи рассрочка 0-0-12</option>
+          <option value="installment_24">📆 Каспи рассрочка 0-0-24</option>
+        </select>
+      </div>
     </div>
     <div class="form-group"><label>Ескертпе</label><input type="text" id="paymentNote" /></div>
     <div class="modal-footer">
@@ -1075,6 +1143,7 @@ function setupUI(){
 
   // Finance month select
   const fm = document.getElementById('finMonth'); fm.innerHTML='';
+  const ue = document.getElementById('ueMonth'); if(ue) ue.innerHTML='';
   const MN=['Қаңтар','Ақпан','Наурыз','Сәуір','Мамыр','Маусым','Шілде','Тамыз','Қыркүйек','Қазан','Қараша','Желтоқсан'];
   [now.getFullYear()-1, now.getFullYear()].forEach(yr=>{
     MN.forEach((mn,i)=>{
@@ -1082,6 +1151,10 @@ function setupUI(){
       o.value=`${i+1}_${yr}`; o.textContent=`${mn} ${yr}`;
       if(i===now.getMonth()&&yr===now.getFullYear()) o.selected=true;
       fm.appendChild(o);
+      if(ue){
+        const o2=o.cloneNode(true);
+        ue.appendChild(o2);
+      }
     });
   });
 }
@@ -1108,7 +1181,7 @@ function showPage(name, el){
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:renderFinance,
     payments:renderPayments, journal:renderJournal, analysis:renderAnalysis,
-    holidays:renderHolidays, reports:renderReports
+    holidays:renderHolidays, reports:renderReports, 'unit-economics':renderUnitEconomics
   };
   renders[name]?.();
 }
@@ -1209,6 +1282,22 @@ const EXPENSE_COLORS={
   'Аренда':'#4f8ef7','Маркетинг':'#a78bfa','Хозтовары':'#34d399',
   'Жалақы':'#f87171','Салық':'#fbbf24','Басқа':'#fb923c'
 };
+
+// ================================================================
+// KASPI КОМИССИЯСЫ + УПРОЩЕНКА (3%) ЕСЕБІ
+// ================================================================
+// Базалық комиссиялар (ҚҚС-сыз). ҚҚС 16% үстеледі: іс жүзіндегі комиссия = база × 1.16
+const KASPI_VAT=1.16;
+const KASPI_BASE_COMMISSION={ normal:0.0095, installment_12:0.135, installment_24:0.14 };
+const TAX_RATE=0.03; // упрощенка — толық сомадан есептеледі
+function calcPaymentBreakdown(amount, payType){
+  const amt=Number(amount||0);
+  const baseRate=KASPI_BASE_COMMISSION[payType]??0;
+  const commission=amt*baseRate*KASPI_VAT;
+  const tax=amt*TAX_RATE;
+  const net=amt-commission-tax;
+  return {commission,tax,net};
+}
 
 function fmt(n){ return Number(n||0).toLocaleString('kk-KZ'); }
 function dur(s,e){ if(!s||!e) return 1; const[sh,sm]=s.split(':').map(Number);const[eh,em]=e.split(':').map(Number); return Math.max(((eh*60+em)-(sh*60+sm))/60,0.5); }
@@ -1364,8 +1453,15 @@ function openQuickPay(sId){
       <div class="wallet-label">${gNames||'—'} | Мерзім: ${quickPayStudent.next_pay_date||'—'}</div>
     </div>
     <div class="form-group"><label>Төлем сомасы (₸)</label><input type="number" id="qpAmount" placeholder="Сомасын енгізіңіз" /></div>
+    <div class="form-group"><label>Касса</label>
+      <select id="qpCashAccount"><option value="Kaspi Pay">💳 Kaspi Pay</option></select>
+    </div>
     <div class="form-group"><label>Төлем түрі</label>
-      <select id="qpType"><option value="cash">💵 Қолма-қол</option><option value="card">💳 Карта</option><option value="transfer">📲 Аударым</option></select>
+      <select id="qpType">
+        <option value="normal">✅ Қалыпты төлем</option>
+        <option value="installment_12">📆 Каспи рассрочка 0-0-12</option>
+        <option value="installment_24">📆 Каспи рассрочка 0-0-24</option>
+      </select>
     </div>
     <div class="form-group"><label>Ескертпе</label><input type="text" id="qpNote" /></div>
     <div style="background:var(--surface2);border-radius:10px;padding:12px;font-size:13px;color:var(--text2)">
@@ -1378,6 +1474,7 @@ async function confirmQuickPay(){
   if(!quickPayStudent) return;
   const amount=Number(document.getElementById('qpAmount').value);
   const type=document.getElementById('qpType').value;
+  const cashAccount=document.getElementById('qpCashAccount').value;
   const note=document.getElementById('qpNote').value;
   if(!amount) return alert('Сомасын енгізіңіз');
   const now=new Date();
@@ -1386,7 +1483,7 @@ async function confirmQuickPay(){
   const payMonth=dueDate.getMonth()+1; const payYear=dueDate.getFullYear();
   await sb.from('payments').insert({
     student_id:quickPayStudent.id, amount, month:payMonth, year:payYear,
-    pay_date:localDateStr(now), pay_type:type, note
+    pay_date:localDateStr(now), pay_type:type, cash_account:cashAccount, note
   });
   // Келесі мерзімді 1 айға алға жылжыту
   const nd=new Date(dueDate.getFullYear(), dueDate.getMonth()+1, dueDate.getDate());
@@ -1913,6 +2010,9 @@ function openStudentModal(s=null){
   document.getElementById('parentPhone').value=s?.parent_phone||'';
   document.getElementById('studentNote').value=s?.note||'';
   document.getElementById('studentNextPayDate').value=s?.next_pay_date||'';
+  document.getElementById('studentLeadSource').value=s?.lead_source||'';
+  document.getElementById('studentSalesManager').value=s?.sales_manager||'';
+  document.getElementById('studentMarketingNote').value=s?.marketing_note||'';
   const selectedIds=new Set(s?.id?getStudentGroupIds(s.id):[]);
   const cWrap=document.getElementById('studentGroupsChecks');
   cWrap.innerHTML=DATA.groups.length?DATA.groups.map(g=>`
@@ -1925,7 +2025,7 @@ function openStudentModal(s=null){
 async function saveStudent(){
   const name=document.getElementById('studentName').value.trim(); if(!name)return alert('Атын енгізіңіз');
   const selectedGroupIds=[...document.querySelectorAll('.studentGroupChk:checked')].map(c=>c.value);
-  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:document.getElementById('studentNextPayDate').value||null};
+  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:document.getElementById('studentNextPayDate').value||null,lead_source:document.getElementById('studentLeadSource').value||null,sales_manager:document.getElementById('studentSalesManager').value||null,marketing_note:document.getElementById('studentMarketingNote').value||null};
   let id=document.getElementById('studentId').value;
   if(id){
     await sb.from('students').update(row).eq('id',id);
@@ -2013,6 +2113,12 @@ function showStudentDetail(id){
       <div class="text-sm" style="margin-top:4px">${prog}% — толық статистика «Анализ» бетінде</div>
     </div>
     ${s.parent_name?`<div class="text-sm" style="margin-bottom:10px">📞 <b>${s.parent_name}</b> — ${s.parent_phone||''}</div>`:''}
+    ${(s.lead_source||s.sales_manager||s.marketing_note)?`<div class="card" style="margin:0 0 12px;padding:12px">
+      <div class="text-muted text-sm" style="margin-bottom:6px">📈 Сату (CRM)</div>
+      ${s.lead_source?`<div class="text-sm" style="margin-bottom:3px">Дереккөз: <b>${s.lead_source}</b></div>`:''}
+      ${s.sales_manager?`<div class="text-sm" style="margin-bottom:3px">Менеджер: <b>${s.sales_manager}</b></div>`:''}
+      ${s.marketing_note?`<div class="text-sm" style="margin-top:6px;color:var(--text2)">${s.marketing_note}</div>`:''}
+    </div>`:''}
     ${role!=='admin'?`<div><b>💳 Төлем тарихы:</b><div style="margin-top:8px">${pmts.map(p=>`<div class="text-sm" style="padding:5px 0;border-bottom:1px solid var(--border)">${MONTHS[p.month]} ${p.year} — <b>${fmt(p.amount)}₸</b> (${p.pay_date||''})</div>`).join('')||'<span class="text-muted text-sm">Жоқ</span>'}</div></div>`:''}`;
   openModal('studentDetailModal');
 }
@@ -2164,6 +2270,7 @@ async function savePayment(){
     student_id:sId, amount:Number(amt), month:payM, year:payY,
     pay_date:document.getElementById('paymentDate').value,
     pay_type:document.getElementById('paymentType').value,
+    cash_account:document.getElementById('paymentCashAccount').value,
     note:document.getElementById('paymentNote').value
   });
   // next_pay_date автоматты жылжыту
@@ -2179,7 +2286,7 @@ async function savePayment(){
 async function deletePayment(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('payments').delete().eq('id',id); await loadAll(); renderPayments(); }
 function filterPayments(val){ payFilter=val; renderPayments(); }
 function renderPayments(){
-  const typeL={cash:'💵 Қолма-қол',card:'💳 Карта',transfer:'📲 Аударым'};
+  const typeL={normal:'✅ Қалыпты төлем',installment_12:'📆 Рассрочка 0-0-12',installment_24:'📆 Рассрочка 0-0-24'};
   let sorted=[...DATA.payments].sort((a,b)=>(b.pay_date||'').localeCompare(a.pay_date||''));
   if(payFilter)sorted=sorted.filter(p=>{const s=DATA.students.find(s=>s.id===p.student_id);return(s?s.name+' '+(s.surname||''):'').toLowerCase().includes(payFilter.toLowerCase());});
   document.getElementById('paymentsTable').innerHTML=sorted.map((p,i)=>{
@@ -2195,11 +2302,13 @@ function renderPayments(){
       <td><span class="badge badge-blue">${MONTHS[p.month]||p.month} ${p.year}</span></td>
       <td>${p.pay_date||'—'}</td>
       <td class="text-muted text-sm">${nextStr}</td>
+      <td>${p.cash_account||'—'}</td>
       <td>${typeL[p.pay_type]||'—'}</td>
+      <td class="text-sm" title="Комиссия: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).commission)}₸ | Салық: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).tax)}₸">${fmt(calcPaymentBreakdown(p.amount,p.pay_type).net)}₸</td>
       <td class="text-muted text-sm">${p.note||''}</td>
       <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}')">🗑️</button></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">💳</div><p>Төлемдер жоқ</p></div></td></tr>';
+  }).join('')||'<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">💳</div><p>Төлемдер жоқ</p></div></td></tr>';
 }
 
 // ================================================================
@@ -2233,6 +2342,13 @@ function renderFinance(){
   const pms=DATA.payments.filter(p=>p.month==m&&p.year==y);
   const income=pms.reduce((s,p)=>s+Number(p.amount||0),0);
 
+  // Kaspi комиссиясы + есептелген салық (әр төлемнің pay_type-іне сай)
+  let totalCommission=0, totalTax=0;
+  pms.forEach(p=>{
+    const{commission,tax}=calcPaymentBreakdown(p.amount,p.pay_type);
+    totalCommission+=commission; totalTax+=tax;
+  });
+
   // Expenses for this month
   const monthExp=DATA.expenses.filter(e=>e.date?.startsWith(`${y}-${mPad}`));
   // Salary payouts
@@ -2243,6 +2359,9 @@ function renderFinance(){
   document.getElementById('finIncome').textContent=fmt(income)+'₸';
   document.getElementById('finExpense').textContent=fmt(totalExpense)+'₸';
   document.getElementById('finProfit').textContent=fmt(income-totalExpense)+'₸';
+  document.getElementById('finCommission').textContent=fmt(totalCommission)+'₸';
+  document.getElementById('finTax').textContent=fmt(totalTax)+'₸';
+  document.getElementById('finNetReal').textContent=fmt(income-totalExpense-totalCommission-totalTax)+'₸';
 
   // Teacher salaries
   document.getElementById('finTeachers').innerHTML=DATA.teachers.map(t=>{
@@ -2280,6 +2399,55 @@ function renderFinance(){
 }
 
 // ================================================================
+// UNIT ECONOMICS (CAC / ТБУ / ТЖД)
+// ================================================================
+const CAC_PAID_SOURCES=['Таргет Facebook','Таргет Tiktok'];
+function renderUnitEconomics(){
+  const ueVal=document.getElementById('ueMonth')?.value||document.getElementById('finMonth')?.value;
+  if(!ueVal) return;
+  const[mStr,yStr]=ueVal.split('_');
+  const m=Number(mStr), y=Number(yStr);
+  const mPad=String(m).padStart(2,'0');
+  const yPad=`${y}-${mPad}`;
+
+  // --- CAC ---
+  const marketingSpend=DATA.expenses.filter(e=>e.category==='Маркетинг'&&e.date?.startsWith(yPad)).reduce((s,e)=>s+Number(e.amount||0),0);
+  const newStudents=DATA.students.filter(s=>s.created_at&&s.created_at.startsWith(yPad));
+  const newStudentsPaid=newStudents.filter(s=>CAC_PAID_SOURCES.includes(s.lead_source));
+  const cacBlended=newStudents.length?marketingSpend/newStudents.length:0;
+  const cacPaid=newStudentsPaid.length?marketingSpend/newStudentsPaid.length:0;
+  document.getElementById('ueCacBlended').textContent=newStudents.length?fmt(Math.round(cacBlended))+'₸':'—';
+  document.getElementById('ueCacPaid').textContent=newStudentsPaid.length?fmt(Math.round(cacPaid))+'₸':'—';
+  document.getElementById('ueCacDetail').innerHTML=`Маркетинг шығысы: <b>${fmt(marketingSpend)}₸</b> | Жаңа оқушы: <b>${newStudents.length}</b> (жарнамадан: <b>${newStudentsPaid.length}</b>)`;
+
+  // --- Жалпы шығын (ТБУ/ТЖД үшін) ---
+  const monthExp=DATA.expenses.filter(e=>e.date?.startsWith(yPad));
+  const salExp=DATA.salary_logs.filter(sl=>sl.note==='payout'&&sl.date?.startsWith(yPad)).reduce((s,l)=>s+Math.abs(Number(l.amount||0)),0);
+  const otherExp=monthExp.reduce((s,e)=>s+Number(e.amount||0),0);
+  const totalExpense=salExp+otherExp;
+
+  // --- Орташа таза маржа (1 сатудан, комиссия мен салықтан кейін) ---
+  const pms=DATA.payments.filter(p=>p.month==m&&p.year==y);
+  const avgMargin=pms.length?pms.reduce((s,p)=>s+calcPaymentBreakdown(p.amount,p.pay_type).net,0)/pms.length:0;
+
+  // --- ТБУ ---
+  const bepSales=avgMargin>0?Math.ceil(totalExpense/avgMargin):0;
+  document.getElementById('ueBepSales').textContent=avgMargin>0?bepSales:'—';
+  document.getElementById('ueBepDetail').innerHTML=avgMargin>0
+    ?`Жалпы шығын: <b>${fmt(totalExpense)}₸</b> ÷ Орташа таза маржа (1 сатудан): <b>${fmt(Math.round(avgMargin))}₸</b> = <b>${bepSales}</b> сату`
+    :'Осы айда төлем жоқ, орташа маржаны есептеу мүмкін емес.';
+
+  // --- ТЖД ---
+  const targetProfit=Number(document.getElementById('ueTargetProfit')?.value||0);
+  if(targetProfit>0&&avgMargin>0){
+    const targetSales=Math.ceil((totalExpense+targetProfit)/avgMargin);
+    document.getElementById('ueTargetSales').textContent=targetSales;
+  } else {
+    document.getElementById('ueTargetSales').textContent='—';
+  }
+}
+
+// ================================================================
 // FINANCE PAYMENTS (Кірістер журналы)
 // ================================================================
 function renderFinancePayments(){
@@ -2287,7 +2455,7 @@ function renderFinancePayments(){
   const[mStr,yStr]=finVal.includes('_')?finVal.split('_'):[String(new Date().getMonth()+1),String(new Date().getFullYear())];
   const m=Number(mStr); const y=Number(yStr);
   const q=(document.getElementById('finPayFilter')?.value||'').toLowerCase();
-  const typeL={cash:'💵 Қолма-қол',card:'💳 Карта',transfer:'📲 Аударым'};
+  const typeL={normal:'✅ Қалыпты төлем',installment_12:'📆 Рассрочка 0-0-12',installment_24:'📆 Рассрочка 0-0-24'};
 
   let pays=[...DATA.payments].filter(p=>Number(p.month)===m&&Number(p.year)===y);
   if(q) pays=pays.filter(p=>{
@@ -2310,17 +2478,19 @@ function renderFinancePayments(){
       <td><span class="badge badge-blue">${MONTHS[p.month]||p.month} ${p.year}</span></td>
       <td class="font-bold" style="color:var(--green)">${fmt(p.amount)}₸</td>
       <td>${p.pay_date||'—'}</td>
+      <td>${p.cash_account||'—'}</td>
       <td>${typeL[p.pay_type]||'—'}</td>
+      <td class="text-sm" title="Комиссия: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).commission)}₸ | Салық: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).tax)}₸">${fmt(calcPaymentBreakdown(p.amount,p.pay_type).net)}₸</td>
       <td class="text-muted text-sm">${p.note||''}</td>
       <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}');setTimeout(()=>{loadAll().then(renderFinance)},400)">🗑️</button></td>
     </tr>`;
-  }).join('')||`<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text2)">${MONTHS[m]||m} ${y} — төлем жоқ</td></tr>`;
+  }).join('')||`<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text2)">${MONTHS[m]||m} ${y} — төлем жоқ</td></tr>`;
 
   if(pays.length>0){
     tbody.innerHTML+=`<tr style="background:var(--surface2);font-weight:700">
       <td colspan="4" style="text-align:right;padding:10px 14px;color:var(--text2)">Барлығы:</td>
       <td style="color:var(--green);padding:10px 14px">${fmt(total)}₸</td>
-      <td colspan="4"></td>
+      <td colspan="6"></td>
     </tr>`;
   }
 }
@@ -2868,12 +3038,12 @@ SUPABASE SQL — Run in SQL Editor:
 create table if not exists courses(id uuid primary key default gen_random_uuid(),name text,description text,color text,levels jsonb,created_at timestamptz default now());
 create table if not exists teachers(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,subject text,hourly_rate numeric,email text,balance numeric default 0,note text,created_at timestamptz default now());
 create table if not exists groups(id uuid primary key default gen_random_uuid(),name text,course_id uuid,level text,teacher_id uuid,room text,fee numeric,max_students int,created_at timestamptz default now());
-create table if not exists students(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,birth_date date,group_id uuid,parent_name text,parent_phone text,note text,next_pay_date date,progress_percent int default 0,created_at timestamptz default now());
+create table if not exists students(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,birth_date date,group_id uuid,parent_name text,parent_phone text,note text,next_pay_date date,progress_percent int default 0,lead_source text,sales_manager text,marketing_note text,created_at timestamptz default now());
 -- group_id жоғарыда ЕСКІ (deprecated) баған, тек кейбір ескі жазбалармен үйлесімділік үшін қалдырылған.
 -- Оқушының нақты топтары төмендегі student_groups кестесінде сақталады (1 оқушы — бірнеше топ).
 create table if not exists student_groups(id uuid primary key default gen_random_uuid(),student_id uuid not null references students(id) on delete cascade,group_id uuid not null references groups(id) on delete cascade,created_at timestamptz default now(),unique(student_id, group_id));
 create table if not exists lessons(id uuid primary key default gen_random_uuid(),group_id uuid,teacher_id uuid,day int,start_time text,end_time text,room text,created_at timestamptz default now());
-create table if not exists payments(id uuid primary key default gen_random_uuid(),student_id uuid,amount numeric,month int,year int,pay_date date,pay_type text,note text,created_at timestamptz default now());
+create table if not exists payments(id uuid primary key default gen_random_uuid(),student_id uuid,amount numeric,month int,year int,pay_date date,pay_type text,cash_account text default 'Kaspi Pay',note text,created_at timestamptz default now());
 -- DEPRECATED: 'grades' table is no longer used by the app (fully replaced by
 -- journal_entries). Kept here only so the one-time migration below still works
 -- if you haven't migrated yet. Safe to drop after migrating.
@@ -2910,6 +3080,11 @@ alter table journal_entries add column if not exists activity int;
 alter table journal_entries add column if not exists homework int;
 alter table journal_entries add column if not exists mock_score numeric;
 alter table journal_entries add column if not exists mock_total numeric;
+alter table students add column if not exists lead_source text;   -- дереккөз: Таргет FB / Tiktok / Сарафанка / Телеграм канал
+alter table students add column if not exists sales_manager text; -- сатқан менеджер аты (мыс. "Нұрбол")
+alter table students add column if not exists marketing_note text; -- CRM ескертпесі (мыс. алдын ала төлем/рассрочка жағдайы)
+alter table payments add column if not exists cash_account text default 'Kaspi Pay'; -- касса түрі (қазір тек Kaspi Pay)
+-- pay_type бағаны бұрыннан бар, енді мәндер: 'normal' | 'installment_12' | 'installment_24'
 
 -- 3. RLS Policies:
 do $$ declare t text; begin
