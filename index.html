@@ -394,6 +394,10 @@ details[open] summary::before{content:'▾ '}
           <div class="card-title">⚠️ Ескертулер</div>
           <div id="dashAlerts"><div class="loading"><div class="spinner"></div></div></div>
         </div>
+        <div class="card dir-admin" style="margin-top:16px">
+          <div class="card-title">🎂 Осы апта туған күндер</div>
+          <div id="dashBirthdays"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
       </div>
 
       <!-- ========== STUDY HUB (Курстар + Группалар + Кесте) ========== -->
@@ -716,8 +720,9 @@ details[open] summary::before{content:'▾ '}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Сағаттық ставка (₸)</label><input type="number" id="teacherRate" /></div>
-      <div class="form-group"><label>Логин</label><input type="text" id="teacherEmail" placeholder="мысалы: madi" /></div>
+      <div class="form-group"><label>Туған күні</label><input type="date" id="teacherBirth" /></div>
     </div>
+    <div class="form-group"><label>Логин</label><input type="text" id="teacherEmail" placeholder="мысалы: madi" /></div>
     <div class="form-group"><label>Пароль</label><input type="text" id="teacherPass" placeholder="мысалы: 1234" /></div>
     <div class="form-group"><label>Ескертпе</label><textarea id="teacherNote" rows="2"></textarea></div>
     <div class="modal-footer">
@@ -1498,15 +1503,52 @@ function renderDashboard(){
     return`<div class="attend-row"><div><div class="attend-name">${g?g.name:'—'}</div><div class="attend-info">${l.start_time}–${l.end_time} | ${l.room||'—'}</div></div><span class="badge badge-blue">${l.start_time}</span></div>`;
   }).join(''):'<div class="empty-state"><div class="empty-icon">📅</div><p>Бүгін сабақ жоқ</p></div>';
 
-  // Alerts (dir only)
+  // Alerts (dir only) — оқушы төлем ескертулерін бұдан алып тастадық, себебі
+  // олар "Жылдам төлем" карточкасында әрекетке шақыратын түрде (💳 батырмасымен)
+  // бұрыннан бар — сол екеуі қайталанбас үшін мұнда тек басқа (мұғалім
+  // жалақысы сияқты) ескертулер қалдырылады.
   const aEl=document.getElementById('dashAlerts');
   if(aEl){
     const alerts=[];
-    overdue.forEach(s=>alerts.push({type:'danger',msg:`❌ ${s.name} ${s.surname||''} — мерзімі өтті (${s.next_pay_date})`}));
-    pending.forEach(s=>alerts.push({type:'warning',msg:`⏳ ${s.name} ${s.surname||''} — ${daysUntil(s.next_pay_date)} күннен кейін төлем`}));
     DATA.teachers.forEach(t=>{const bal=Number(t.balance||0);if(bal>0)alerts.push({type:'info',msg:`💰 ${t.name} ${t.surname||''} — берілуі тиіс: ${fmt(bal)}₸`});});
     aEl.innerHTML=alerts.length?alerts.map(a=>`<div class="alert-item ${a.type}">${a.msg}</div>`).join(''):'<div class="empty-state"><div class="empty-icon">✅</div><p>Ескертулер жоқ</p></div>';
   }
+
+  renderDashboardBirthdays();
+}
+
+// Берілген туған күннен келесі туылу күніне дейін қанша күн қалғанын және
+// сол кезде неше жасқа толатынын есептейді (жыл ауысымын дұрыс өңдейді:
+// мыс. бүгін 30-желтоқсан, туған күні 2-қаңтар болса — келесі жылға өтеді).
+function nextBirthdayInfo(birthDateStr, from){
+  const bd=parseLocalDate(birthDateStr); if(!bd) return null;
+  let target=new Date(from.getFullYear(), bd.getMonth(), bd.getDate());
+  if(target<from) target=new Date(from.getFullYear()+1, bd.getMonth(), bd.getDate());
+  const days=Math.round((target-from)/(1000*60*60*24));
+  const age=target.getFullYear()-bd.getFullYear();
+  return {days, age};
+}
+
+function renderDashboardBirthdays(){
+  const el=document.getElementById('dashBirthdays'); if(!el) return;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const items=[];
+  DATA.students.forEach(s=>{
+    if(!s.birth_date) return;
+    const info=nextBirthdayInfo(s.birth_date,today);
+    if(info && info.days<=6) items.push({...info, name:s.name+' '+(s.surname||''), type:'Оқушы', badge:'badge-blue'});
+  });
+  DATA.teachers.forEach(t=>{
+    if(!t.birth_date) return;
+    const info=nextBirthdayInfo(t.birth_date,today);
+    if(info && info.days<=6) items.push({...info, name:t.name+' '+(t.surname||''), type:'Мұғалім', badge:'badge-purple'});
+  });
+  items.sort((a,b)=>a.days-b.days);
+  el.innerHTML=items.length?items.map(it=>`
+    <div class="attend-row">
+      <div><div class="attend-name">🎂 ${it.name}</div><div class="attend-info">${it.type} · ${it.age} жасқа толады</div></div>
+      <span class="badge ${it.days===0?'badge-green':it.badge}">${it.days===0?'Бүгін!':it.days===1?'Ертең':`${it.days} күннен кейін`}</span>
+    </div>`).join(''):'<div class="empty-state"><div class="empty-icon">🎂</div><p>Осы аптада туған күн жоқ</p></div>';
 }
 
 // ================================================================
@@ -1658,6 +1700,7 @@ function openTeacherModal(t=null){
   document.getElementById('teacherPhone').value=t?.phone||'';
   document.getElementById('teacherSubject').value=t?.subject||'';
   document.getElementById('teacherRate').value=t?.hourly_rate||t?.rate||'';
+  document.getElementById('teacherBirth').value=t?.birth_date||'';
   document.getElementById('teacherEmail').value=t?.email||'';
   document.getElementById('teacherPass').value=t?.pass||'';
   document.getElementById('teacherNote').value=t?.note||'';
@@ -1665,7 +1708,7 @@ function openTeacherModal(t=null){
 }
 async function saveTeacher(){
   const name=document.getElementById('teacherName').value.trim(); if(!name) return alert('Атын енгізіңіз');
-  const row={name,surname:document.getElementById('teacherSurname').value,phone:document.getElementById('teacherPhone').value,subject:document.getElementById('teacherSubject').value,hourly_rate:document.getElementById('teacherRate').value||null,email:document.getElementById('teacherEmail').value,pass:document.getElementById('teacherPass').value,note:document.getElementById('teacherNote').value};
+  const row={name,surname:document.getElementById('teacherSurname').value,phone:document.getElementById('teacherPhone').value,subject:document.getElementById('teacherSubject').value,hourly_rate:document.getElementById('teacherRate').value||null,birth_date:document.getElementById('teacherBirth').value||null,email:document.getElementById('teacherEmail').value,pass:document.getElementById('teacherPass').value,note:document.getElementById('teacherNote').value};
   const id=document.getElementById('teacherId').value;
   if(id) await sb.from('teachers').update(row).eq('id',id); else await sb.from('teachers').insert({...row,balance:0});
   closeModal('teacherModal'); await loadAll(); renderTeachers(); toast('✅ Сақталды!');
@@ -1859,6 +1902,7 @@ async function autoSyncSalaryFromJournal(tId){
     const t=DATA.teachers.find(t=>t.id===tId); if(!t) return false;
     const gs=DATA.groups.filter(g=>g.teacher_id===tId);
     const now=new Date(); const m=now.getMonth()+1; const y=now.getFullYear();
+    const todayStr=localDateStr(now);
     const rate=Number(t.hourly_rate||t.rate||0);
     let addedTotal=0, changed=false;
     for(const g of gs){
@@ -1869,6 +1913,7 @@ async function autoSyncSalaryFromJournal(tId){
         const dates=getDatesInMonth(y,m,Number(l.day));
         for(const dsRaw of dates){
           const ds=dsRaw.replace(' 🎉','');
+          if(ds>todayStr) continue; // болашақ күнге әлі өтпеген сабаққа жалақы есептелмейді
           const already=DATA.salary_logs.find(sl=>sl.lesson_id===l.id&&sl.date===ds&&sl.teacher_id===tId&&sl.note!=='payout');
           if(already) continue;
           const journalFilled=DATA.journal_entries.some(je=>je.group_id===g.id&&je.lesson_date===ds&&je.attendance);
@@ -2174,6 +2219,16 @@ function renderStudents(){
   }).join('')||'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div></td></tr>';
 }
 
+// Ашылып/жабылатын (accordion) блоктар үшін ортақ toggle — оқушы профиліндегі
+// "Анализ" бөлімінде (топ бойынша) қолданылады.
+function toggleAccordion(headerEl){
+  const body=headerEl.nextElementSibling;
+  const arrow=headerEl.querySelector('.accordion-arrow');
+  const isOpen=body.style.display!=='none';
+  body.style.display=isOpen?'none':'block';
+  if(arrow) arrow.textContent=isOpen?'▾':'▴';
+}
+
 function showStudentDetail(id){
   const s=DATA.students.find(s=>s.id===id); if(!s)return;
   const sGroups=getStudentGroups(s.id);
@@ -2192,9 +2247,36 @@ function showStudentDetail(id){
       ${role!=='admin'?`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келесі төлем</div><div class="font-bold">${s.next_pay_date||'—'}</div>${payStatusBadge(s)}</div>`:'<div></div>'}
     </div>
     <div style="margin-bottom:12px">
-      <div class="text-muted text-sm" style="margin-bottom:4px">📊 Үлгерім</div>
+      <div class="text-muted text-sm" style="margin-bottom:4px">📊 Жалпы үлгерім</div>
       <div class="progress-bar"><div class="progress-fill" style="width:${prog}%;background:${prog>=80?'var(--green)':prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
-      <div class="text-sm" style="margin-top:4px">${prog}% — толық статистика «Анализ» бетінде</div>
+      <div class="text-sm" style="margin-top:4px">${prog}% — барлық топтардың орташасы</div>
+    </div>
+    <div class="accordion-item" style="border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden">
+      <div class="accordion-header" style="padding:11px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--surface2)" onclick="toggleAccordion(this)">
+        <span class="font-bold">📊 Анализ (топтар бойынша)</span>
+        <span class="accordion-arrow text-muted">▾</span>
+      </div>
+      <div class="accordion-body" style="display:none;padding:12px 14px">
+        ${sGroups.length?sGroups.map(g=>{
+          const st=studentStatsForRange(s.id, '2000-01-01', localDateStr(new Date()), g.id);
+          const mock=st.mockCount?st.mockDisplay:'—';
+          return `<div class="accordion-item" style="border:1px solid var(--border);border-radius:9px;margin-bottom:8px;overflow:hidden">
+            <div class="accordion-header" style="padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--surface)" onclick="toggleAccordion(this)">
+              <span>${g.name}</span>
+              <span class="accordion-arrow text-muted">▾</span>
+            </div>
+            <div class="accordion-body" style="display:none;padding:12px">
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+                <div><div class="font-bold" style="font-size:17px">${st.attAvg!=null?st.attAvg+'%':'—'}</div><div class="text-muted text-sm">Қатысу</div></div>
+                <div><div class="font-bold" style="font-size:17px">${st.actAvg??'—'}</div><div class="text-muted text-sm">Белсенділік</div></div>
+                <div><div class="font-bold" style="font-size:17px">${st.hwAvg??'—'}</div><div class="text-muted text-sm">Үй жұмысы</div></div>
+                <div><div class="font-bold" style="font-size:17px">${mock}</div><div class="text-muted text-sm">Мок тест</div></div>
+              </div>
+              <div class="text-muted text-sm" style="margin-top:8px">${st.entries.length} сабақ жазбасы</div>
+            </div>
+          </div>`;
+        }).join(''):'<div class="text-muted text-sm">Оқушы ешбір топқа тіркелмеген</div>'}
+      </div>
     </div>
     ${s.parent_name?`<div class="text-sm" style="margin-bottom:10px">📞 <b>${s.parent_name}</b> — ${s.parent_phone||''}</div>`:''}
     ${(s.lead_source||s.sales_manager||s.marketing_note)?`<div class="card" style="margin:0 0 12px;padding:12px">
@@ -2681,8 +2763,8 @@ function attendancePercent(e){
 // (journal_entries негізінде). Кез келген компонент болмаса, қалғандары арасында
 // салмақ пропорционал қайта бөлінеді. minLessons — рейтингке кіру үшін керекті
 // ең аз "қатысу" жазбасының саны (кездейсоқ 1 сабақпен 100% алып кетуден сақтайды).
-function calcProgressJournal(studentId, minLessons=3){
-  const entries = DATA.journal_entries.filter(je=>je.student_id===studentId && je.attendance);
+function calcProgressJournal(studentId, minLessons=3, groupId=null){
+  const entries = DATA.journal_entries.filter(je=>je.student_id===studentId && je.attendance && (!groupId || je.group_id===groupId));
   if(entries.length < minLessons) return null;
 
   const pcts = entries.map(attendancePercent).filter(p=>p!=null);
@@ -2760,9 +2842,12 @@ function renderJournal(){
   }).join('')+`<th>Қатысу %</th>`;
 
   const rows=students.map(s=>{
-    const entries=dates.map(d=>DATA.journal_entries.find(je=>je.student_id===s.id&&je.lesson_date===d));
+    const entries=dates.map(d=>DATA.journal_entries.find(je=>je.student_id===s.id&&je.group_id===gId&&je.lesson_date===d));
+    const todayStr=localDateStr(new Date());
     const cells=entries.map((e,i)=>{
       const d=dates[i];
+      const isFuture=d>todayStr;
+      if(isFuture) return `<td><div class="j-cell empty" style="opacity:0.35;cursor:not-allowed" title="Әлі өтпеген сабақ">·</div></td>`;
       if(!e || !e.attendance) return `<td><div class="j-cell empty" onclick="openJournalEntry('${s.id}','${gId}','${d}')">—</div></td>`;
       const label=e.attendance==='late'&&e.late_minutes?`${e.late_minutes}м`:J_STATUS_LABEL[e.attendance]||'';
       const hasExtra=e.activity!=null||e.homework!=null||(e.mock_score!=null&&e.mock_total!=null)||e.note;
@@ -2784,7 +2869,7 @@ function renderJournal(){
 
 function openJournalEntry(sId, gId, date){
   const s=DATA.students.find(s=>s.id===sId); if(!s)return;
-  const e=DATA.journal_entries.find(je=>je.student_id===sId&&je.lesson_date===date);
+  const e=DATA.journal_entries.find(je=>je.student_id===sId&&je.group_id===gId&&je.lesson_date===date);
   currentJournalEntry={studentId:sId, groupId:gId, date, id:e?.id||null};
   journalStatus=e?.attendance||null;
   jeActivityVal=e?.activity??null;
@@ -2819,6 +2904,7 @@ function applyJournalStatusUI(){
 async function saveJournalEntry(){
   if(!currentJournalEntry) return;
   const {studentId,groupId,date,id}=currentJournalEntry;
+  if(date>localDateStr(new Date())){ alert('Болашақ күнге журнал жазбасын енгізуге болмайды — сабақ әлі өткен жоқ.'); return; }
   if(!journalStatus){ return alert('Қатысу түрін таңдаңыз'); }
   if(journalStatus==='late' && !document.getElementById('jeLateMinutes').value){ return alert('Кешіккен минут санын енгізіңіз'); }
   const mockScore=document.getElementById('jeMockScore').value;
@@ -2909,8 +2995,8 @@ function analysisDateRange(){
   }
 }
 
-function studentStatsForRange(sId, start, end){
-  const entries=DATA.journal_entries.filter(je=>je.student_id===sId&&je.lesson_date>=start&&je.lesson_date<=end&&je.attendance);
+function studentStatsForRange(sId, start, end, groupId=null){
+  const entries=DATA.journal_entries.filter(je=>je.student_id===sId&&je.lesson_date>=start&&je.lesson_date<=end&&je.attendance&&(!groupId||je.group_id===groupId));
   const pcts=entries.map(attendancePercent);
   const attAvg=pcts.length?Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length):null;
   // Себепті/себепсіз қатыспаған күнгі белсенділік үлгерімге қосылмайды.
@@ -2938,7 +3024,7 @@ function renderAnalysis(){
   if(!students.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл топта оқушылар жоқ</p></div>'; return; }
 
   const rows=students.map(s=>{
-    const st=studentStatsForRange(s.id, start, end);
+    const st=studentStatsForRange(s.id, start, end, gId);
     const mock=st.mockCount ? st.mockDisplay : '—';
     return `<tr style="cursor:pointer" onclick="openAnalysisStudentDetail('${s.id}','${gId}')">
       <td class="font-bold">${s.name} ${s.surname||''}</td>
@@ -2956,7 +3042,7 @@ function renderAnalysis(){
 function openAnalysisStudentDetail(sId, gId){
   const s=DATA.students.find(s=>s.id===sId); if(!s)return;
   const [start,end]=analysisDateRange();
-  const st=studentStatsForRange(sId, start, end);
+  const st=studentStatsForRange(sId, start, end, gId);
   document.getElementById('analysisDetailTitle').textContent=`👤 ${s.name} ${s.surname||''} — ${start} — ${end}`;
   const rows=[...st.entries].sort((a,b)=>a.lesson_date.localeCompare(b.lesson_date)).map(e=>{
     const pct=attendancePercent(e);
