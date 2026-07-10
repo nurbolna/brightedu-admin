@@ -503,6 +503,9 @@ details[open] summary::before{content:'▾ '}
           <select id="studentGroupFilter" onchange="renderStudents()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
             <option value="">👥 Барлық топ</option>
           </select>
+          <select id="studentCourseFilter" onchange="renderStudents()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+            <option value="">📚 Барлық курс</option>
+          </select>
           <select id="studentStatusFilter" onchange="renderStudents()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
             <option value="">💳 Барлық статус</option>
             <option value="overdue">❌ Мерзімі өткен</option>
@@ -515,7 +518,7 @@ details[open] summary::before{content:'▾ '}
           <table>
             <thead>
               <tr>
-                <th>#</th><th>Аты-жөні</th><th>Группа</th>
+                <th>#</th><th>Аты-жөні</th><th>Группа</th><th>Курс</th>
                 <th>Үлгерім</th>
                 <th class="admin-hidden">Төлем статусы</th>
                 <th>Ата-ана</th><th>Әрекет</th>
@@ -544,7 +547,7 @@ details[open] summary::before{content:'▾ '}
         <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <input type="text" placeholder="🔍 Іздеу..." oninput="filterPayments(this.value)" style="flex:1;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
         </div>
-        <div class="table-wrap"><table><thead><tr><th>#</th><th>Оқушы</th><th>Сомасы</th><th>Қай айға</th><th>Төлеген күні</th><th>Келесі төлем</th><th>Касса</th><th>Түрі</th><th>Таза түсім</th><th>Ескертпе</th><th>Әрекет</th></tr></thead><tbody id="paymentsTable"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>Оқушы</th><th>Курс</th><th>Сомасы</th><th>Қай айға</th><th>Төлеген күні</th><th>Келесі төлем</th><th>Касса</th><th>Түрі</th><th>Таза түсім</th><th>Ескертпе</th><th>Әрекет</th></tr></thead><tbody id="paymentsTable"></tbody></table></div>
       </div>
 
       <!-- ========== FINANCE ========== -->
@@ -956,6 +959,7 @@ details[open] summary::before{content:'▾ '}
   <div class="modal">
     <div class="modal-title">💳 Төлем қосу</div>
     <div class="form-group"><label>Оқушы</label><select id="paymentStudent" onchange="fillPaymentAmount()"><option value="">—</option></select></div>
+    <div class="form-group"><label>Курс</label><select id="paymentCourse"><option value="">—</option></select></div>
     <div class="form-row">
       <div class="form-group"><label>Сомасы (₸)</label><input type="number" id="paymentAmount" /></div>
       <div class="form-group"><label>Күні</label><input type="date" id="paymentDate" /></div>
@@ -1207,6 +1211,34 @@ let taskAssigneeFilter = '';    // '' | director login | 'all'
 let taskDueFilter = '';         // '' | 'overdue' | 'today' | 'soon3' | 'week' | 'none'
 let editingTaskId = null;
 
+// Жоспарлау фильтрлерін пайдаланушыға байланысты localStorage-те сақтау
+function taskFilterKey(){
+  return 'academy_task_filters_' + (currentUser?.login || 'guest');
+}
+function saveTaskFilters(){
+  try{
+    localStorage.setItem(taskFilterKey(), JSON.stringify({
+      view: taskView, status: taskStatusFilter, assignee: taskAssigneeFilter, due: taskDueFilter
+    }));
+  }catch(e){}
+}
+function loadTaskFilters(){
+  try{
+    const saved = localStorage.getItem(taskFilterKey());
+    if(!saved) return;
+    const f = JSON.parse(saved);
+    if(!f) return;
+    taskView = f.view || 'active';
+    taskStatusFilter = f.status || '';
+    taskAssigneeFilter = f.assignee || '';
+    taskDueFilter = f.due || '';
+    const activeBtn = document.getElementById('taskTabActiveBtn');
+    const archiveBtn = document.getElementById('taskTabArchiveBtn');
+    if(activeBtn) activeBtn.className = taskView==='active' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+    if(archiveBtn) archiveBtn.className = taskView==='archive' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  }catch(e){}
+}
+
 // Тапсырма "Дайын" деп белгіленген соң бірден мұрағатқа кетпейді — сол күні
 // (белгіленген сәттен 24 сағат бойы) әлі "Белсенді" тізімде ✅ күйінде көрініп
 // тұрады, содан кейін ғана мұрағатқа өтеді. Осылайша директор "бүгін не
@@ -1407,6 +1439,7 @@ function startApp(){
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   setupUI();
+  loadTaskFilters();
   loadAll().then(restoreLastPage);
 }
 
@@ -1622,6 +1655,7 @@ async function loadAll(){
   populateJournalGroups();
   populateAnalysisGroups();
   populateStudentGroupFilter();
+  populateStudentCourseFilter();
 }
 
 // ================================================================
@@ -1814,10 +1848,11 @@ function switchTaskView(view){
   taskView = view;
   document.getElementById('taskTabActiveBtn').className = view==='active' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
   document.getElementById('taskTabArchiveBtn').className = view==='archive' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  saveTaskFilters();
   renderTasks();
 }
-function setTaskStatusFilter(v){ taskStatusFilter = v; renderTasks(); }
-function setTaskAssigneeFilter(v){ taskAssigneeFilter = v; renderTasks(); }
+function setTaskStatusFilter(v){ taskStatusFilter = v; saveTaskFilters(); renderTasks(); }
+function setTaskAssigneeFilter(v){ taskAssigneeFilter = v; saveTaskFilters(); renderTasks(); }
 
 function taskPriorityBadge(p){
   if(p==='high') return '<span class="badge badge-red">🔴 Жоғары</span>';
@@ -1854,7 +1889,7 @@ function taskDueCategory(t){
   if(diff<=7) return 'week';
   return 'later';
 }
-function setTaskDueFilter(v){ taskDueFilter = v; renderTasks(); }
+function setTaskDueFilter(v){ taskDueFilter = v; saveTaskFilters(); renderTasks(); }
 
 function renderTaskFilters(){
   const statusWrap = document.getElementById('taskStatusFilters');
@@ -3039,6 +3074,12 @@ function populateStudentGroupFilter(){
   sel.innerHTML='<option value="">👥 Барлық топ</option>'+DATA.groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
   if(v) sel.value=v;
 }
+function populateStudentCourseFilter(){
+  const sel=document.getElementById('studentCourseFilter'); if(!sel) return;
+  const v=sel.value;
+  sel.innerHTML='<option value="">📚 Барлық курс</option>'+DATA.courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  if(v) sel.value=v;
+}
 
 function openStudentModal(s=null){
   document.getElementById('studentId').value=s?.id||'';
@@ -3101,6 +3142,7 @@ function filterStudents(val){ studentFilter=val; renderStudents(); }
 
 function renderStudents(){
   const gFilter=document.getElementById('studentGroupFilter')?.value||'';
+  const cFilter=document.getElementById('studentCourseFilter')?.value||'';
   const statusFilter=document.getElementById('studentStatusFilter')?.value||'';
   const role=currentUser?.role;
 
@@ -3109,6 +3151,7 @@ function renderStudents(){
     const match=!q||(s.name+' '+(s.surname||'')).toLowerCase().includes(q);
     if(!match)return false;
     if(gFilter&&!studentInGroup(s.id,gFilter))return false;
+    if(cFilter&&!getStudentGroups(s.id).some(g=>g.course_id===cFilter))return false;
     if(statusFilter&&getPayStatus(s)!==statusFilter)return false;
     // Teacher: only show students who have at least one group with this teacher
     if(role==='teacher'&&currentUser.teacherId){
@@ -3128,6 +3171,7 @@ function renderStudents(){
       <td>${i+1}</td>
       <td><span class="font-bold" style="cursor:pointer;color:var(--accent)" onclick="showStudentDetail('${s.id}')">${s.name} ${s.surname||''}</span></td>
       <td>${sGroups.length?sGroups.map(g=>g.name).join(', '):'—'}</td>
+      <td>${(()=>{const cNames=[...new Set(sGroups.map(g=>DATA.courses.find(c=>c.id===g.course_id)).filter(Boolean).map(c=>c.name))];return cNames.length?cNames.join(', '):'—';})()}</td>
       <td>
         <div class="progress-bar" style="width:70px;display:inline-block;margin-right:6px"><div class="progress-fill" style="width:${prog}%;background:${prog>=80?'var(--green)':prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
         <span class="text-sm">${prog}%</span>
@@ -3140,7 +3184,7 @@ function renderStudents(){
         <button class="btn btn-red btn-sm dir-only" onclick="deleteStudent('${s.id}')">🗑️</button>
       </div></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div></td></tr>';
+  }).join('')||'<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div></td></tr>';
 }
 
 // Ашылып/жабылатын (accordion) блоктар үшін ортақ toggle — оқушы профиліндегі
@@ -3330,6 +3374,7 @@ function renderSchedule(){
 // ================================================================
 function openPaymentModal(){
   sel('paymentStudent',DATA.students.map(s=>({id:s.id,name:s.name+' '+(s.surname||'')})));
+  document.getElementById('paymentCourse').innerHTML='<option value="">—</option>';
   const now=new Date();
   document.getElementById('paymentDate').value=localDateStr(now);
   document.getElementById('paymentMonth').value=now.getMonth()+1;
@@ -3340,7 +3385,12 @@ function openPaymentModal(){
 }
 function fillPaymentAmount(){
   const sId=document.getElementById('paymentStudent').value;
-  const s=DATA.students.find(s=>s.id===sId); if(!s)return;
+  const s=DATA.students.find(s=>s.id===sId);
+  // Оқушы қатысатын топтардың курстарын Курс тізіміне толтырамыз (бір оқушы бірнеше курста болуы мүмкін)
+  const courses=[...new Map(getStudentGroups(sId).map(g=>DATA.courses.find(c=>c.id===g.course_id)).filter(Boolean).map(c=>[c.id,c])).values()];
+  sel('paymentCourse',courses.map(c=>({id:c.id,name:c.name})));
+  if(courses.length===1) document.getElementById('paymentCourse').value=courses[0].id;
+  if(!s)return;
   // Сома әрдайым қолмен енгізіледі (оқушы бірнеше топқа қатысуы мүмкін болғандықтан автоматты есептелмейді)
   // Ай/жыл: next_pay_date негізінде
   if(s.next_pay_date){
@@ -3352,12 +3402,14 @@ function fillPaymentAmount(){
 async function savePayment(){
   const sId=document.getElementById('paymentStudent').value;
   const amt=document.getElementById('paymentAmount').value;
+  const courseId=document.getElementById('paymentCourse').value;
   if(!sId||!amt)return alert('Оқушы және сомасын енгізіңіз');
+  if(!courseId)return alert('Қай курс үшін төленгенін таңдаңыз');
   const now=new Date();
   const payM=Number(document.getElementById('paymentMonth').value);
   const payY=Number(document.getElementById('paymentYear').value);
   await sb.from('payments').insert({
-    student_id:sId, amount:Number(amt), month:payM, year:payY,
+    student_id:sId, course_id:courseId, amount:Number(amt), month:payM, year:payY,
     pay_date:document.getElementById('paymentDate').value,
     pay_type:document.getElementById('paymentType').value,
     cash_account:document.getElementById('paymentCashAccount').value,
@@ -3388,6 +3440,7 @@ function renderPayments(){
     return`<tr>
       <td>${i+1}</td>
       <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
+      <td>${(()=>{const c=DATA.courses.find(c=>c.id===p.course_id);return c?`<span class="badge badge-blue">${c.name}</span>`:'<span class="text-muted">—</span>';})()}</td>
       <td class="font-bold" style="color:var(--green)">${fmt(p.amount)}₸</td>
       <td><span class="badge badge-blue">${MONTHS[p.month]||p.month} ${p.year}</span></td>
       <td>${p.pay_date||'—'}</td>
@@ -3398,7 +3451,7 @@ function renderPayments(){
       <td class="text-muted text-sm">${p.note||''}</td>
       <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}')">🗑️</button></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">💳</div><p>Төлемдер жоқ</p></div></td></tr>';
+  }).join('')||'<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">💳</div><p>Төлемдер жоқ</p></div></td></tr>';
 }
 
 // ================================================================
