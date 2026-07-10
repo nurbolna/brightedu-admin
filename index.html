@@ -164,7 +164,10 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .crm-col-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;padding:0 2px;}
 .crm-col-count{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:11px;}
 .crm-col-cards{overflow-y:auto;display:flex;flex-direction:column;gap:8px;flex:1;}
-.crm-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 13px;cursor:pointer;transition:border-color .2s;}
+.crm-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 13px;cursor:grab;transition:border-color .2s,opacity .2s,transform .2s;}
+.crm-card:active{cursor:grabbing;}
+.crm-card.dragging{opacity:.4;}
+.crm-col.drag-over{border-color:var(--accent);background:rgba(79,142,247,0.06);}
 .crm-card:hover{border-color:var(--accent);}
 .crm-card-name{font-weight:700;font-size:13px;margin-bottom:5px;}
 .crm-card-row{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px;margin-top:3px;}
@@ -1118,10 +1121,55 @@ details[open] summary::before{content:'▾ '}
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Эксперт</label><input type="text" id="leadExpert" list="leadExpertList" /><datalist id="leadExpertList"></datalist></div>
+      <div class="form-group"><label>Эксперт</label><select id="leadExpert"></select></div>
       <div class="form-group"><label>Выручка (₸)</label><input type="number" id="leadRevenue" /></div>
     </div>
     <div class="form-group"><label>Ескертпе</label><textarea id="leadNote" rows="2"></textarea></div>
+
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">📋 Қосымша ақпарат (міндетті емес)</div>
+      <div class="form-row">
+        <div class="form-group"><label>Сумма предоплаты (₸)</label><input type="number" id="leadPrepayment" /></div>
+        <div class="form-group"><label>Адрес</label><input type="text" id="leadAddress" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Школа</label><input type="text" id="leadSchool" /></div>
+        <div class="form-group"><label>Класс</label>
+          <select id="leadGrade">
+            <option value="">Таңдау</option>
+            <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+            <option value="10">10</option><option value="11">11</option>
+            <option value="Студент">Студент</option><option value="Ересек">Ересек</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Ағылшын тілі деңгейі</label>
+          <select id="leadEnglishLevel">
+            <option value="">Таңдау</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Elementary">Elementary</option>
+            <option value="Pre-Intermediate">Pre-Intermediate</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Upper-Intermediate">Upper-Intermediate</option>
+            <option value="Advanced">Advanced</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:9px;cursor:pointer;margin-top:8px">
+            <input type="checkbox" id="leadHasExperience" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer" />
+            Оқыған тәжірибесі бар ма
+          </label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Консультация күні мен уақыты</label><input type="datetime-local" id="leadConsultationAt" /></div>
+        <div class="form-group"><label>Қайта жазу (перезапись) күні</label><input type="date" id="leadRescheduleDate" /></div>
+      </div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('leadModal')">Бас тарту</button>
       <button class="btn btn-red" id="leadDeleteBtn" style="display:none" onclick="deleteLeadFromModal()">🗑️ Өшіру</button>
@@ -3371,16 +3419,18 @@ function switchCrmView(v){
 }
 
 function populateCrmFilters(){
-  // Эксперт селектін DATA.leads + DATA.teachers ішінен жинақтап толтырамыз
-  const names = new Set();
-  DATA.teachers.forEach(t=>names.add((t.name+' '+(t.surname||'')).trim()));
-  DATA.leads.forEach(l=>{ if(l.expert) names.add(l.expert); });
+  // Эксперт тізімі — тек директорлар (сату мамандары), мұғалімдер емес
+  const names = DATA.directors.map(d=>d.name).filter(Boolean);
   const sel = document.getElementById('crmFilterExpert');
   const cur = sel.value;
-  sel.innerHTML = '<option value="">Эксперт — барлығы</option>' + [...names].filter(Boolean).map(n=>`<option value="${n}">${n}</option>`).join('');
+  sel.innerHTML = '<option value="">Эксперт — барлығы</option>' + names.map(n=>`<option value="${n}">${n}</option>`).join('');
   sel.value = cur;
-  const dl = document.getElementById('leadExpertList');
-  if(dl) dl.innerHTML = [...names].filter(Boolean).map(n=>`<option value="${n}"></option>`).join('');
+  const expSel = document.getElementById('leadExpert');
+  if(expSel){
+    const curExp = expSel.value;
+    expSel.innerHTML = '<option value="">— Таңдау —</option>' + names.map(n=>`<option value="${n}">${n}</option>`).join('');
+    if(curExp) expSel.value = curExp;
+  }
 }
 
 function getFilteredLeads(){
@@ -3428,18 +3478,68 @@ function renderCrmTable(list){
 function renderCrmBoard(list){
   document.getElementById('crmBoardView').innerHTML = CRM_STATUSES.map(st=>{
     const cards = list.filter(l=>l.status===st.name);
-    return `<div class="crm-col">
+    return `<div class="crm-col" data-status="${st.name}" ondragover="crmDragOver(event)" ondragleave="crmDragLeave(event)" ondrop="crmDrop(event,'${st.name}')">
       <div class="crm-col-head"><span class="badge badge-${st.color}">${st.name}</span><span class="crm-col-count">${cards.length}</span></div>
       <div class="crm-col-cards">
-        ${cards.map(l=>`<div class="crm-card" onclick="openLeadModal('${l.id}')">
+        ${cards.map(l=>`<div class="crm-card" draggable="true" ondragstart="crmDragStart(event,'${l.id}')" ondragend="crmDragEnd(event)" onclick="crmCardClick(event,'${l.id}')">
             <div class="crm-card-name">${l.name||'—'}</div>
             ${l.whatsapp?`<div class="crm-card-row">📱 ${l.whatsapp}</div>`:''}
             ${l.expert?`<div class="crm-card-row">👤 ${l.expert}</div>`:''}
             ${l.revenue?`<div class="crm-card-row crm-card-revenue">${fmt(l.revenue)}₸</div>`:''}
+            ${l.consultation_at?`<div class="crm-card-row">📅 ${l.consultation_at.slice(0,16).replace('T',' ')}</div>`:''}
           </div>`).join('') || '<div class="text-muted text-sm" style="padding:8px 2px">Бос</div>'}
       </div>
     </div>`;
   }).join('');
+}
+
+// ---- Drag & drop (Trello-стиль) ----
+let crmDragLeadId = null;
+let crmDragMoved = false;
+function crmDragStart(ev, leadId){
+  crmDragLeadId = leadId;
+  crmDragMoved = false;
+  ev.dataTransfer.effectAllowed = 'move';
+  try{ ev.dataTransfer.setData('text/plain', leadId); }catch(e){}
+  setTimeout(()=>ev.target.classList.add('dragging'), 0);
+}
+function crmDragEnd(ev){
+  ev.target.classList.remove('dragging');
+  document.querySelectorAll('.crm-col.drag-over').forEach(c=>c.classList.remove('drag-over'));
+}
+function crmDragOver(ev){
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('drag-over');
+}
+function crmDragLeave(ev){
+  ev.currentTarget.classList.remove('drag-over');
+}
+async function crmDrop(ev, newStatus){
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drag-over');
+  const leadId = crmDragLeadId || ev.dataTransfer.getData('text/plain');
+  crmDragLeadId = null;
+  if(!leadId) return;
+  const lead = DATA.leads.find(l=>l.id===leadId);
+  if(!lead || lead.status===newStatus) return;
+  crmDragMoved = true;
+  lead.status = newStatus; // optimистикалық жаңарту — UI бірден жауап береді
+  renderCrmBoard(getFilteredLeads());
+  try{
+    await sb.from('leads').update({status:newStatus}).eq('id',leadId);
+    await loadAll();
+    if(crmView==='board') renderCrmBoard(getFilteredLeads());
+    toast('✅ Статус жаңартылды: '+newStatus);
+  }catch(e){
+    toast('❌ Сақталмады: '+e.message,'error');
+    await loadAll(); renderCRM();
+  }
+}
+// Карточканы басқанда (drag жасалмаса ғана) модалды ашамыз
+function crmCardClick(ev, leadId){
+  if(crmDragMoved){ crmDragMoved=false; return; }
+  openLeadModal(leadId);
 }
 
 function openLeadModal(id){
@@ -3461,6 +3561,14 @@ function openLeadModal(id){
     document.getElementById('leadExpert').value=l.expert||'';
     document.getElementById('leadRevenue').value=l.revenue||'';
     document.getElementById('leadNote').value=l.note||'';
+    document.getElementById('leadPrepayment').value=l.prepayment_amount||'';
+    document.getElementById('leadAddress').value=l.address||'';
+    document.getElementById('leadSchool').value=l.school||'';
+    document.getElementById('leadGrade').value=l.grade||'';
+    document.getElementById('leadEnglishLevel').value=l.english_level||'';
+    document.getElementById('leadHasExperience').checked=!!l.has_experience;
+    document.getElementById('leadConsultationAt').value=l.consultation_at ? l.consultation_at.slice(0,16) : '';
+    document.getElementById('leadRescheduleDate').value=l.reschedule_date||'';
   }else{
     document.getElementById('leadModalTitle').textContent='🎯 Жаңа лид';
     document.getElementById('leadId').value='';
@@ -3473,6 +3581,14 @@ function openLeadModal(id){
     document.getElementById('leadExpert').value='';
     document.getElementById('leadRevenue').value='';
     document.getElementById('leadNote').value='';
+    document.getElementById('leadPrepayment').value='';
+    document.getElementById('leadAddress').value='';
+    document.getElementById('leadSchool').value='';
+    document.getElementById('leadGrade').value='';
+    document.getElementById('leadEnglishLevel').value='';
+    document.getElementById('leadHasExperience').checked=false;
+    document.getElementById('leadConsultationAt').value='';
+    document.getElementById('leadRescheduleDate').value='';
   }
   openModal('leadModal');
 }
@@ -3490,7 +3606,15 @@ async function saveLead(){
     qual: document.getElementById('leadQual').value,
     expert: document.getElementById('leadExpert').value.trim(),
     revenue: Number(document.getElementById('leadRevenue').value)||0,
-    note: document.getElementById('leadNote').value.trim()
+    note: document.getElementById('leadNote').value.trim(),
+    prepayment_amount: document.getElementById('leadPrepayment').value ? Number(document.getElementById('leadPrepayment').value) : null,
+    address: document.getElementById('leadAddress').value.trim() || null,
+    school: document.getElementById('leadSchool').value.trim() || null,
+    grade: document.getElementById('leadGrade').value || null,
+    english_level: document.getElementById('leadEnglishLevel').value || null,
+    has_experience: document.getElementById('leadHasExperience').checked,
+    consultation_at: document.getElementById('leadConsultationAt').value || null,
+    reschedule_date: document.getElementById('leadRescheduleDate').value || null
   };
   try{
     if(id){ await sb.from('leads').update(payload).eq('id',id); }
@@ -3498,6 +3622,7 @@ async function saveLead(){
   }catch(e){ return alert('❌ Сақталмады! Қате: '+e.message); }
   closeModal('leadModal'); await loadAll(); renderCRM(); toast('✅ Сақталды!');
 }
+
 
 async function deleteLead(id){
   if(!confirm('Өшіресіз бе?')) return;
