@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Академия Басқару Жүйесі</title>
+<title>Bright Education Басқару Жүйесі</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -311,8 +311,11 @@ details[open] summary::before{content:'▾ '}
 <div id="loginPage">
   <div class="login-box">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-      <div class="login-logo">🎓 Академия</div>
-      <button class="theme-toggle" onclick="toggleTheme()" id="loginThemeBtn">☀️ Күндіз</button>
+      <div class="login-logo">🎓 Bright Education</div>
+      <div style="display:flex;gap:8px">
+        <button class="theme-toggle lang-toggle" onclick="cycleLang()" id="loginLangBtn">KK</button>
+        <button class="theme-toggle" onclick="toggleTheme()" id="loginThemeBtn">☀️ Күндіз</button>
+      </div>
     </div>
     <div class="login-sub">Логин мен паролді енгізіңіз</div>
     <div class="form-group"><label>Логин</label><input type="text" id="loginInput" placeholder="логин" /></div>
@@ -326,15 +329,18 @@ details[open] summary::before{content:'▾ '}
 <div id="app">
   <div class="mobile-header">
     <button class="hamburger" onclick="toggleSidebar()">☰</button>
-    <span style="font-family:'Playfair Display',serif;color:var(--accent)">🎓 Академия</span>
-    <button class="theme-toggle" onclick="toggleTheme()" id="mobileThemeBtn">☀️</button>
+    <span style="font-family:'Playfair Display',serif;color:var(--accent)">🎓 Bright Education</span>
+    <div style="display:flex;gap:6px">
+      <button class="theme-toggle lang-toggle" onclick="cycleLang()" id="mobileLangBtn">KK</button>
+      <button class="theme-toggle" onclick="toggleTheme()" id="mobileThemeBtn">☀️</button>
+    </div>
   </div>
   <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebar()"></div>
 
   <div class="layout">
     <!-- SIDEBAR -->
     <div class="sidebar" id="sidebar">
-      <div class="sidebar-logo">🎓 Академия<span id="sidebarRole">Жүйе</span></div>
+      <div class="sidebar-logo">🎓 Bright Education<span id="sidebarRole">Жүйе</span></div>
       <nav>
         <div class="nav-section">Негізгі</div>
         <div class="nav-item active" onclick="showPage('dashboard',this)">📊 Дашборд<span class="nav-badge hidden" id="badgeDash">0</span></div>
@@ -354,6 +360,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-item teacher-only" onclick="openMySalary()">💰 Жалақым</div>
       </nav>
       <div class="sidebar-bottom">
+        <button class="theme-toggle lang-toggle" data-full="1" onclick="cycleLang()" id="sidebarLangBtn" style="width:100%;justify-content:center;margin-bottom:8px">🌐 KK</button>
         <button class="theme-toggle" onclick="toggleTheme()" id="sidebarThemeBtn" style="width:100%;justify-content:center">☀️ Күндіз режимі</button>
         <div class="sidebar-user">
           <div class="user-avatar" id="uAvatar">Д</div>
@@ -389,13 +396,15 @@ details[open] summary::before{content:'▾ '}
             <div id="dashToday"><div class="loading"><div class="spinner"></div></div></div>
           </div>
         </div>
-        <div class="card dir-only">
-          <div class="card-title">⚠️ Ескертулер</div>
-          <div id="dashAlerts"><div class="loading"><div class="spinner"></div></div></div>
-        </div>
-        <div class="card dir-admin" style="margin-top:16px">
-          <div class="card-title">🎂 Осы апта туған күндер</div>
-          <div id="dashBirthdays"><div class="loading"><div class="spinner"></div></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+          <div class="card dir-only">
+            <div class="card-title">⚠️ Ескертулер</div>
+            <div id="dashAlerts"><div class="loading"><div class="spinner"></div></div></div>
+          </div>
+          <div class="card dir-admin">
+            <div class="card-title">🎂 Осы апта туған күндер</div>
+            <div id="dashBirthdays"><div class="loading"><div class="spinner"></div></div></div>
+          </div>
         </div>
       </div>
 
@@ -1077,7 +1086,22 @@ function startApp(){
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   setupUI();
-  loadAll();
+  loadAll().then(restoreLastPage);
+}
+
+// Беттi жаңартқанда (F5) пайдаланушыны басты бетке емес, тұрған бөлімінде
+// қалдыру үшін — соңғы ашылған бетті localStorage-тен оқып, соны белсендіреді.
+function restoreLastPage(){
+  try{
+    const last = localStorage.getItem('academy_last_page');
+    if(!last || last==='dashboard') return; // дашборд бастапқыда өзінен-өзі белсенді
+    const pageEl = document.getElementById('page-'+last);
+    const navEl = document.querySelector(`[onclick^="showPage('${last}'"]`);
+    if(!pageEl || !navEl) return;
+    // Бұл бет ағымдағы рөлге көрінбейтін болса (dir-only/dir-admin жасырылған), дашбордта қаламыз
+    if(getComputedStyle(navEl).display==='none') return;
+    showPage(last, navEl);
+  }catch(e){}
 }
 
 // ================================================================
@@ -1178,6 +1202,7 @@ function showPage(name, el){
   el?.classList.add('active');
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('mobileOverlay').classList.remove('open');
+  try{ localStorage.setItem('academy_last_page', name); }catch(e){}
   const renders={
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
@@ -1190,7 +1215,7 @@ function showPage(name, el){
 // ================================================================
 // STUDY HUB (Курстар / Группалар / Кесте бір бетте)
 // ================================================================
-let studyActiveTab='courses';
+let studyActiveTab=(()=>{ try{ return localStorage.getItem('academy_last_study_tab')||'courses'; }catch(e){ return 'courses'; } })();
 
 const STUDY_TABS={
   courses:{title:'Курстар', subtitle:'Оқу бағдарламалары', addLabel:'+ Курс қосу', addCls:'dir-only', addFn:()=>openCourseModal(), render:()=>renderCourses()},
@@ -1204,6 +1229,7 @@ function switchStudyTab(tab){
   // teacher-ге Курстар/Группалар табтары жабық болғандықтан, сол табқа өтуге тырысса Кестеге қайтарамыз
   if(r==='teacher' && tab!=='schedule') tab='schedule';
   studyActiveTab=tab;
+  try{ localStorage.setItem('academy_last_study_tab', tab); }catch(e){}
 
   ['courses','groups','schedule'].forEach(t=>{
     const panel=document.getElementById('study-'+t);
@@ -3416,6 +3442,117 @@ on conflict (student_id, lesson_date) do update
   set grade = excluded.grade, note = coalesce(excluded.note, journal_entries.note);
 =================================================================
 */
+
+// ================================================================
+// I18N (KK / RU / EN) — тіл ауыстыру жүйесі
+// ================================================================
+const I18N_KK = {"% қатысу ·":{"ru":"% посещаемости ·","en":"% attendance ·"},"% үлгерім ·":{"ru":"% успеваемости ·","en":"% progress ·"},"(жарнамадан:":{"ru":"(из рекламы:","en":"(from ads:"},"+ Группа қосу":{"ru":"+ Добавить группу","en":"+ Add group"},"+ Деңгей қосу":{"ru":"+ Добавить уровень","en":"+ Add level"},"+ Курс қосу":{"ru":"+ Добавить курс","en":"+ Add course"},"+ Марапат беру":{"ru":"+ Выдать награду","en":"+ Give reward"},"+ Мұғалім қосу":{"ru":"+ Добавить учителя","en":"+ Add teacher"},"+ Оқушы қосу":{"ru":"+ Добавить ученика","en":"+ Add student"},"+ Сабақ қосу":{"ru":"+ Добавить урок","en":"+ Add lesson"},"+ Санат қосу":{"ru":"+ Добавить категорию","en":"+ Add category"},"+ Төлем қосу":{"ru":"+ Добавить платеж","en":"+ Add payment"},"+ Шығыс қосу":{"ru":"+ Добавить расход","en":"+ Add expense"},"adjustment: Айыппұл/шегеру":{"ru":"adjustment: Штраф/вычет","en":"adjustment: Penalty/deduction"},"adjustment: Бонус":{"ru":"adjustment: Бонус","en":"adjustment: Bonus"},"Blended CAC (барлық жаңа оқушы)":{"ru":"Blended CAC (все новые ученики)","en":"Blended CAC (all new students)"},"Bright Education Басқару Жүйесі":{"ru":"Система управления Bright Education","en":"Bright Education Management System"},"CAC, безубыточность, табыс жоспары":{"ru":"CAC, безубыточность, план доходов","en":"CAC, break-even, revenue plan"},"JSON қате":{"ru":"Ошибка JSON","en":"JSON error"},"Kaspi комиссиясы":{"ru":"Комиссия Kaspi","en":"Kaspi commission"},"Paid CAC (тек Таргет FB/Tiktok)":{"ru":"Paid CAC (только Таргет FB/Tiktok)","en":"Paid CAC (Target FB/Tiktok only)"},"| Жаңа оқушы:":{"ru":"| Новый ученик:","en":"| New student:"},"| Мерзім:":{"ru":"| Срок:","en":"| Term:"},"| Пароль:":{"ru":"| Пароль:","en":"| Password:"},"÷ Орташа таза маржа (1 сатудан):":{"ru":"÷ Средняя чистая маржа (с 1 продажи):","en":"÷ Average net margin (per 1 sale):"},"Адамдар":{"ru":"Люди","en":"People"},"Администратор":{"ru":"Администратор","en":"Administrator"},"Ай":{"ru":"Месяц","en":"Month"},"Айлық":{"ru":"Ежемесячно","en":"Monthly"},"Айлық кіріс":{"ru":"Ежемесячный доход","en":"Monthly income"},"Айлық төлем (₸)":{"ru":"Ежемесячный платеж (₸)","en":"Monthly payment (₸)"},"Айына керек сату саны (нольге шығу үшін)":{"ru":"Необходимое количество продаж в месяц (для выхода в ноль)","en":"Required sales per month (to break even)"},"Айыппұл/шегеру аласыз ба? Соманы (₸) енгізіңіз, керек болмаса бос қалдырып \"OK\" басыңыз:":{"ru":"Получите штраф/вычет? Введите сумму (₸), если не нужно, оставьте пустым и нажмите \"OK\":","en":"Get a penalty/deduction? Enter amount (₸), otherwise leave blank and press \"OK\":"},"алған балл":{"ru":"полученный балл","en":"score earned"},"Амбассадор":{"ru":"Амбассадор","en":"Ambassador"},"Анализ":{"ru":"Анализ","en":"Analysis"},"Апта (кез келген күні)":{"ru":"Неделя (в любой день)","en":"Week (any day)"},"Апта күні":{"ru":"День недели","en":"Day of the week"},"Апталық":{"ru":"Еженедельно","en":"Weekly"},"Апталық кесте — сабаққа басыңыз":{"ru":"Еженедельное расписание — нажмите на урок","en":"Weekly schedule — click on a lesson"},"Апталық сабақтар":{"ru":"Еженедельные уроки","en":"Weekly lessons"},"аралығы. Кестедегі оқушыға басып, жеке нәтижесін көре аласыз.":{"ru":"период. Вы можете нажать на ученика в расписании, чтобы увидеть индивидуальный результат.","en":"period. You can click on a student in the schedule to see individual results."},"Аренда":{"ru":"Аренда","en":"Rent"},"Ата-ана":{"ru":"Родитель","en":"Parent"},"Атауын енгізіңіз":{"ru":"Введите название","en":"Enter name"},"Аты":{"ru":"Имя","en":"First name"},"Аты-жөні":{"ru":"ФИО","en":"Full name"},"Атын енгізіңіз":{"ru":"Введите имя","en":"Enter first name"},"Аяқталу":{"ru":"Окончание","en":"End"},"Ақпан":{"ru":"Февраль","en":"February"},"Баланс 0₸":{"ru":"Баланс 0₸","en":"Balance 0₸"},"Баланс:":{"ru":"Баланс:","en":"Balance:"},"Барлығы төледі!":{"ru":"Все оплатили!","en":"Everyone paid!"},"барлық балл":{"ru":"общий балл","en":"total score"},"Барлық оқу топтары":{"ru":"Все учебные groups","en":"All study groups"},"Барлық оқушы":{"ru":"Все ученики","en":"All students"},"Бас тарту":{"ru":"Отмена","en":"Cancel"},"Басталу":{"ru":"Начало","en":"Start"},"Басқа":{"ru":"Другое","en":"Other"},"Бейсенбі":{"ru":"Четверг","en":"Thursday"},"Белгі (emoji)":{"ru":"Значок (emoji)","en":"Icon (emoji)"},"Белгісіз":{"ru":"Неизвестно","en":"Unknown"},"Белс:":{"ru":"Акт:","en":"Act:"},"Белсенділік (0-5)":{"ru":"Активность (0-5)","en":"Activity (0-5)"},"Болашақ күнге журнал жазбасын енгізуге болмайды — сабақ әлі өткен жоқ.":{"ru":"Нельзя вводить запись в журнал на будущую дату — урок еще не прошел.","en":"Cannot enter a journal log for a future date — the lesson hasn't taken place yet."},"Бонус сомасы дұрыс емес":{"ru":"Неверная сумма бонуса","en":"Incorrect bonus amount"},"Бс":{"ru":"Чт","en":"Th"},"Бүгін":{"ru":"Сегодня","en":"Today"},"Бүгін сабақ жоқ":{"ru":"Сегодня нет уроков","en":"No lessons today"},"Бүгін!":{"ru":"Сегодня!","en":"Today!"},"Бұл айда жаңа оқушы жоқ":{"ru":"В этом месяце нет новых учеников","en":"No new students this month"},"Бұл айда сабақ күндері жоқ":{"ru":"В этом месяце нет учебных дней","en":"No lesson days this month"},"Бұл ақша не үшін жұмсалды?":{"ru":"На что были потрачены эти деньги?","en":"What was this money spent on?"},"Бұл жазбаны (":{"ru":"Эту запись (","en":"This record ("},"Бұл кезеңде жазба жоқ":{"ru":"В этом периоде нет записей","en":"No records in this period"},"Бұл топта оқушылар жоқ":{"ru":"В этой группе нет учеников","en":"There are no students in this group"},"Бұл топтың толық баллы:":{"ru":"Общий балл этой группы:","en":"Total score of this group:"},"Бөлме":{"ru":"Комната","en":"Room"},"бөлме жоқ":{"ru":"нет комнаты","en":"no room"},"Группа":{"ru":"Группа","en":"Group"},"Группа атауы":{"ru":"Название группы","en":"Group name"},"Группа жоқ":{"ru":"Нет группы","en":"No group"},"Группа мен айды таңдаңыз":{"ru":"Выберите группу и месяц","en":"Select group and month"},"Группа таңдаңыз":{"ru":"Выберите группу","en":"Select group"},"Группалар":{"ru":"Группы","en":"Groups"},"Группалар (бірнешеуін таңдауға болады)":{"ru":"Группы (можно выбрать несколько)","en":"Groups (multiple selection available)"},"Группалар жоқ":{"ru":"Нет групп","en":"No groups"},"Дашборд":{"ru":"Дашборд","en":"Dashboard"},"Дереккөз":{"ru":"Источник","en":"Source"},"Дереккөз:":{"ru":"Источник:","en":"Source:"},"Деректер жоқ":{"ru":"Нет данных","en":"No data"},"Деңгей":{"ru":"Уровень","en":"Level"},"Деңгейлер":{"ru":"Уровни","en":"Levels"},"Директор":{"ru":"Директор","en":"Director"},"Дс":{"ru":"Пн","en":"Mo"},"Дүйсенбі":{"ru":"Понедельник","en":"Monday"},"Дұрыс сан енгізіңіз":{"ru":"Введите корректное число","en":"Enter a valid number"},"Ертең":{"ru":"Завтра","en":"Tomorrow"},"Есептелген салық (3%)":{"ru":"Исчисленный налог (3%)","en":"Calculated tax (3%)"},"Ескертпе":{"ru":"Примечание","en":"Note"},"Ескертпе (мыс. себебі)":{"ru":"Примечание (напр. причина)","en":"Note (e.g., reason)"},"Ескертулер":{"ru":"Предупреждения","en":"Warnings"},"Ескертулер жоқ":{"ru":"Нет предупреждений","en":"No warnings"},"Жабу":{"ru":"Закрыть","en":"Close"},"Жалақы":{"ru":"Зарплата","en":"Salary"},"Жалақы төлемдері әлі жоқ":{"ru":"Выплат зарплаты еще нет","en":"No salary payments yet"},"Жалпы кіріс":{"ru":"Общий доход","en":"Total income"},"Жалпы шығыс":{"ru":"Общий расход","en":"Total expense"},"Жексенбі":{"ru":"Воскресенье","en":"Sunday"},"Желтоқсан":{"ru":"Декабрь","en":"December"},"Жеткілікті журнал деректері жоқ":{"ru":"Недостаточно данных в журнале","en":"Insufficient journal data"},"Жк":{"ru":"Вс","en":"Su"},"Жм":{"ru":"Пт","en":"Fr"},"Жоспарланған айлық шығын":{"ru":"Планируемый месячный расход","en":"Planned monthly expense"},"Жоспарланған айлық шығынды санат бойынша толтырыңыз — қосындысы автоматты есептеледі және есеп содан алынады":{"ru":"Заполните планируемый месячный расход по категориям — сумма рассчитывается автоматически и отчет берется из нее","en":"Fill in the planned monthly expense by category — the total is calculated automatically and the report uses it"},"Жоспарланған жиыны:":{"ru":"Планируемая сумма:","en":"Planned total:"},"Жоқ":{"ru":"Нет","en":"No"},"Журнал":{"ru":"Журнал","en":"Journal"},"Жыл":{"ru":"Год","en":"Year"},"Жылдам төлем":{"ru":"Быстрая оплата","en":"Quick payment"},"Жүйе":{"ru":"Система","en":"System"},"Жұма":{"ru":"Пятница","en":"Friday"},"Заметка":{"ru":"Заметка","en":"Note"},"Заметка (міндетті) *":{"ru":"Заметка (обязательно) *","en":"Note (required) *"},"Заметка міндетті өріс!":{"ru":"Заметка — обязательное поле!","en":"Note is a required field!"},"ЗП:":{"ru":"ЗП:","en":"Salary:"},"Импорт жасалсын ба?":{"ru":"Выполнить импорт?","en":"Perform import?"},"Касса":{"ru":"Касса","en":"Cash desk"},"Категория":{"ru":"Категория","en":"Category"},"Кезең":{"ru":"Период","en":"Period"},"Кезеңді таңдаңыз":{"ru":"Выберите период","en":"Select period"},"Келді":{"ru":"Пришел","en":"Attended"},"Келесі төлем":{"ru":"Следующий платеж","en":"Next payment"},"Келесі төлем күні":{"ru":"Дата следующего платежа","en":"Next payment date"},"Керек сату саны":{"ru":"Необходимое кол-во продаж","en":"Required sales quantity"},"Кешіккен минут санын енгізіңіз":{"ru":"Введите количество минут опоздания","en":"Enter minutes late"},"Кешікті":{"ru":"Опоздал","en":"Late"},"Курс":{"ru":"Курс","en":"Course"},"Курс атауы":{"ru":"Название курса","en":"Course name"},"Курстар":{"ru":"Курсы","en":"Courses"},"Курстар жоқ":{"ru":"Нет курсов","en":"No courses"},"Кіру →":{"ru":"Войти →","en":"Login →"},"Кіріс, шығыс, пайда":{"ru":"Доход, расход, прибыль","en":"Income, expense, profit"},"күн қалды":{"ru":"дней осталось","en":"days left"},"күн өтті":{"ru":"дней прошло","en":"days passed"},"күн өтті —":{"ru":"дней прошло —","en":"days passed —"},"күннен кейін":{"ru":"через дней","en":"days later"},"Күні":{"ru":"Дата","en":"Date"},"Логин":{"ru":"Логин","en":"Login"},"логин":{"ru":"логин","en":"login"},"Логин мен паролді енгізіңіз":{"ru":"Введите логин и пароль","en":"Enter username and password"},"Логин немесе пароль қате!":{"ru":"Неверный логин или пароль!","en":"Incorrect username or password!"},"Макс. оқушы":{"ru":"Макс. учеников","en":"Max students"},"Мамыр":{"ru":"Май","en":"May"},"Марапат атауы":{"ru":"Название награды","en":"Reward name"},"Марапаттар жоқ":{"ru":"Нет наград","en":"No rewards"},"Маркетинг":{"ru":"Маркетинг","en":"Marketing"},"Маркетинг ескертпесі":{"ru":"Примечание к маркетингу","en":"Marketing note"},"Маркетинг шығысы:":{"ru":"Маркетинговый расход:","en":"Marketing expense:"},"Маусым":{"ru":"Июнь","en":"June"},"Менеджер":{"ru":"Менеджер","en":"Manager"},"Менеджер:":{"ru":"Менеджер:","en":"Manager:"},"Менің оқушыларым":{"ru":"Мои ученики","en":"My students"},"Менің топтарым":{"ru":"Мои группы","en":"My groups"},"Мерзімі өткен":{"ru":"Просрочено","en":"Overdue"},"мин)":{"ru":"мин)","en":"min)"},"Мок тест (міндетті емес)":{"ru":"Мок-тест (необязательно)","en":"Mock test (optional)"},"Мок:":{"ru":"Мок:","en":"Mock:"},"мыс. 10":{"ru":"напр. 10","en":"e.g., 10"},"мыс. 500000":{"ru":"напр. 500000","en":"e.g., 500000"},"Мыс: 18к предоплата жіберді, қалғанын рассрочкаға алады":{"ru":"Напр: отправил 18к предоплаты, остальное возьмет в рассрочку","en":"Ex: sent 18k prepayment, will take the rest in installments"},"Мыс: Нұрбол":{"ru":"Напр: Нурбол","en":"Ex: Nurbol"},"мысалы: 1234":{"ru":"например: 1234","en":"example: 1234"},"мысалы: madi":{"ru":"например: madi","en":"example: madi"},"Мұғалім":{"ru":"Учитель","en":"Teacher"},"Мұғалім рұқсаты":{"ru":"Доступ учителя","en":"Teacher permission"},"Мұғалімдер":{"ru":"Учителя","en":"Teachers"},"Мұғалімдер жоқ":{"ru":"Нет учителей","en":"No teachers"},"Назар аударатын оқушы жоқ":{"ru":"Нет учеников, требующих внимания","en":"No students requiring attention"},"Наурыз":{"ru":"Март","en":"March"},"Нақты енгізілген шығын (әлі толық болмауы мүмкін)":{"ru":"Фактически внесенный расход (может быть еще не полным)","en":"Actual entered expense (may not be full yet)"},"Нақты таза пайда":{"ru":"Фактическая чистая прибыль","en":"Actual net profit"},"Негізгі":{"ru":"Основной","en":"Main"},"Неше минут кешікті?":{"ru":"На сколько минут опоздал?","en":"How many minutes late?"},"Осы ай алғыңыз келетін таза пайда (₸)":{"ru":"Чистая прибыль, которую вы хотите получить в этом месяце (₸)","en":"Net profit you want to get this month (₸)"},"Осы ай жаңа келген":{"ru":"Новые в этом месяце","en":"New arrivals this month"},"Осы айда төлем жоқ, орташа маржаны есептеу мүмкін емес.":{"ru":"В этом месяце нет платежей, невозможно рассчитать среднюю маржу.","en":"No payments this month, cannot calculate average margin."},"Осы аптада туған күн жоқ":{"ru":"На этой неделе нет дней рождения","en":"No birthdays this week"},"Оқу":{"ru":"Обучение","en":"Study"},"Оқу бағдарламалары":{"ru":"Учебные программы","en":"Curriculums"},"Оқушы":{"ru":"Ученик","en":"Student"},"Оқушы ешбір топқа тіркелмеген":{"ru":"Ученик не зарегистрирован ни в одной группе","en":"Student is not registered in any group"},"Оқушы және атауын енгізіңіз":{"ru":"Введите ученика и название","en":"Enter student and name"},"Оқушы және сомасын енгізіңіз":{"ru":"Введите ученика и сумму","en":"Enter student and amount"},"Оқушы төлемдері тарихы":{"ru":"История платежей ученика","en":"Student payment history"},"Оқушылар":{"ru":"Ученики","en":"Students"},"Оқушылар жоқ":{"ru":"Нет учеников","en":"No students"},"Пароль":{"ru":"Пароль","en":"Password"},"Пән":{"ru":"Предмет","en":"Subject"},"режимі":{"ru":"режим","en":"mode"},"Рейтинг":{"ru":"Рейтинг","en":"Rating"},"Рейтинг орт:":{"ru":"Средний рейтинг:","en":"Average rating:"},"Сабақ Кестесі":{"ru":"Расписание занятий","en":"Lesson schedule"},"Сабақ кестесі жоқ":{"ru":"Нет расписания занятий","en":"No lesson schedule"},"Сабақтар жоқ":{"ru":"Нет уроков","en":"No lessons"},"Салық":{"ru":"Налог","en":"Tax"},"Сарафанка":{"ru":"Сарафанное радио","en":"Word of mouth"},"сату":{"ru":"продажи","en":"sales"},"Сағаттық ставка (₸)":{"ru":"Почасовая ставка (₸)","en":"Hourly rate (₸)"},"Сақтау":{"ru":"Сохранить","en":"Save"},"Сб":{"ru":"Сб","en":"Sa"},"Себебі (міндетті емес):":{"ru":"Причина (необязательно):","en":"Reason (optional):"},"Себепсіз":{"ru":"Без причины","en":"Without reason"},"Себепті":{"ru":"По причине","en":"With reason"},"Сейсенбі":{"ru":"Вторник","en":"Tuesday"},"Сенбі":{"ru":"Суббота","en":"Saturday"},"Сипаттама":{"ru":"Описание","en":"Description"},"Сома":{"ru":"Сумма","en":"Amount"},"Сома (₸)":{"ru":"Сумма (₸)","en":"Amount (₸)"},"Сомасы":{"ru":"Сумма","en":"Amount"},"Сомасы (₸)":{"ru":"Сумма (₸)","en":"Amount (₸)"},"Сомасын енгізіңіз":{"ru":"Введите сумму","en":"Enter amount"},"Ср":{"ru":"Ср","en":"We"},"Сс":{"ru":"Вт","en":"Tu"},"Статистика және аналитика":{"ru":"Статистика и аналитика","en":"Statistics and analytics"},"Сізге топ тағайындалмаған":{"ru":"Вам не назначена группа","en":"No group assigned to you"},"Сәрсенбі":{"ru":"Среда","en":"Wednesday"},"Сәуір":{"ru":"Апрель","en":"April"},"Таза пайда":{"ru":"Чистая прибыль","en":"Net profit"},"Таза түсім":{"ru":"Чистая выручка","en":"Net income"},"Тамыз":{"ru":"Август","en":"August"},"Таргет Facebook":{"ru":"Таргет Facebook","en":"Target Facebook"},"Таргет Tiktok":{"ru":"Таргет Tiktok","en":"Target Tiktok"},"Тарих жоқ":{"ru":"Нет истории","en":"No history"},"Тегі":{"ru":"Фамилия","en":"Last name"},"Телеграм канал":{"ru":"Телеграм канал","en":"Telegram channel"},"Телефон":{"ru":"Телефон","en":"Phone"},"Толық рұқсат":{"ru":"Полный доступ","en":"Full access"},"Толық тізім":{"ru":"Полный список","en":"Full list"},"Топ":{"ru":"Группа","en":"Group"},"Топ пен оқушы бойынша қатысу мен үлгерім статистикасы":{"ru":"Статистика посещаемости и успеваемости по группам и ученикам","en":"Attendance and progress statistics by groups and students"},"Туған күні":{"ru":"День рождения","en":"Birthday"},"Тізім және жалақы":{"ru":"Список и зарплата","en":"List and salary"},"Түзету":{"ru":"Корректировка","en":"Adjustment"},"Түзету себебі (міндетті емес):":{"ru":"Причина корректировки (необязательно):","en":"Adjustment reason (optional):"},"Түрі":{"ru":"Тип","en":"Type"},"Түсі":{"ru":"Цвет","en":"Color"},"Төлеген күні":{"ru":"Дата оплаты","en":"Payment date"},"Төлем":{"ru":"Платеж","en":"Payment"},"Төлем күтуде":{"ru":"Ожидание оплаты","en":"Pending payment"},"Төлем статусы":{"ru":"Статус платежа","en":"Payment status"},"Төлем түрі":{"ru":"Тип платежа","en":"Payment type"},"Төлемдер":{"ru":"Платежи","en":"Payments"},"Төлемдер жоқ":{"ru":"Нет платежей","en":"No payments"},"Хозтовары":{"ru":"Хозтовары","en":"Household supplies"},"Шегеру сомасы дұрыс емес":{"ru":"Неверная сумма вычета","en":"Incorrect deduction amount"},"Шектеулі рұқсат":{"ru":"Ограниченный доступ","en":"Limited access"},"Шығу":{"ru":"Выход","en":"Logout"},"Шығыстар жоқ":{"ru":"Нет расходов","en":"No expenses"},"Шілде":{"ru":"Июль","en":"July"},"Юнит-экономика":{"ru":"Юнит-экономика","en":"Unit economics"},"Қазан":{"ru":"Октябрь","en":"October"},"Қай айға":{"ru":"На какой месяц","en":"For which month"},"қайталанған жазба табылып, баланс түзетілді":{"ru":"найдена дублирующаяся запись, баланс скорректирован","en":"duplicate record found, balance adjusted"},"Қараша":{"ru":"Ноябрь","en":"November"},"Қаржы":{"ru":"Финансы","en":"Finance"},"Қатысу":{"ru":"Посещаемость","en":"Attendance"},"Қатысу %":{"ru":"Посещаемость %","en":"Attendance %"},"Қатысу мен бағалар — бір кестеде":{"ru":"Посещаемость и оценки — в одной таблице","en":"Attendance and grades — in one table"},"Қатысу орт:":{"ru":"Средняя посещаемость:","en":"Average attendance:"},"Қатысу түрін таңдаңыз":{"ru":"Выберите тип посещаемости","en":"Select attendance type"},"Қаңтар":{"ru":"Январь","en":"January"},"Қыркүйек":{"ru":"Сентябрь","en":"September"},"ҮЖ:":{"ru":"ДЗ:","en":"HW:"},"Үй жұмысы (0-10)":{"ru":"Домашнее задание (0-10)","en":"Homework (0-10)"},"Үлгерім":{"ru":"Успеваемость","en":"Progress"},"Әрекет":{"ru":"Действие","en":"Action"},"Өшіресіз бе?":{"ru":"Удалить?","en":"Delete?"},"Өшіресіз бе? Оқушының журнал/қатысу жазбалары бірге өшіріледі, ал төлем тарихы қаржы есебінде сақталып қалады.":{"ru":"Удалить? Записи журнала/посещаемости ученика будут удалены вместе, а история платежей сохранится в финансовом отчете.","en":"Delete? The student's journal/attendance records will be deleted together, but the payment history will be kept in the financial report."},"— ағымдағы баланс:":{"ru":"— текущий баланс:","en":"— current balance:"},"— берілуі тиіс:":{"ru":"— должно быть выдано:","en":"— due to be paid:"},"— жалақы төлемі":{"ru":"— выплата зарплаты","en":"— salary payment"},"— Таңдау —":{"ru":"— Выбор —","en":"— Select —"},"— Таңдаңыз —":{"ru":"— Выберите —","en":"— Choose —"},"— төлем жоқ":{"ru":"— нет платежа","en":"— no payment"},"₸ | Салық:":{"ru":"₸ | Налог:","en":"₸ | Tax:"},"₸ балансқа қосылды":{"ru":"₸ добавлено на баланс","en":"₸ added to balance"},"₸ берілді деп белгілеу?":{"ru":"Отметить как выдано ₸?","en":"Mark as ₸ paid?"},"₸ берілді! Баланс 0₸ болды.":{"ru":"₸ выдано! Баланс стал 0₸.","en":"₸ paid! Balance became 0₸."},"₸ қабылданды!":{"ru":"₸ принято!","en":"₸ received!"},"₸) өшіресіз бе? Баланс сол сомаға қайта есептеледі.":{"ru":"удалить ₸)? Баланс будет пересчитан на эту сумму.","en":"delete ₸)? Balance will be recalculated for that amount."},"₸/сағ |":{"ru":"₸/час |","en":"₸/hour |"},"⏰ Кешікті":{"ru":"⏰ Опоздал","en":"⏰ Late"},"⏰ Кешікті (":{"ru":"⏰ Опоздал (","en":"⏰ Late ("},"⏳ Берілмеген":{"ru":"⏳ Не выдано","en":"⏳ Not paid"},"⏳ Күтуде":{"ru":"⏳ В ожидании","en":"⏳ Pending"},"☀️ Күндіз":{"ru":"☀️ Дневной","en":"☀️ Daytime"},"☀️ Күндіз режимі":{"ru":"☀️ Дневной режим","en":"☀️ Daytime mode"},"⚖️ ТБУ — Точка безубыточности":{"ru":"⚖️ ТБУ — Точка безубыточности","en":"⚖️ BEP — Break-even point"},"⚠️ Ескертулер":{"ru":"⚠️ Предупреждения","en":"⚠️ Warnings"},"⚠️ Назар аудару керек оқушылар":{"ru":"⚠️ Ученики, требующие внимания","en":"⚠️ Students requiring attention"},"⚡ Жылдам төлем":{"ru":"⚡ Быстрая оплата","en":"⚡ Quick payment"},"✅ Баланс түзетілді":{"ru":"✅ Баланс скорректирован","en":"✅ Balance adjusted"},"✅ Берілді":{"ru":"✅ Выдано","en":"✅ Paid"},"✅ Жазба өшірілді, баланс жаңартылды":{"ru":"✅ Запись удалена, баланс обновлен","en":"✅ Record deleted, balance updated"},"✅ Жоспарланған шығын сақталды!":{"ru":"✅ Планируемый расход сохранен!","en":"✅ Planned expense saved!"},"✅ Импорт сәтті!":{"ru":"✅ Импорт успешен!","en":"✅ Import successful!"},"✅ Оқушы өшірілді":{"ru":"✅ Ученик удален","en":"✅ Student deleted"},"✅ Растау":{"ru":"✅ Подтвердить","en":"✅ Confirm"},"✅ Сақталды!":{"ru":"✅ Сохранено!","en":"✅ Saved!"},"✅ Түзетілді, баланс 0₸ болды.":{"ru":"✅ Скорректировано, баланс стал 0₸.","en":"✅ Adjusted, balance became 0₸."},"✅ Төлем сақталды!":{"ru":"✅ Платеж сохранен!","en":"✅ Payment saved!"},"✅ Төленді":{"ru":"✅ Оплачено","en":"✅ Paid"},"✅ Төленді — келесі:":{"ru":"✅ Оплачено — следующее:","en":"✅ Paid — next:"},"✅ Шығыс сақталды!":{"ru":"✅ Расход сохранен!","en":"✅ Expense saved!"},"✅ Қалыпты төлем":{"ru":"✅ Обычный платеж","en":"✅ Regular payment"},"✓ Келді":{"ru":"✓ Пришел","en":"✓ Attended"},"✕ Жабу":{"ru":"✕ Закрыть","en":"✕ Close"},"❌ Мерзімі өткен":{"ru":"❌ Просрочено","en":"❌ Overdue"},"❌ Сақталмады! Қате:":{"ru":"❌ Не сохранено! Ошибка:","en":"❌ Not saved! Error:"},"❌ Сақталмады:":{"ru":"❌ Не сохранено:","en":"❌ Not saved:"},"❌ Өшіру кезінде қате:":{"ru":"❌ Ошибка при удалении:","en":"❌ Error during deletion:"},"❌ Өшірілмеді! Қате:":{"ru":"❌ Не удалено! Ошибка:","en":"❌ Not deleted! Error:"},"🌙 Түнгі":{"ru":"🌙 Ночной","en":"🌙 Night"},"🎂 Осы апта туған күндер":{"ru":"🎂 Дни рождения на этой неделе","en":"🎂 Birthdays this week"},"🎓 Оқушылар":{"ru":"🎓 Ученики","en":"🎓 Students"},"🎯 CAC — клиентті тарту құны":{"ru":"🎯 CAC — стоимость привлечения клиента","en":"🎯 CAC — customer acquisition cost"},"🎯 Марапаттар":{"ru":"🎯 Награды","en":"🎯 Rewards"},"🏆 Марапат беру":{"ru":"🏆 Выдать награду","en":"🏆 Give reward"},"🏆 Марапат берілді!":{"ru":"🏆 Награда выдана!","en":"🏆 Reward given!"},"🏆 Үздік оқушылар (ТОП-10)":{"ru":"🏆 Лучшие ученики (ТОП-10)","en":"🏆 Top students (TOP-10)"},"🏛️ Салық":{"ru":"🏛️ Налог","en":"🏛️ Tax"},"🏢 Аренда":{"ru":"🏢 Аренда","en":"🏢 Rent"},"👤 Мұғалім профилі":{"ru":"👤 Профиль учителя","en":"👤 Teacher profile"},"👥 Барлық топ":{"ru":"👥 Все группы","en":"👥 All groups"},"👥 Группа":{"ru":"👥 Группа","en":"👥 Group"},"👥 Группалар":{"ru":"👥 Группы","en":"👥 Groups"},"👥 Менің топтарым":{"ru":"👥 Мои группы","en":"👥 My groups"},"👨‍🏫 Мұғалім":{"ru":"👨‍🏫 Учитель","en":"👨‍🏫 Teacher"},"👨‍🏫 Мұғалім жалақылары":{"ru":"👨‍🏫 Зарплаты учителей","en":"👨‍🏫 Teacher salaries"},"👨‍🏫 Мұғалімдер":{"ru":"👨‍🏫 Учителя","en":"👨‍🏫 Teachers"},"👨‍👩‍👧 Ата-ана":{"ru":"👨‍👩‍👧 Родитель","en":"👨‍👩‍👧 Parent"},"👩‍🎓 Оқушы":{"ru":"👩‍🎓 Ученик","en":"👩‍🎓 Student"},"👩‍🎓 Оқушылар":{"ru":"👩‍🎓 Ученики","en":"👩‍🎓 Students"},"💡 Салық — есептелген сома ғана (әлі төленбеген). Нақты төлеген кезде (жылына 2 рет) «Шығыс қосу → Салық» арқылы жазыңыз.":{"ru":"💡 Налог — только исчисленная сумма (еще не уплаченная). При фактической оплате (2 раза в год) записывайте через «Добавить расход → Налог».","en":"💡 Tax — calculated amount only (not paid yet). When actually paid (2 times a year), record via «Add expense → Tax»."},"💰 Жалақы":{"ru":"💰 Зарплата","en":"💰 Salary"},"💰 Жалақым":{"ru":"💰 Моя зарплата","en":"💰 My salary"},"💰 Қаржы":{"ru":"💰 Финансы","en":"💰 Finance"},"💳 Барлық статус":{"ru":"💳 Все статусы","en":"💳 All statuses"},"💳 Кірістер журналы":{"ru":"💳 Журнал доходов","en":"💳 Income journal"},"💳 Төлем тарихы:":{"ru":"💳 История платежей:","en":"💳 Payment history:"},"💳 Төлем қосу":{"ru":"💳 Добавить платеж","en":"💳 Add payment"},"💳 Төлемдер":{"ru":"💳 Платежи","en":"💳 Payments"},"💸 Жалақыны беру":{"ru":"💸 Выдача зарплаты","en":"💸 Salary payment"},"💸 Жалақыны беру (":{"ru":"💸 Выдача зарплаты (","en":"💸 Salary payment ("},"💾 Деректерді басқару":{"ru":"💾 Управление данными","en":"💾 Data management"},"💾 Сақтау":{"ru":"💾 Сохранить","en":"💾 Save"},"📅 Бүгінгі сабақтар":{"ru":"📅 Сегодняшние уроки","en":"📅 Today's lessons"},"📅 Кесте":{"ru":"📅 Расписание","en":"📅 Schedule"},"📅 Күн қойылмаған":{"ru":"📅 Дата не установлена","en":"📅 Date not set"},"📅 Менің кестем":{"ru":"📅 Мое расписание","en":"📅 My schedule"},"📅 Сабақ қосу":{"ru":"📅 Добавить урок","en":"📅 Add lesson"},"📆 Каспи рассрочка 0-0-12":{"ru":"📆 Каспи рассрочка 0-0-12","en":"📆 Kaspi installment 0-0-12"},"📆 Каспи рассрочка 0-0-24":{"ru":"📆 Каспи рассрочка 0-0-24","en":"📆 Kaspi installment 0-0-24"},"📆 Рассрочка 0-0-12":{"ru":"📆 Рассрочка 0-0-12","en":"📆 Installment 0-0-12"},"📆 Рассрочка 0-0-24":{"ru":"📆 Рассрочка 0-0-24","en":"📆 Installment 0-0-24"},"📈 Рейтинг":{"ru":"📈 Рейтинг","en":"📈 Rating"},"📈 Сату (CRM)":{"ru":"📈 Продажи (CRM)","en":"📈 Sales (CRM)"},"📈 Юнит-экономика":{"ru":"📈 Юнит-экономика","en":"📈 Unit economics"},"📊 Анализ":{"ru":"📊 Анализ","en":"📊 Analysis"},"📊 Дашборд":{"ru":"📊 Дашборд","en":"📊 Dashboard"},"📊 Шығыстар диаграммасы":{"ru":"📊 Диаграмма расходов","en":"📊 Expenses chart"},"📋 Сабақтар тізімі":{"ru":"📋 Список уроков","en":"📋 Lesson list"},"📋 Топтар мен сабақтар":{"ru":"📋 Группы и уроки","en":"📋 Groups and lessons"},"📌 Басқа":{"ru":"📌 Другое","en":"📌 Other"},"📔 Журнал":{"ru":"📔 Журнал","en":"📔 Journal"},"📔 Журнал жазуы":{"ru":"📔 Запись в журнале","en":"📔 Journal entry"},"📔 журнал толық":{"ru":"📔 журнал заполнен","en":"📔 journal full"},"📔 Журналға сай сабақтар автоматты белгіленді":{"ru":"📔 Уроки автоматически отмечены согласно журналу","en":"📔 Lessons automatically marked according to the journal"},"📚 Курс":{"ru":"📚 Курс","en":"📚 Course"},"📚 Курстар":{"ru":"📚 Курсы","en":"📚 Courses"},"📚 Оқу процесі":{"ru":"📚 Учебный процесс","en":"📚 Learning process"},"📣 Маркетинг":{"ru":"📣 Маркетинг","en":"📣 Marketing"},"📤 JSON импорт":{"ru":"📤 JSON импорт","en":"📤 JSON import"},"📤 Жалақы тарихы":{"ru":"📤 История зарплат","en":"📤 Salary history"},"📥 JSON экспорт":{"ru":"📥 JSON экспорт","en":"📥 JSON export"},"🔄 Жаңарту":{"ru":"🔄 Обновить","en":"🔄 Update"},"🔍 Оқушы іздеу...":{"ru":"🔍 Поиск ученика...","en":"🔍 Search student..."},"🔍 Іздеу...":{"ru":"🔍 Поиск...","en":"🔍 Search..."},"🔑 Логин:":{"ru":"🔑 Логин:","en":"🔑 Login:"},"🔴 Қызыл":{"ru":"🔴 Красный","en":"🔴 Red"},"🔵 Көк":{"ru":"🔵 Синий","en":"🔵 Blue"},"🕘 Жалақы тарихы":{"ru":"🕘 История зарплат","en":"🕘 Salary history"},"🖨️ Басып шығару":{"ru":"🖨️ Печать","en":"🖨️ Print"},"🗑️ Өшіру":{"ru":"🗑️ Удалить","en":"🗑️ Delete"},"🗑️ Өшірілді":{"ru":"🗑️ Удалено","en":"🗑️ Deleted"},"🚀 ТЖД — мақсатты табыс нүктесі":{"ru":"🚀 ТЖД — целевая точка дохода","en":"🚀 Target income point"},"🟡 Сары":{"ru":"🟡 Желтый","en":"🟡 Yellow"},"🟢 Жасыл":{"ru":"🟢 Зеленый","en":"🟢 Green"},"🟣 Күлгін":{"ru":"🟣 Фиолетовый","en":"🟣 Purple"},"🧹 Хозтовары":{"ru":"🧹 Хозтовары","en":"🧹 Household supplies"},"🧾 Шығыс қосу":{"ru":"🧾 Добавить расход","en":"🧾 Add expense"},"🧾 Шығыстар журналы":{"ru":"🧾 Журнал расходов","en":"🧾 Expenses journal"},"👤 Профиль":{"ru":"')\">👤 Профиль","en":"')\">👤 Profile"},"💸 Жалақы беру":{"ru":"')\">💸 Выдача зарплаты","en":"')\">💸 Pay salary"},"📋 Журнал":{"ru":"')\">📋 Журнал","en":"')\">📋 Journal"}};
+const I18N_REVERSE = {};
+for (const kk in I18N_KK) {
+  const e = I18N_KK[kk];
+  if (e.ru && !(e.ru in I18N_REVERSE)) I18N_REVERSE[e.ru] = kk;
+  if (e.en && !(e.en in I18N_REVERSE)) I18N_REVERSE[e.en] = kk;
+}
+
+function detectBrowserLang(){
+  const n = (navigator.language || 'kk').toLowerCase();
+  if(n.startsWith('ru')) return 'ru';
+  if(n.startsWith('en')) return 'en';
+  return 'kk';
+}
+
+let currentLang = localStorage.getItem('academy_lang') || detectBrowserLang();
+
+function resolveKk(text){
+  if (text in I18N_KK) return text;
+  if (text in I18N_REVERSE) return I18N_REVERSE[text];
+  return null;
+}
+
+function translateText(text){
+  const kk = resolveKk(text);
+  if(kk === null) return null;
+  if(currentLang === 'kk') return kk;
+  const entry = I18N_KK[kk];
+  const t = entry && entry[currentLang];
+  return (t && t.length) ? t : kk;
+}
+
+const I18N_ATTRS = ['placeholder','title','alt'];
+
+function translateElementAttrs(el){
+  I18N_ATTRS.forEach(attr => {
+    const val = el.getAttribute && el.getAttribute(attr);
+    if(!val) return;
+    const translated = translateText(val.trim());
+    if(translated !== null && translated !== val) el.setAttribute(attr, translated);
+  });
+}
+
+function translateSubtree(root){
+  if(!root) return;
+  if(root.nodeType === Node.ELEMENT_NODE) translateElementAttrs(root);
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ALL, {
+    acceptNode(node){
+      if(node.nodeType === Node.ELEMENT_NODE){
+        const tag = node.tagName;
+        if(tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_SKIP;
+      }
+      if(node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+      return NodeFilter.FILTER_SKIP;
+    }
+  });
+
+  let n;
+  while(n = walker.nextNode()){
+    const raw = n.nodeValue;
+    const trimmed = raw.trim();
+    if(!trimmed) continue;
+    const translated = translateText(trimmed);
+    if(translated !== null && translated !== trimmed){
+      const lead = raw.match(/^\s*/)[0];
+      const trail = raw.match(/\s*$/)[0];
+      n.nodeValue = lead + translated + trail;
+    }
+  }
+
+  root.querySelectorAll && root.querySelectorAll('*').forEach(el => translateElementAttrs(el));
+}
+
+function updateLangButtons(){
+  const labels = {kk:'KK', ru:'RU', en:'EN'};
+  document.querySelectorAll('.lang-toggle').forEach(btn => {
+    btn.textContent = btn.dataset.full === '1' ? ('🌐 ' + labels[currentLang]) : labels[currentLang];
+  });
+}
+
+function applyLang(){
+  langObserver.disconnect();
+  translateSubtree(document.body);
+  updateLangButtons();
+  document.documentElement.setAttribute('lang', currentLang);
+  langObserver.observe(document.body, {childList:true, subtree:true, characterData:true});
+}
+
+function cycleLang(){
+  const order = ['kk','ru','en'];
+  currentLang = order[(order.indexOf(currentLang) + 1) % order.length];
+  localStorage.setItem('academy_lang', currentLang);
+  applyLang();
+}
+
+let langDebounce = null;
+const langObserver = new MutationObserver(() => {
+  clearTimeout(langDebounce);
+  langDebounce = setTimeout(applyLang, 50);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  applyLang();
+});
+
 </script>
 </body>
 </html>
