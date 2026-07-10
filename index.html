@@ -702,7 +702,15 @@ details[open] summary::before{content:'▾ '}
         </select>
       </div>
     </div>
-    <div class="form-group"><label>Мерзімі (қажет болса)</label><input type="date" id="taskDue" /></div>
+    <div class="form-row">
+      <div class="form-group"><label>Статус</label>
+        <select id="taskStatus">
+          <option value="todo">⚪ Басталмаған</option>
+          <option value="in_progress">🔵 Орындалуда</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Мерзімі (қажет болса)</label><input type="date" id="taskDue" /></div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('taskModal')">Бас тарту</button>
       <button class="btn btn-blue" onclick="saveTask()">Сақтау</button>
@@ -1668,8 +1676,8 @@ function renderTasks(){
   const today = localDateStr(new Date());
   wrap.innerHTML = list.map(t=>{
     const overdue = taskView==='active' && t.due_date && t.due_date<today;
-    const statusLabel = t.status==='todo' ? '<span class="badge" style="background:var(--surface2);color:var(--text2)">⚪ Басталмаған</span>'
-      : t.status==='in_progress' ? '<span class="badge badge-blue">🔵 Орындалуда</span>'
+    const statusLabel = t.status==='todo' ? `<span class="badge" style="background:var(--surface2);color:var(--text2);cursor:pointer" onclick="toggleTaskStatus('${t.id}')" title="Басу арқылы «Орындалуда» ету">⚪ Басталмаған</span>`
+      : t.status==='in_progress' ? `<span class="badge badge-blue" style="cursor:pointer" onclick="toggleTaskStatus('${t.id}')" title="Басу арқылы «Басталмаған» ету">🔵 Орындалуда</span>`
       : '<span class="badge badge-green">✅ Дайын</span>';
     const dueText = t.due_date ? `${overdue?'<span style="color:var(--red)">❌ Мерзімі өтті — ':''}${t.due_date}${overdue?'</span>':''}` : '';
     const metaLine = taskView==='archive'
@@ -1714,12 +1722,14 @@ function openTaskModal(id){
     document.getElementById('taskDesc').value = t.description || '';
     document.getElementById('taskAssignee').value = t.assigned_to || 'all';
     document.getElementById('taskPriority').value = t.priority || 'medium';
+    document.getElementById('taskStatus').value = t.status || 'todo';
     document.getElementById('taskDue').value = t.due_date || '';
   } else {
     document.getElementById('taskTitle').value = '';
     document.getElementById('taskDesc').value = '';
     document.getElementById('taskAssignee').value = 'all';
     document.getElementById('taskPriority').value = 'medium';
+    document.getElementById('taskStatus').value = 'todo';
     document.getElementById('taskDue').value = '';
   }
   openModal('taskModal');
@@ -1733,13 +1743,13 @@ async function saveTask(){
     description: document.getElementById('taskDesc').value.trim(),
     assigned_to: document.getElementById('taskAssignee').value,
     priority: document.getElementById('taskPriority').value,
+    status: document.getElementById('taskStatus').value,
     due_date: document.getElementById('taskDue').value || null,
     created_by: currentUser.login
   };
   if(editingTaskId){
     await sb.from('tasks').update(payload).eq('id', editingTaskId);
   } else {
-    payload.status = 'todo';
     await sb.from('tasks').insert(payload);
   }
   closeModal('taskModal');
@@ -1753,6 +1763,15 @@ async function markTaskDone(id){
   await loadAll();
   renderTasks();
   toast('Мұрағатқа өтті ✅');
+}
+
+async function toggleTaskStatus(id){
+  const t = DATA.tasks.find(x=>x.id===id);
+  if(!t) return;
+  const next = t.status==='todo' ? 'in_progress' : 'todo';
+  await sb.from('tasks').update({ status: next }).eq('id', id);
+  await loadAll();
+  renderTasks();
 }
 
 async function restoreTask(id){
