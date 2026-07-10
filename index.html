@@ -718,6 +718,19 @@ details[open] summary::before{content:'▾ '}
   </div>
 </div>
 
+<!-- SUBTASK -->
+<div class="modal-overlay" id="subtaskModal">
+  <div class="modal">
+    <div class="modal-title">📌 Кіші тапсырма қосу</div>
+    <div class="form-group"><label>Атауы</label><input type="text" id="subtaskTitle" autocomplete="off" name="subtask-title-field" /></div>
+    <div class="form-group"><label>Жауапты</label><select id="subtaskAssignee"></select></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('subtaskModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveSubtask()">Қосу</button>
+    </div>
+  </div>
+</div>
+
 <!-- QUICK PAY -->
 <div class="modal-overlay" id="quickPayModal">
   <div class="modal">
@@ -1035,12 +1048,14 @@ let DATA = {
   courses:[], teachers:[], groups:[], students:[], student_groups:[],
   lessons:[], payments:[], holidays:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
-  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[]
+  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[]
 };
 let taskView = 'active';        // 'active' | 'archive'
 let taskStatusFilter = '';      // '' | 'todo' | 'in_progress'
 let taskAssigneeFilter = '';    // '' | director login | 'all'
 let editingTaskId = null;
+let expandedTasks = new Set();  // қай негізгі тапсырмалардың subtask тізімі ашық тұрғанын сақтайды
+let subtaskParentId = null;
 let quickPayStudent = null;
 let salaryTeacherId = null;
 let currentJournalEntry = null; // {studentId, groupId, date, id} for journal modal
@@ -1424,6 +1439,10 @@ async function loadAll(){
     if(tk) DATA.tasks=tk;
   }catch(e){ DATA.tasks=[]; }
   try{
+    const {data:sub}=await sb.from('task_subtasks').select('*').order('created_at',{ascending:true});
+    if(sub) DATA.subtasks=sub;
+  }catch(e){ DATA.subtasks=[]; }
+  try{
     const {data:dirs}=await sb.from('staff_accounts').select('login,name').eq('role','director');
     if(dirs) DATA.directors=dirs;
   }catch(e){ DATA.directors=[]; }
@@ -1609,6 +1628,10 @@ async function reloadTasks(){
     const {data:tk}=await sb.from('tasks').select('*').order('created_at',{ascending:false});
     if(tk) DATA.tasks=tk;
   }catch(e){}
+  try{
+    const {data:sub}=await sb.from('task_subtasks').select('*').order('created_at',{ascending:true});
+    if(sub) DATA.subtasks=sub;
+  }catch(e){}
   updateBadges();
 }
 
@@ -1670,6 +1693,31 @@ function renderTaskFilters(){
   }).join('');
 }
 
+function getSubtasks(taskId){
+  return DATA.subtasks.filter(s=>s.task_id===taskId);
+}
+function taskProgress(taskId){
+  const subs = getSubtasks(taskId);
+  return { done: subs.filter(s=>s.status==='done').length, total: subs.length };
+}
+function toggleTaskExpand(id){
+  if(expandedTasks.has(id)) expandedTasks.delete(id); else expandedTasks.add(id);
+  renderTasks();
+}
+function renderSubtaskBlock(taskId, subs){
+  const rows = subs.map(s=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 16px 8px 52px;border-top:1px solid var(--border)">
+      <input type="checkbox" ${s.status==='done'?'checked':''} onclick="toggleSubtaskDone('${s.id}')" style="width:14px;height:14px;flex-shrink:0;cursor:pointer" />
+      <span style="flex:1;font-size:13px;${s.status==='done'?'text-decoration:line-through;color:var(--text2)':''}">${s.title}</span>
+      <div class="user-avatar" style="width:22px;height:22px;font-size:10px;flex-shrink:0;background:${taskAssigneeColor(s.assigned_to)}" title="${taskAssigneeLabel(s.assigned_to)}">${taskAssigneeInitials(s.assigned_to)}</div>
+      <button class="btn-ghost btn-sm" style="border:none;padding:4px" onclick="deleteSubtask('${s.id}')" title="Өшіру">🗑️</button>
+    </div>`).join('');
+  return `${rows}
+    <div style="padding:8px 16px 10px 52px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost btn-sm" onclick="openSubtaskModal('${taskId}')">+ Кіші тапсырма қосу</button>
+    </div>`;
+}
+
 function renderTasks(){
   renderTaskFilters();
   const wrap = document.getElementById('tasksList');
@@ -1677,7 +1725,11 @@ function renderTasks(){
 
   let list = DATA.tasks.filter(t => taskView==='archive' ? t.status==='done' : t.status!=='done');
   if(taskView==='active' && taskStatusFilter) list = list.filter(t=>t.status===taskStatusFilter);
-  if(taskAssigneeFilter) list = list.filter(t=>t.assigned_to===taskAssigneeFilter);
+  if(taskAssigneeFilter) list = list.filter(t=>{
+    const subs = getSubtasks(t.id);
+    if(subs.length) return subs.some(s=>s.assigned_to===taskAssigneeFilter);
+    return t.assigned_to===taskAssigneeFilter;
+  });
   list = list.slice().sort((a,b)=>{
     if(taskView==='archive') return new Date(b.completed_at||b.created_at) - new Date(a.completed_at||a.created_at);
     return new Date(a.due_date||'9999-12-31') - new Date(b.due_date||'9999-12-31');
@@ -1695,12 +1747,20 @@ function renderTasks(){
       : t.status==='in_progress' ? `<span class="badge badge-blue" style="cursor:pointer" onclick="toggleTaskStatus('${t.id}')" title="Басу арқылы «Басталмаған» ету">🔵 Орындалуда</span>`
       : '<span class="badge badge-green">✅ Дайын</span>';
     const dueText = t.due_date ? `${overdue?'<span style="color:var(--red)">❌ Мерзімі өтті — ':''}${t.due_date}${overdue?'</span>':''}` : '';
+    const subs = taskView==='active' ? getSubtasks(t.id) : [];
+    const prog = taskProgress(t.id);
+    const hasSubs = prog.total>0;
+    const progLine = hasSubs ? ` · ${prog.done}/${prog.total} кіші тапсырма дайын` : '';
     const metaLine = taskView==='archive'
       ? `Дайын болды${t.completed_at ? ' — '+localDateStr(new Date(t.completed_at)) : ''}`
-      : (dueText || 'Мерзімі көрсетілмеген');
+      : ((dueText || 'Мерзімі көрсетілмеген') + progLine);
+    const isExpanded = expandedTasks.has(t.id);
 
     return `
     <div class="task-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
+      ${taskView==='active'
+        ? `<button class="btn-ghost btn-sm" style="border:none;padding:2px 4px;flex-shrink:0;font-size:11px" onclick="toggleTaskExpand('${t.id}')" title="Кіші тапсырмалар">${isExpanded?'▾':'▸'}</button>`
+        : ''}
       ${taskView==='active'
         ? `<input type="checkbox" onclick="markTaskDone('${t.id}')" style="width:17px;height:17px;flex-shrink:0;cursor:pointer" />`
         : `<span style="font-size:16px;flex-shrink:0">✅</span>`}
@@ -1710,12 +1770,15 @@ function renderTasks(){
       </div>
       ${taskPriorityBadge(t.priority)}
       ${taskView==='active' ? statusLabel : ''}
-      <div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0;background:${taskAssigneeColor(t.assigned_to)}" title="${taskAssigneeLabel(t.assigned_to)}">${taskAssigneeInitials(t.assigned_to)}</div>
+      ${hasSubs
+        ? `<span class="badge badge-blue" style="flex-shrink:0" title="Кіші тапсырмалар прогресі">${prog.done}/${prog.total}</span>`
+        : `<div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0;background:${taskAssigneeColor(t.assigned_to)}" title="${taskAssigneeLabel(t.assigned_to)}">${taskAssigneeInitials(t.assigned_to)}</div>`}
       ${taskView==='active'
         ? `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Өшіру">🗑️</button>`
         : `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="restoreTask('${t.id}')" title="Қалпына келтіру">↩️</button>
            <button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Мұрағаттан өшіру">🗑️</button>`}
-    </div>`;
+    </div>
+    ${(taskView==='active' && isExpanded) ? renderSubtaskBlock(t.id, subs) : ''}`;
   }).join('');
 }
 
@@ -1807,8 +1870,63 @@ async function restoreTask(id){
 async function deleteTask(id){
   if(!confirm('Тапсырманы өшіресіз бе?')) return;
   DATA.tasks = DATA.tasks.filter(x=>x.id!==id);
+  DATA.subtasks = DATA.subtasks.filter(x=>x.task_id!==id);
   renderTasks();
   await sb.from('tasks').delete().eq('id', id);
+  await reloadTasks();
+  renderTasks();
+}
+
+// ================================================================
+// SUBTASKS (негізгі тапсырма ішіндегі, әр директорға бөлек жауапкершілік)
+// ================================================================
+function populateSubtaskAssigneeSelect(){
+  const sel = document.getElementById('subtaskAssignee');
+  if(!sel) return;
+  sel.innerHTML = DATA.directors.map(d=>`<option value="${d.login}">👤 ${d.name}</option>`).join('');
+}
+
+function openSubtaskModal(taskId){
+  subtaskParentId = taskId;
+  populateSubtaskAssigneeSelect();
+  document.getElementById('subtaskTitle').value = '';
+  openModal('subtaskModal');
+  setTimeout(()=>document.getElementById('subtaskTitle').focus(), 50);
+}
+
+async function saveSubtask(){
+  const title = document.getElementById('subtaskTitle').value.trim();
+  if(!title){ toast('Атауын енгізіңіз', 'error'); return; }
+  const payload = {
+    task_id: subtaskParentId,
+    title,
+    assigned_to: document.getElementById('subtaskAssignee').value,
+    status: 'todo'
+  };
+  closeModal('subtaskModal');
+  expandedTasks.add(subtaskParentId);
+  await sb.from('task_subtasks').insert(payload);
+  await reloadTasks();
+  renderTasks();
+  toast('Кіші тапсырма қосылды');
+}
+
+async function toggleSubtaskDone(id){
+  const s = DATA.subtasks.find(x=>x.id===id);
+  if(!s) return;
+  const next = s.status==='done' ? 'todo' : 'done';
+  s.status = next; s.completed_at = next==='done' ? new Date().toISOString() : null;
+  renderTasks();
+  await sb.from('task_subtasks').update({ status: next, completed_at: s.completed_at }).eq('id', id);
+  await reloadTasks();
+  renderTasks();
+}
+
+async function deleteSubtask(id){
+  if(!confirm('Кіші тапсырманы өшіресіз бе?')) return;
+  DATA.subtasks = DATA.subtasks.filter(x=>x.id!==id);
+  renderTasks();
+  await sb.from('task_subtasks').delete().eq('id', id);
   await reloadTasks();
   renderTasks();
 }
