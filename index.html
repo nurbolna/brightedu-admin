@@ -150,6 +150,25 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .badge-blue{background:rgba(79,142,247,0.15);color:var(--accent);}
 .badge-purple{background:rgba(167,139,250,0.15);color:var(--accent2);}
 .badge-orange{background:rgba(251,146,60,0.15);color:var(--orange);}
+.badge-gray{background:rgba(139,144,176,0.15);color:var(--text2);}
+
+/* ===================== CRM ===================== */
+.crm-view-toggle{display:flex;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:4px;}
+.crm-view-toggle button{background:transparent;border:none;color:var(--text2);font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;transition:all .2s;}
+.crm-view-toggle button.active{background:var(--accent);color:#fff;}
+.crm-filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.crm-filters input,.crm-filters select{padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:13px;outline:none;}
+.crm-filters input{flex:1;min-width:180px;}
+.crm-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;}
+.crm-col{flex:0 0 260px;background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:12px;max-height:74vh;display:flex;flex-direction:column;}
+.crm-col-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;padding:0 2px;}
+.crm-col-count{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:11px;}
+.crm-col-cards{overflow-y:auto;display:flex;flex-direction:column;gap:8px;flex:1;}
+.crm-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 13px;cursor:pointer;transition:border-color .2s;}
+.crm-card:hover{border-color:var(--accent);}
+.crm-card-name{font-weight:700;font-size:13px;margin-bottom:5px;}
+.crm-card-row{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px;margin-top:3px;}
+.crm-card-revenue{color:var(--green);font-weight:700;}
 
 /* ===================== MODAL ===================== */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:16px;}
@@ -360,6 +379,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-item active" onclick="showPage('dashboard',this)">📊 Дашборд<span class="nav-badge hidden" id="badgeDash">0</span></div>
         <div class="nav-section dir-only">Жоспарлау</div>
         <div class="nav-item dir-only" onclick="showPage('tasks',this)">📋 Жоспарлау<span class="nav-badge hidden" id="badgeTasks">0</span></div>
+        <div class="nav-item dir-only" onclick="showPage('crm',this)">🎯 CRM<span class="nav-badge hidden" id="badgeCRM">0</span></div>
         <div class="nav-section">Оқу</div>
         <div class="nav-item" onclick="showPage('study',this)">📚 Оқу процесі</div>
         <div class="nav-section">Журнал</div>
@@ -677,6 +697,41 @@ details[open] summary::before{content:'▾ '}
             <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)" />
           </div>
         </div>
+      </div>
+
+      <!-- ========== CRM (LEADS) ========== -->
+      <div class="page dir-only" id="page-crm">
+        <div class="page-header">
+          <div><div class="page-title">CRM</div><div class="page-subtitle">Лидтер және сату воронкасы</div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <div class="crm-view-toggle">
+              <button id="crmViewTableBtn" class="active" onclick="switchCrmView('table')">📋 Кесте</button>
+              <button id="crmViewBoardBtn" onclick="switchCrmView('board')">🗂️ Канбан</button>
+            </div>
+            <button class="btn btn-blue" onclick="openLeadModal()">+ Лид қосу</button>
+          </div>
+        </div>
+        <div class="crm-filters">
+          <input type="text" id="crmSearch" placeholder="🔍 Аты немесе Whatsapp бойынша іздеу..." oninput="renderCRM()" />
+          <select id="crmFilterTraffic" onchange="renderCRM()">
+            <option value="">Traffic — барлығы</option>
+            <option value="organic">organic</option>
+            <option value="paid ads">paid ads</option>
+          </select>
+          <select id="crmFilterExpert" onchange="renderCRM()">
+            <option value="">Эксперт — барлығы</option>
+          </select>
+          <select id="crmFilterQual" onchange="renderCRM()">
+            <option value="">Квал — барлығы</option>
+            <option value="Квал">Квал</option>
+            <option value="Неквал">Неквал</option>
+          </select>
+        </div>
+
+        <div id="crmTableView">
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>Аты</th><th>Whatsapp</th><th>Қала</th><th>Traffic</th><th>Status</th><th>Квал</th><th>Эксперт</th><th>Выручка</th><th>Күні</th><th>Әрекет</th></tr></thead><tbody id="crmTable"></tbody></table></div>
+        </div>
+        <div id="crmBoardView" class="crm-board" style="display:none"></div>
       </div>
 
     </div><!-- /main -->
@@ -1033,6 +1088,48 @@ details[open] summary::before{content:'▾ '}
   </div>
 </div>
 
+<!-- LEAD (CRM) -->
+<div class="modal-overlay" id="leadModal">
+  <div class="modal">
+    <div class="modal-title" id="leadModalTitle">🎯 Лид</div>
+    <input type="hidden" id="leadId" />
+    <div class="form-row">
+      <div class="form-group"><label>Аты *</label><input type="text" id="leadName" /></div>
+      <div class="form-group"><label>Whatsapp</label><input type="text" id="leadWhatsapp" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Қала</label><input type="text" id="leadCity" /></div>
+      <div class="form-group"><label>Traffic</label>
+        <select id="leadTraffic">
+          <option value="organic">organic</option>
+          <option value="paid ads">paid ads</option>
+          <option value="google_forms">google_forms</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Status</label><select id="leadStatus"></select></div>
+      <div class="form-group"><label>Квал</label>
+        <select id="leadQual">
+          <option value="">—</option>
+          <option value="Квал">Квал</option>
+          <option value="Неквал">Неквал</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Эксперт</label><input type="text" id="leadExpert" list="leadExpertList" /><datalist id="leadExpertList"></datalist></div>
+      <div class="form-group"><label>Выручка (₸)</label><input type="number" id="leadRevenue" /></div>
+    </div>
+    <div class="form-group"><label>Ескертпе</label><textarea id="leadNote" rows="2"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('leadModal')">Бас тарту</button>
+      <button class="btn btn-red" id="leadDeleteBtn" style="display:none" onclick="deleteLeadFromModal()">🗑️ Өшіру</button>
+      <button class="btn btn-blue" onclick="saveLead()">Сақтау</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ================================================================
 // CONFIG & STATE
@@ -1049,8 +1146,9 @@ let DATA = {
   courses:[], teachers:[], groups:[], students:[], student_groups:[],
   lessons:[], payments:[], holidays:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
-  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[]
+  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[], leads:[]
 };
+let crmView = 'table';           // 'table' | 'board'
 let taskView = 'active';        // 'active' | 'archive'
 let taskStatusFilter = '';      // '' | 'todo' | 'in_progress'
 let taskAssigneeFilter = '';    // '' | director login | 'all'
@@ -1373,7 +1471,7 @@ function showPage(name, el){
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
     payments:renderPayments, journal:renderJournal, analysis:renderAnalysis,
-    reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks
+    reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM
   };
   renders[name]?.();
 }
@@ -1453,6 +1551,10 @@ async function loadAll(){
     const {data:sub}=await sb.from('task_subtasks').select('*').order('created_at',{ascending:true});
     if(sub) DATA.subtasks=sub;
   }catch(e){ DATA.subtasks=[]; }
+  try{
+    const {data:lv}=await sb.from('leads').select('*').order('created_at',{ascending:false});
+    if(lv) DATA.leads=lv;
+  }catch(e){ DATA.leads=DATA.leads||[]; }
   try{
     const {data:dirs}=await sb.from('staff_accounts').select('login,name').eq('role','director');
     if(dirs) DATA.directors=dirs;
@@ -3240,6 +3342,173 @@ function renderPayments(){
       <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}')">🗑️</button></td>
     </tr>`;
   }).join('')||'<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">💳</div><p>Төлемдер жоқ</p></div></td></tr>';
+}
+
+// ================================================================
+// CRM (LEADS)
+// ================================================================
+const CRM_STATUSES = [
+  {name:'СВЯЗАТЬСЯ ПОЗЖЕ', color:'blue'},
+  {name:'ПОЛУЧИЛИ ОТВЕТ ОТ КЛИЕНТА', color:'yellow'},
+  {name:'ПЕРЕНАЗНАЧИТЬ', color:'blue'},
+  {name:'НАЗНАЧЕНА ВСТРЕЧА', color:'purple'},
+  {name:'ПОВТОРНАЯ КОНСА', color:'red'},
+  {name:'ДОЖИМ', color:'orange'},
+  {name:'ПРОБНЫЙ ПЕРИОД', color:'green'},
+  {name:'УСПЕШНО РЕАЛИЗОВАНО', color:'green'},
+  {name:'ЗНР', color:'gray'},
+  {name:'ИГНОР', color:'gray'}
+];
+function crmStatusColor(s){ return (CRM_STATUSES.find(x=>x.name===s)||{}).color || 'gray'; }
+
+function switchCrmView(v){
+  crmView=v;
+  document.getElementById('crmViewTableBtn').classList.toggle('active', v==='table');
+  document.getElementById('crmViewBoardBtn').classList.toggle('active', v==='board');
+  document.getElementById('crmTableView').style.display = v==='table' ? '' : 'none';
+  document.getElementById('crmBoardView').style.display = v==='board' ? '' : 'none';
+  renderCRM();
+}
+
+function populateCrmFilters(){
+  // Эксперт селектін DATA.leads + DATA.teachers ішінен жинақтап толтырамыз
+  const names = new Set();
+  DATA.teachers.forEach(t=>names.add((t.name+' '+(t.surname||'')).trim()));
+  DATA.leads.forEach(l=>{ if(l.expert) names.add(l.expert); });
+  const sel = document.getElementById('crmFilterExpert');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Эксперт — барлығы</option>' + [...names].filter(Boolean).map(n=>`<option value="${n}">${n}</option>`).join('');
+  sel.value = cur;
+  const dl = document.getElementById('leadExpertList');
+  if(dl) dl.innerHTML = [...names].filter(Boolean).map(n=>`<option value="${n}"></option>`).join('');
+}
+
+function getFilteredLeads(){
+  const q = (document.getElementById('crmSearch')?.value||'').toLowerCase().trim();
+  const traffic = document.getElementById('crmFilterTraffic')?.value||'';
+  const expert = document.getElementById('crmFilterExpert')?.value||'';
+  const qual = document.getElementById('crmFilterQual')?.value||'';
+  return [...DATA.leads].filter(l=>{
+    if(q && !(((l.name||'')+' '+(l.whatsapp||'')).toLowerCase().includes(q))) return false;
+    if(traffic && l.traffic!==traffic) return false;
+    if(expert && l.expert!==expert) return false;
+    if(qual && l.qual!==qual) return false;
+    return true;
+  }).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+}
+
+function renderCRM(){
+  populateCrmFilters();
+  const list = getFilteredLeads();
+  if(crmView==='table') renderCrmTable(list); else renderCrmBoard(list);
+  const badge=document.getElementById('badgeCRM');
+  const newCount = DATA.leads.filter(l=>l.status==='СВЯЗАТЬСЯ ПОЗЖЕ'||l.status==='ПОЛУЧИЛИ ОТВЕТ ОТ КЛИЕНТА').length;
+  if(badge){ badge.textContent=newCount; badge.classList.toggle('hidden', newCount===0); }
+}
+
+function renderCrmTable(list){
+  document.getElementById('crmTable').innerHTML = list.map((l,i)=>`<tr>
+      <td>${i+1}</td>
+      <td class="font-bold" style="cursor:pointer" onclick="openLeadModal('${l.id}')">${l.name||'—'}</td>
+      <td>${l.whatsapp||'—'}</td>
+      <td>${l.city||'—'}</td>
+      <td>${l.traffic?`<span class="badge badge-blue">${l.traffic}</span>`:'—'}</td>
+      <td><span class="badge badge-${crmStatusColor(l.status)}">${l.status||'—'}</span></td>
+      <td>${l.qual?`<span class="badge badge-${l.qual==='Квал'?'green':'red'}">${l.qual}</span>`:'—'}</td>
+      <td>${l.expert||'—'}</td>
+      <td class="font-bold" style="color:var(--green)">${l.revenue?fmt(l.revenue)+'₸':'—'}</td>
+      <td class="text-muted text-sm">${(l.created_at||'').slice(0,10)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="openLeadModal('${l.id}')">✏️</button>
+        <button class="btn btn-red btn-sm" onclick="deleteLead('${l.id}')">🗑️</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🎯</div><p>Лидтер жоқ</p></div></td></tr>';
+}
+
+function renderCrmBoard(list){
+  document.getElementById('crmBoardView').innerHTML = CRM_STATUSES.map(st=>{
+    const cards = list.filter(l=>l.status===st.name);
+    return `<div class="crm-col">
+      <div class="crm-col-head"><span class="badge badge-${st.color}">${st.name}</span><span class="crm-col-count">${cards.length}</span></div>
+      <div class="crm-col-cards">
+        ${cards.map(l=>`<div class="crm-card" onclick="openLeadModal('${l.id}')">
+            <div class="crm-card-name">${l.name||'—'}</div>
+            ${l.whatsapp?`<div class="crm-card-row">📱 ${l.whatsapp}</div>`:''}
+            ${l.expert?`<div class="crm-card-row">👤 ${l.expert}</div>`:''}
+            ${l.revenue?`<div class="crm-card-row crm-card-revenue">${fmt(l.revenue)}₸</div>`:''}
+          </div>`).join('') || '<div class="text-muted text-sm" style="padding:8px 2px">Бос</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openLeadModal(id){
+  populateCrmFilters();
+  const statusSel = document.getElementById('leadStatus');
+  statusSel.innerHTML = CRM_STATUSES.map(s=>`<option value="${s.name}">${s.name}</option>`).join('');
+  document.getElementById('leadDeleteBtn').style.display = id ? '' : 'none';
+  if(id){
+    const l = DATA.leads.find(x=>x.id===id);
+    if(!l) return;
+    document.getElementById('leadModalTitle').textContent='🎯 Лидті өзгерту';
+    document.getElementById('leadId').value=l.id;
+    document.getElementById('leadName').value=l.name||'';
+    document.getElementById('leadWhatsapp').value=l.whatsapp||'';
+    document.getElementById('leadCity').value=l.city||'';
+    document.getElementById('leadTraffic').value=l.traffic||'organic';
+    document.getElementById('leadStatus').value=l.status||CRM_STATUSES[0].name;
+    document.getElementById('leadQual').value=l.qual||'';
+    document.getElementById('leadExpert').value=l.expert||'';
+    document.getElementById('leadRevenue').value=l.revenue||'';
+    document.getElementById('leadNote').value=l.note||'';
+  }else{
+    document.getElementById('leadModalTitle').textContent='🎯 Жаңа лид';
+    document.getElementById('leadId').value='';
+    document.getElementById('leadName').value='';
+    document.getElementById('leadWhatsapp').value='';
+    document.getElementById('leadCity').value='';
+    document.getElementById('leadTraffic').value='organic';
+    document.getElementById('leadStatus').value=CRM_STATUSES[0].name;
+    document.getElementById('leadQual').value='';
+    document.getElementById('leadExpert').value='';
+    document.getElementById('leadRevenue').value='';
+    document.getElementById('leadNote').value='';
+  }
+  openModal('leadModal');
+}
+
+async function saveLead(){
+  const name = document.getElementById('leadName').value.trim();
+  if(!name) return alert('Атын енгізіңіз');
+  const id = document.getElementById('leadId').value;
+  const payload = {
+    name,
+    whatsapp: document.getElementById('leadWhatsapp').value.trim(),
+    city: document.getElementById('leadCity').value.trim(),
+    traffic: document.getElementById('leadTraffic').value,
+    status: document.getElementById('leadStatus').value,
+    qual: document.getElementById('leadQual').value,
+    expert: document.getElementById('leadExpert').value.trim(),
+    revenue: Number(document.getElementById('leadRevenue').value)||0,
+    note: document.getElementById('leadNote').value.trim()
+  };
+  try{
+    if(id){ await sb.from('leads').update(payload).eq('id',id); }
+    else{ await sb.from('leads').insert(payload); }
+  }catch(e){ return alert('❌ Сақталмады! Қате: '+e.message); }
+  closeModal('leadModal'); await loadAll(); renderCRM(); toast('✅ Сақталды!');
+}
+
+async function deleteLead(id){
+  if(!confirm('Өшіресіз бе?')) return;
+  await sb.from('leads').delete().eq('id',id);
+  await loadAll(); renderCRM(); toast('🗑️ Өшірілді');
+}
+function deleteLeadFromModal(){
+  const id=document.getElementById('leadId').value;
+  if(!id) return;
+  closeModal('leadModal');
+  deleteLead(id);
 }
 
 // ================================================================
