@@ -3524,16 +3524,16 @@ async function crmDrop(ev, newStatus){
   const lead = DATA.leads.find(l=>l.id===leadId);
   if(!lead || lead.status===newStatus) return;
   crmDragMoved = true;
+  const oldStatus = lead.status;
   lead.status = newStatus; // optimистикалық жаңарту — UI бірден жауап береді
   renderCrmBoard(getFilteredLeads());
   try{
     await sb.from('leads').update({status:newStatus}).eq('id',leadId);
-    await loadAll();
-    if(crmView==='board') renderCrmBoard(getFilteredLeads());
     toast('✅ Статус жаңартылды: '+newStatus);
   }catch(e){
+    lead.status = oldStatus; // қате болса — артқа қайтарамыз
+    if(crmView==='board') renderCrmBoard(getFilteredLeads());
     toast('❌ Сақталмады: '+e.message,'error');
-    await loadAll(); renderCRM();
   }
 }
 // Карточканы басқанда (drag жасалмаса ғана) модалды ашамыз
@@ -3616,18 +3616,37 @@ async function saveLead(){
     consultation_at: document.getElementById('leadConsultationAt').value || null,
     reschedule_date: document.getElementById('leadRescheduleDate').value || null
   };
+  let saved;
   try{
-    if(id){ await sb.from('leads').update(payload).eq('id',id); }
-    else{ await sb.from('leads').insert(payload); }
+    if(id){
+      const {data,error} = await sb.from('leads').update(payload).eq('id',id).select().single();
+      if(error) throw error;
+      saved = data;
+    }else{
+      const {data,error} = await sb.from('leads').insert(payload).select().single();
+      if(error) throw error;
+      saved = data;
+    }
   }catch(e){ return alert('❌ Сақталмады! Қате: '+e.message); }
-  closeModal('leadModal'); await loadAll(); renderCRM(); toast('✅ Сақталды!');
+  // Толық loadAll() шақырмай, тек жергілікті DATA.leads-ті жаңартамыз — жылдам болу үшін
+  if(id){
+    const idx = DATA.leads.findIndex(l=>l.id===id);
+    if(idx>-1) DATA.leads[idx] = saved; else DATA.leads.unshift(saved);
+  }else{
+    DATA.leads.unshift(saved);
+  }
+  closeModal('leadModal'); renderCRM(); toast('✅ Сақталды!');
 }
 
 
 async function deleteLead(id){
   if(!confirm('Өшіресіз бе?')) return;
-  await sb.from('leads').delete().eq('id',id);
-  await loadAll(); renderCRM(); toast('🗑️ Өшірілді');
+  try{
+    const {error} = await sb.from('leads').delete().eq('id',id);
+    if(error) throw error;
+  }catch(e){ return alert('❌ Өшірілмеді! Қате: '+e.message); }
+  DATA.leads = DATA.leads.filter(l=>l.id!==id);
+  renderCRM(); toast('🗑️ Өшірілді');
 }
 function deleteLeadFromModal(){
   const id=document.getElementById('leadId').value;
