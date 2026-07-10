@@ -1604,6 +1604,14 @@ function updateBadges(){
 // ================================================================
 // TASKS / ЖОСПАРЛАУ (екі директорға арналған to-do + мұрағат)
 // ================================================================
+async function reloadTasks(){
+  try{
+    const {data:tk}=await sb.from('tasks').select('*').order('created_at',{ascending:false});
+    if(tk) DATA.tasks=tk;
+  }catch(e){}
+  updateBadges();
+}
+
 function switchTaskView(view){
   taskView = view;
   document.getElementById('taskTabActiveBtn').className = view==='active' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
@@ -1626,8 +1634,15 @@ function taskAssigneeLabel(login){
 function taskAssigneeInitials(login){
   if(login==='all') return '👥';
   const d = DATA.directors.find(x=>x.login===login);
-  const name = d ? d.name : login;
-  return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const name = (d ? d.name : login).trim();
+  const parts = name.split(/\s+/).filter(Boolean);
+  if(parts.length>=2) return (parts[0][0]+parts[1][0]).toUpperCase();
+  return login.slice(0,2).toUpperCase();
+}
+function taskAssigneeColor(login){
+  if(login==='all') return 'var(--text3)';
+  const idx = DATA.directors.findIndex(x=>x.login===login);
+  return idx===1 ? 'var(--accent2)' : 'var(--accent)';
 }
 
 function renderTaskFilters(){
@@ -1695,7 +1710,7 @@ function renderTasks(){
       </div>
       ${taskPriorityBadge(t.priority)}
       ${taskView==='active' ? statusLabel : ''}
-      <div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0" title="${taskAssigneeLabel(t.assigned_to)}">${taskAssigneeInitials(t.assigned_to)}</div>
+      <div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0;background:${taskAssigneeColor(t.assigned_to)}" title="${taskAssigneeLabel(t.assigned_to)}">${taskAssigneeInitials(t.assigned_to)}</div>
       ${taskView==='active'
         ? `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Өшіру">🗑️</button>`
         : `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="restoreTask('${t.id}')" title="Қалпына келтіру">↩️</button>
@@ -1753,14 +1768,17 @@ async function saveTask(){
     await sb.from('tasks').insert(payload);
   }
   closeModal('taskModal');
-  await loadAll();
+  await reloadTasks();
   renderTasks();
   toast('Сақталды');
 }
 
 async function markTaskDone(id){
+  const t = DATA.tasks.find(x=>x.id===id);
+  if(t){ t.status='done'; t.completed_at=new Date().toISOString(); }
+  renderTasks();
   await sb.from('tasks').update({ status:'done', completed_at:new Date().toISOString() }).eq('id', id);
-  await loadAll();
+  await reloadTasks();
   renderTasks();
   toast('Мұрағатқа өтті ✅');
 }
@@ -1769,22 +1787,29 @@ async function toggleTaskStatus(id){
   const t = DATA.tasks.find(x=>x.id===id);
   if(!t) return;
   const next = t.status==='todo' ? 'in_progress' : 'todo';
+  t.status = next;
+  renderTasks();
   await sb.from('tasks').update({ status: next }).eq('id', id);
-  await loadAll();
+  await reloadTasks();
   renderTasks();
 }
 
 async function restoreTask(id){
+  const t = DATA.tasks.find(x=>x.id===id);
+  if(t){ t.status='todo'; t.completed_at=null; }
+  renderTasks();
   await sb.from('tasks').update({ status:'todo', completed_at:null }).eq('id', id);
-  await loadAll();
+  await reloadTasks();
   renderTasks();
   toast('Белсенді тізімге қайтарылды');
 }
 
 async function deleteTask(id){
   if(!confirm('Тапсырманы өшіресіз бе?')) return;
+  DATA.tasks = DATA.tasks.filter(x=>x.id!==id);
+  renderTasks();
   await sb.from('tasks').delete().eq('id', id);
-  await loadAll();
+  await reloadTasks();
   renderTasks();
 }
 
