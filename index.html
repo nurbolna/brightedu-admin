@@ -326,23 +326,12 @@ details[open] summary::before{content:'▾ '}
       <div class="login-error" id="loginError">Логин немесе пароль қате!</div>
     </div>
 
-    <!-- ШАГ 2: Telegram OTP код -->
-    <div id="loginStep2" style="display:none">
-      <div class="login-sub">Telegram-ға жіберілген 6 таңбалы кодты енгізіңіз</div>
-      <div class="form-group"><label>Код</label><input type="text" inputmode="numeric" maxlength="6" id="otpInput" placeholder="000000" onkeydown="if(event.key==='Enter')doVerifyOtp()" /></div>
-      <button class="btn-primary" onclick="doVerifyOtp()">Растау →</button>
-      <div style="display:flex;justify-content:space-between;margin-top:12px">
-        <span class="sw-link" style="cursor:pointer;color:var(--text2);font-size:13px" onclick="backToStep1()">← Артқа</span>
-        <span class="sw-link" style="cursor:pointer;color:var(--accent);font-size:13px" onclick="doResendOtp()">🔄 Кодты қайта жіберу</span>
-      </div>
-      <div class="login-error" id="otpError">Код қате немесе мерзімі өтті!</div>
-    </div>
-
-    <!-- ШАГ 2b: Telegram байланыстырылмаған -->
+    <!-- ШАГ 2: Telegram байланыстырылмаған -->
     <div id="loginStepNeedsTelegram" style="display:none">
       <div class="login-sub">Қауіпсіздік үшін Telegram байланыстыру қажет</div>
-      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">Ботты ашып, <b>START</b> батырмасын басыңыз. Одан кейін қайта кіріп көріңіз.</p>
-      <a id="tgLinkBtn" href="#" target="_blank" class="btn-primary" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box">✈ Telegram-да ашу →</a>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">Ботты ашып, <b>START</b> батырмасын басыңыз (тіл таңдау сұралады). Одан кейін төмендегі "Тексеру" батырмасын басыңыз — бұл бір рет қана керек, келесі жолы тікелей логин+парольмен кіресіз.</p>
+      <a id="tgLinkBtn" href="#" target="_blank" class="btn-primary" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box;margin-bottom:10px">✈ Telegram-да ашу →</a>
+      <button class="btn-primary" id="tgRetryBtn" onclick="retryAfterTelegramLink()" style="background:var(--green)">🔄 Тексеру</button>
       <div style="margin-top:12px;text-align:center">
         <span class="sw-link" style="cursor:pointer;color:var(--text2);font-size:13px" onclick="backToStep1()">← Артқа</span>
       </div>
@@ -1044,8 +1033,8 @@ sb = window.supabase.createClient(SB_URL, SB_KEY);
 // ================================================================
 // AUTH
 // ================================================================
-let pendingUser = null;   // логин+пароль тексерілген, OTP күтіп тұрған қолданушы
-let pendingPhone = null;  // OTP жіберілген телефон
+let pendingUser = null;   // логин+пароль тексерілген, тек Telegram байланысы жоқ қолданушы
+let pendingPhone = null;
 
 async function doLogin(){
   const login = document.getElementById('loginInput').value.trim();
@@ -1061,9 +1050,15 @@ async function doLogin(){
     const {data:staffRows} = await sb.from('staff_accounts').select('*').eq('login', login);
     const staff = staffRows && staffRows[0];
     if(staff && staff.pass === pass){
-      pendingUser = { login: staff.login, role: staff.role, name: staff.name };
-      pendingPhone = staff.phone;
-      await sendOtpAndShowStep(login);
+      if(!staff.telegram_chat_id){
+        pendingUser = { login: staff.login, role: staff.role, name: staff.name };
+        pendingPhone = staff.phone;
+        showNeedsTelegram();
+        return;
+      }
+      currentUser = { login: staff.login, role: staff.role, name: staff.name };
+      saveSession();
+      startApp();
       return;
     }
 
@@ -1072,9 +1067,15 @@ async function doLogin(){
     if(teachers && teachers.length>0){
       const t = teachers[0];
       if(t.pass && t.pass === pass){
-        pendingUser = { login, role:'teacher', name:t.name+' '+(t.surname||''), teacherId:t.id };
-        pendingPhone = t.phone;
-        await sendOtpAndShowStep(login);
+        if(!t.telegram_chat_id){
+          pendingUser = { login, role:'teacher', name:t.name+' '+(t.surname||''), teacherId:t.id };
+          pendingPhone = t.phone;
+          showNeedsTelegram();
+          return;
+        }
+        currentUser = { login, role:'teacher', name:t.name+' '+(t.surname||''), teacherId:t.id };
+        saveSession();
+        startApp();
         return;
       }
     }
@@ -1089,84 +1090,41 @@ async function doLogin(){
   }
 }
 
-async function sendOtpAndShowStep(login){
-  const err = document.getElementById('loginError');
-  try{
-    const r = await fetch(EDGE_URL + '/send-otp', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ login })
-    });
-    const res = await r.json();
-
-    if(res.error){
-      err.textContent = 'Қате шықты, қайталап көріңіз.';
-      err.style.display = 'block';
-      return;
-    }
-
-    if(res.needs_telegram){
-      showLoginStep('needsTelegram');
-      const phoneDigits = (pendingPhone||'').replace(/\D/g,'');
-      const link = document.getElementById('tgLinkBtn');
-      link.href = phoneDigits
-        ? `https://t.me/${TG_BOT_USERNAME}?start=${phoneDigits}`
-        : `https://t.me/${TG_BOT_USERNAME}`;
-      return;
-    }
-
-    showLoginStep('otp');
-  }catch(e){
-    err.textContent = 'Қате шықты, қайталап көріңіз.';
-    err.style.display = 'block';
-  }
+function showNeedsTelegram(){
+  showLoginStep('needsTelegram');
+  const phoneDigits = (pendingPhone||'').replace(/\D/g,'');
+  const link = document.getElementById('tgLinkBtn');
+  link.href = phoneDigits
+    ? `https://t.me/${TG_BOT_USERNAME}?start=${phoneDigits}`
+    : `https://t.me/${TG_BOT_USERNAME}`;
 }
 
-async function doVerifyOtp(){
-  const code = document.getElementById('otpInput').value.trim();
-  const err  = document.getElementById('otpError');
-  err.style.display = 'none';
-  if(!code || code.length !== 6){ err.textContent='6 таңбалы кодты толық енгізіңіз!'; err.style.display='block'; return; }
-  if(!pendingUser || !pendingPhone){ backToStep1(); return; }
-
+// Пайдаланушы ботта /start басып, қайта "Кіру" дегенде осы шақырылады —
+// telegram_chat_id жазылған-жазылмағанын қайта тексереді.
+async function retryAfterTelegramLink(){
+  if(!pendingUser) { backToStep1(); return; }
+  const btn = document.getElementById('tgRetryBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Тексерілуде...'; }
   try{
-    const now = new Date().toISOString();
-    const {data} = await sb.from('otp_codes')
-      .select('*').eq('phone', pendingPhone).eq('code', code).eq('purpose','login')
-      .eq('used', false).gte('expires_at', now).maybeSingle();
-
-    if(!data){
-      err.textContent = 'Код қате немесе мерзімі өтті!';
-      err.style.display = 'block';
-      return;
+    const table = pendingUser.role === 'teacher' ? 'teachers' : 'staff_accounts';
+    const field = pendingUser.role === 'teacher' ? 'email' : 'login';
+    const {data} = await sb.from(table).select('telegram_chat_id').eq(field, pendingUser.login).maybeSingle();
+    if(data && data.telegram_chat_id){
+      currentUser = pendingUser;
+      saveSession();
+      pendingUser = null; pendingPhone = null;
+      startApp();
+    } else {
+      alert('Әлі байланыстырылмаған. Ботта START батырмасын басқаныңызды тексеріңіз.');
     }
-
-    await sb.from('otp_codes').update({used:true}).eq('id', data.id);
-
-    currentUser = pendingUser;
-    saveSession();
-    pendingUser = null; pendingPhone = null;
-    startApp();
-  }catch(e){
-    err.textContent = 'Қате шықты, қайталап көріңіз.';
-    err.style.display = 'block';
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 Тексеру'; }
   }
-}
-
-async function doResendOtp(){
-  if(!pendingUser) return;
-  await sendOtpAndShowStep(pendingUser.login);
 }
 
 function showLoginStep(step){
   document.getElementById('loginStep1').style.display = step==='login' ? 'block' : 'none';
-  document.getElementById('loginStep2').style.display = step==='otp' ? 'block' : 'none';
   document.getElementById('loginStepNeedsTelegram').style.display = step==='needsTelegram' ? 'block' : 'none';
-  if(step==='otp'){
-    document.getElementById('otpInput').value = '';
-    document.getElementById('otpError').style.display = 'none';
-    setTimeout(()=>document.getElementById('otpInput').focus(), 50);
-  }
 }
 
 function backToStep1(){
