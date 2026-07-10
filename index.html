@@ -711,6 +711,7 @@ details[open] summary::before{content:'▾ '}
               <button id="crmViewTableBtn" class="active" onclick="switchCrmView('table')">📋 Кесте</button>
               <button id="crmViewBoardBtn" onclick="switchCrmView('board')">🗂️ Канбан</button>
             </div>
+            <button class="btn btn-ghost" id="crmSyncBtn" onclick="syncBrightLeads()">🔄 Bright тест сайттан жүктеу</button>
             <button class="btn btn-blue" onclick="openLeadModal()">+ Лид қосу</button>
           </div>
         </div>
@@ -720,6 +721,8 @@ details[open] summary::before{content:'▾ '}
             <option value="">Traffic — барлығы</option>
             <option value="organic">organic</option>
             <option value="paid ads">paid ads</option>
+            <option value="google_forms">google_forms</option>
+            <option value="bright_test">bright_test (mock сайт)</option>
           </select>
           <select id="crmFilterExpert" onchange="renderCRM()">
             <option value="">Эксперт — барлығы</option>
@@ -1107,6 +1110,7 @@ details[open] summary::before{content:'▾ '}
           <option value="organic">organic</option>
           <option value="paid ads">paid ads</option>
           <option value="google_forms">google_forms</option>
+          <option value="bright_test">bright_test (mock сайт)</option>
         </select>
       </div>
     </div>
@@ -1259,6 +1263,11 @@ function setTheme(t, persist){
 // SUPABASE INIT
 // ================================================================
 sb = window.supabase.createClient(SB_URL, SB_KEY);
+
+// Bright Mock тест сайтының Supabase жобасы — тек оқу үшін (лидтерді синхрондау)
+const MOCK_SB_URL = 'https://cayvlvjvmjeabrvzttqo.supabase.co';
+const MOCK_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNheXZsdmp2bWplYWJydnp0dHFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2NDU4NDgsImV4cCI6MjA5NTIyMTg0OH0.HWQl2h5X8ijfdZg2JGeD1f3E05zKfVHRzoYCSj0u6S4';
+const sbMock = window.supabase.createClient(MOCK_SB_URL, MOCK_SB_KEY);
 
 // ================================================================
 // AUTH
@@ -3653,6 +3662,43 @@ function deleteLeadFromModal(){
   if(!id) return;
   closeModal('leadModal');
   deleteLead(id);
+}
+
+// ---- Bright Mock тест сайтынан лидтерді синхрондау ----
+async function syncBrightLeads(){
+  const btn = document.getElementById('crmSyncBtn');
+  const origText = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Жүктелуде...';
+  try{
+    const {data:users, error} = await sbMock.from('users').select('*').eq('role','student');
+    if(error) throw error;
+    const norm = p => (p||'').replace(/\D/g,'').slice(-10); // телефонды салыстыру үшін тек соңғы 10 сан
+    const existingPhones = new Set(DATA.leads.map(l=>norm(l.whatsapp)).filter(Boolean));
+    const newOnes = (users||[]).filter(u=>u.phone && norm(u.phone) && !existingPhones.has(norm(u.phone)));
+    if(newOnes.length===0){
+      toast('✅ Жаңа лид жоқ, барлығы синхронды');
+      return;
+    }
+    const payload = newOnes.map(u=>({
+      name: u.name || 'Аты көрсетілмеген',
+      whatsapp: u.phone || '',
+      city: u.city || '',
+      school: u.school || '',
+      grade: u.grade || '',
+      traffic: 'bright_test',
+      status: CRM_STATUSES[0].name,
+      note: `Bright mock тест сайттан автоматты тіркелді (тіркелген күні: ${(u.created_at||'').slice(0,10)})`
+    }));
+    const {data:inserted, error:insErr} = await sb.from('leads').insert(payload).select();
+    if(insErr) throw insErr;
+    DATA.leads = [...(inserted||[]), ...DATA.leads];
+    renderCRM();
+    toast(`✅ ${inserted?inserted.length:0} жаңа лид қосылды (Bright тест сайттан)!`);
+  }catch(e){
+    toast('❌ Синхрондау қатесі: '+e.message, 'error');
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
 }
 
 // ================================================================
