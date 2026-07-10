@@ -358,6 +358,8 @@ details[open] summary::before{content:'▾ '}
       <nav>
         <div class="nav-section">Негізгі</div>
         <div class="nav-item active" onclick="showPage('dashboard',this)">📊 Дашборд<span class="nav-badge hidden" id="badgeDash">0</span></div>
+        <div class="nav-section dir-only">Жоспарлау</div>
+        <div class="nav-item dir-only" onclick="showPage('tasks',this)">📋 Жоспарлау<span class="nav-badge hidden" id="badgeTasks">0</span></div>
         <div class="nav-section">Оқу</div>
         <div class="nav-item" onclick="showPage('study',this)">📚 Оқу процесі</div>
         <div class="nav-section">Журнал</div>
@@ -420,6 +422,24 @@ details[open] summary::before{content:'▾ '}
             <div id="dashBirthdays"><div class="loading"><div class="spinner"></div></div></div>
           </div>
         </div>
+      </div>
+
+      <!-- ========== TASKS / PLANNING (директорларға арналған) ========== -->
+      <div class="page dir-only" id="page-tasks">
+        <div class="page-header">
+          <div><div class="page-title">Жоспарлау</div><div class="page-subtitle">Директорлар арасындағы тапсырмалар</div></div>
+          <button class="btn btn-blue" onclick="openTaskModal()">+ Тапсырма қосу</button>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-sm" id="taskTabActiveBtn" onclick="switchTaskView('active')">📋 Белсенді</button>
+          <button class="btn btn-ghost btn-sm" id="taskTabArchiveBtn" onclick="switchTaskView('archive')">🗄️ Мұрағат</button>
+        </div>
+
+        <div id="taskStatusFilters" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"></div>
+        <div id="taskAssigneeFilters" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"></div>
+
+        <div class="card" style="padding:6px 0"><div id="tasksList"></div></div>
       </div>
 
       <!-- ========== STUDY HUB (Курстар + Группалар + Кесте) ========== -->
@@ -663,6 +683,32 @@ details[open] summary::before{content:'▾ '}
 </div>
 
 <!-- ==================== MODALS ==================== -->
+
+<!-- TASK (Жоспарлау) -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal">
+    <div class="modal-title" id="taskModalTitle">📋 Тапсырма</div>
+    <div class="form-group"><label>Атауы</label><input type="text" id="taskTitle" /></div>
+    <div class="form-group"><label>Сипаттамасы</label><textarea id="taskDesc" rows="3"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label>Тағайындау</label>
+        <select id="taskAssignee"><option value="all">👥 Екеуіне де</option></select>
+      </div>
+      <div class="form-group"><label>Басымдық</label>
+        <select id="taskPriority">
+          <option value="high">🔴 Жоғары</option>
+          <option value="medium" selected>🟡 Орташа</option>
+          <option value="low">🔵 Төмен</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Мерзімі (қажет болса)</label><input type="date" id="taskDue" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('taskModal')">Бас тарту</button>
+      <button class="btn btn-blue" onclick="saveTask()">Сақтау</button>
+    </div>
+  </div>
+</div>
 
 <!-- QUICK PAY -->
 <div class="modal-overlay" id="quickPayModal">
@@ -981,8 +1027,12 @@ let DATA = {
   courses:[], teachers:[], groups:[], students:[], student_groups:[],
   lessons:[], payments:[], holidays:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
-  journal_entries:[], unit_econ_settings:[]
+  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[]
 };
+let taskView = 'active';        // 'active' | 'archive'
+let taskStatusFilter = '';      // '' | 'todo' | 'in_progress'
+let taskAssigneeFilter = '';    // '' | director login | 'all'
+let editingTaskId = null;
 let quickPayStudent = null;
 let salaryTeacherId = null;
 let currentJournalEntry = null; // {studentId, groupId, date, id} for journal modal
@@ -1289,7 +1339,7 @@ function showPage(name, el){
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
     payments:renderPayments, journal:renderJournal, analysis:renderAnalysis,
-    reports:renderReports, 'unit-economics':renderUnitEconomics
+    reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks
   };
   renders[name]?.();
 }
@@ -1361,6 +1411,14 @@ async function loadAll(){
     const {data:ue}=await sb.from('unit_econ_settings').select('*');
     if(ue) DATA.unit_econ_settings=ue;
   }catch(e){ DATA.unit_econ_settings=[]; }
+  try{
+    const {data:tk}=await sb.from('tasks').select('*').order('created_at',{ascending:false});
+    if(tk) DATA.tasks=tk;
+  }catch(e){ DATA.tasks=[]; }
+  try{
+    const {data:dirs}=await sb.from('staff_accounts').select('login,name').eq('role','director');
+    if(dirs) DATA.directors=dirs;
+  }catch(e){ DATA.directors=[]; }
 
   renderDashboard();
   updateBadges();
@@ -1526,6 +1584,189 @@ function updateBadges(){
   const bp=document.getElementById('badgePay');
   if(total>0){bd.textContent=total;bd.classList.remove('hidden');}else bd.classList.add('hidden');
   if(overdue>0){bp.textContent=overdue;bp.classList.remove('hidden');}else bp.classList.add('hidden');
+
+  const bt=document.getElementById('badgeTasks');
+  if(bt){
+    const today=localDateStr(new Date());
+    const overdueTasks=(DATA.tasks||[]).filter(t=>t.status!=='done'&&t.due_date&&t.due_date<today).length;
+    if(overdueTasks>0){bt.textContent=overdueTasks;bt.classList.remove('hidden');}else bt.classList.add('hidden');
+  }
+}
+
+// ================================================================
+// TASKS / ЖОСПАРЛАУ (екі директорға арналған to-do + мұрағат)
+// ================================================================
+function switchTaskView(view){
+  taskView = view;
+  document.getElementById('taskTabActiveBtn').className = view==='active' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('taskTabArchiveBtn').className = view==='archive' ? 'btn btn-sm' : 'btn btn-ghost btn-sm';
+  renderTasks();
+}
+function setTaskStatusFilter(v){ taskStatusFilter = v; renderTasks(); }
+function setTaskAssigneeFilter(v){ taskAssigneeFilter = v; renderTasks(); }
+
+function taskPriorityBadge(p){
+  if(p==='high') return '<span class="badge badge-red">🔴 Жоғары</span>';
+  if(p==='low') return '<span class="badge badge-blue">🔵 Төмен</span>';
+  return '<span class="badge badge-yellow">🟡 Орташа</span>';
+}
+function taskAssigneeLabel(login){
+  if(login==='all') return '👥 Екеуіне де';
+  const d = DATA.directors.find(x=>x.login===login);
+  return d ? d.name : login;
+}
+function taskAssigneeInitials(login){
+  if(login==='all') return '👥';
+  const d = DATA.directors.find(x=>x.login===login);
+  const name = d ? d.name : login;
+  return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+}
+
+function renderTaskFilters(){
+  const statusWrap = document.getElementById('taskStatusFilters');
+  const assigneeWrap = document.getElementById('taskAssigneeFilters');
+  if(!statusWrap || !assigneeWrap) return;
+
+  if(taskView==='archive'){ statusWrap.innerHTML=''; }
+  else{
+    const activeTasks = DATA.tasks.filter(t=>t.status!=='done');
+    const counts = { '':activeTasks.length, todo:activeTasks.filter(t=>t.status==='todo').length, in_progress:activeTasks.filter(t=>t.status==='in_progress').length };
+    const chips = [ ['', '📋 Барлығы'], ['todo','⚪ Басталмаған'], ['in_progress','🔵 Орындалуда'] ];
+    statusWrap.innerHTML = chips.map(([val,label])=>{
+      const active = taskStatusFilter===val;
+      return `<button class="btn btn-sm ${active?'btn-blue':'btn-ghost'}" onclick="setTaskStatusFilter('${val}')">${label} · ${counts[val]}</button>`;
+    }).join('');
+  }
+
+  const assigneeOptions = [['', '👥 Барлығы']]
+    .concat(DATA.directors.map(d=>[d.login, '👤 '+d.name]))
+    .concat([['all','👥 Екеуіне де']]);
+  assigneeWrap.innerHTML = assigneeOptions.map(([val,label])=>{
+    const active = taskAssigneeFilter===val;
+    return `<button class="btn btn-sm ${active?'btn-blue':'btn-ghost'}" onclick="setTaskAssigneeFilter('${val}')">${label}</button>`;
+  }).join('');
+}
+
+function renderTasks(){
+  renderTaskFilters();
+  const wrap = document.getElementById('tasksList');
+  if(!wrap) return;
+
+  let list = DATA.tasks.filter(t => taskView==='archive' ? t.status==='done' : t.status!=='done');
+  if(taskView==='active' && taskStatusFilter) list = list.filter(t=>t.status===taskStatusFilter);
+  if(taskAssigneeFilter) list = list.filter(t=>t.assigned_to===taskAssigneeFilter);
+  list = list.slice().sort((a,b)=>{
+    if(taskView==='archive') return new Date(b.completed_at||b.created_at) - new Date(a.completed_at||a.created_at);
+    return new Date(a.due_date||'9999-12-31') - new Date(b.due_date||'9999-12-31');
+  });
+
+  if(!list.length){
+    wrap.innerHTML = `<div class="empty-state" style="padding:40px 0"><div class="empty-icon">${taskView==='archive'?'🗄️':'📋'}</div><p>${taskView==='archive'?'Мұрағат бос':'Тапсырма жоқ'}</p></div>`;
+    return;
+  }
+
+  const today = localDateStr(new Date());
+  wrap.innerHTML = list.map(t=>{
+    const overdue = taskView==='active' && t.due_date && t.due_date<today;
+    const statusLabel = t.status==='todo' ? '<span class="badge" style="background:var(--surface2);color:var(--text2)">⚪ Басталмаған</span>'
+      : t.status==='in_progress' ? '<span class="badge badge-blue">🔵 Орындалуда</span>'
+      : '<span class="badge badge-green">✅ Дайын</span>';
+    const dueText = t.due_date ? `${overdue?'<span style="color:var(--red)">❌ Мерзімі өтті — ':''}${t.due_date}${overdue?'</span>':''}` : '';
+    const metaLine = taskView==='archive'
+      ? `Дайын болды${t.completed_at ? ' — '+localDateStr(new Date(t.completed_at)) : ''}`
+      : (dueText || 'Мерзімі көрсетілмеген');
+
+    return `
+    <div class="task-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
+      ${taskView==='active'
+        ? `<input type="checkbox" onclick="markTaskDone('${t.id}')" style="width:17px;height:17px;flex-shrink:0;cursor:pointer" />`
+        : `<span style="font-size:16px;flex-shrink:0">✅</span>`}
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="${taskView==='active'?`openTaskModal('${t.id}')`:''}">
+        <div style="font-size:14px;font-weight:600;margin-bottom:3px;${taskView==='archive'?'text-decoration:line-through;color:var(--text2)':''}">${t.title}</div>
+        <div style="font-size:12px;color:var(--text2)">${metaLine}</div>
+      </div>
+      ${taskPriorityBadge(t.priority)}
+      ${taskView==='active' ? statusLabel : ''}
+      <div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0" title="${taskAssigneeLabel(t.assigned_to)}">${taskAssigneeInitials(t.assigned_to)}</div>
+      ${taskView==='active'
+        ? `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Өшіру">🗑️</button>`
+        : `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="restoreTask('${t.id}')" title="Қалпына келтіру">↩️</button>
+           <button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Мұрағаттан өшіру">🗑️</button>`}
+    </div>`;
+  }).join('');
+}
+
+function populateTaskAssigneeSelect(){
+  const sel = document.getElementById('taskAssignee');
+  if(!sel) return;
+  sel.innerHTML = '<option value="all">👥 Екеуіне де</option>' +
+    DATA.directors.map(d=>`<option value="${d.login}">👤 ${d.name}</option>`).join('');
+}
+
+function openTaskModal(id){
+  editingTaskId = id || null;
+  populateTaskAssigneeSelect();
+  document.getElementById('taskModalTitle').textContent = id ? '📋 Тапсырманы өңдеу' : '📋 Жаңа тапсырма';
+  if(id){
+    const t = DATA.tasks.find(x=>x.id===id);
+    if(!t) return;
+    document.getElementById('taskTitle').value = t.title || '';
+    document.getElementById('taskDesc').value = t.description || '';
+    document.getElementById('taskAssignee').value = t.assigned_to || 'all';
+    document.getElementById('taskPriority').value = t.priority || 'medium';
+    document.getElementById('taskDue').value = t.due_date || '';
+  } else {
+    document.getElementById('taskTitle').value = '';
+    document.getElementById('taskDesc').value = '';
+    document.getElementById('taskAssignee').value = 'all';
+    document.getElementById('taskPriority').value = 'medium';
+    document.getElementById('taskDue').value = '';
+  }
+  openModal('taskModal');
+}
+
+async function saveTask(){
+  const title = document.getElementById('taskTitle').value.trim();
+  if(!title){ toast('Атауын енгізіңіз', 'error'); return; }
+  const payload = {
+    title,
+    description: document.getElementById('taskDesc').value.trim(),
+    assigned_to: document.getElementById('taskAssignee').value,
+    priority: document.getElementById('taskPriority').value,
+    due_date: document.getElementById('taskDue').value || null,
+    created_by: currentUser.login
+  };
+  if(editingTaskId){
+    await sb.from('tasks').update(payload).eq('id', editingTaskId);
+  } else {
+    payload.status = 'todo';
+    await sb.from('tasks').insert(payload);
+  }
+  closeModal('taskModal');
+  await loadAll();
+  renderTasks();
+  toast('Сақталды');
+}
+
+async function markTaskDone(id){
+  await sb.from('tasks').update({ status:'done', completed_at:new Date().toISOString() }).eq('id', id);
+  await loadAll();
+  renderTasks();
+  toast('Мұрағатқа өтті ✅');
+}
+
+async function restoreTask(id){
+  await sb.from('tasks').update({ status:'todo', completed_at:null }).eq('id', id);
+  await loadAll();
+  renderTasks();
+  toast('Белсенді тізімге қайтарылды');
+}
+
+async function deleteTask(id){
+  if(!confirm('Тапсырманы өшіресіз бе?')) return;
+  await sb.from('tasks').delete().eq('id', id);
+  await loadAll();
+  renderTasks();
 }
 
 // ================================================================
