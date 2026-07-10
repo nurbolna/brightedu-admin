@@ -1056,6 +1056,15 @@ let taskStatusFilter = '';      // '' | 'todo' | 'in_progress'
 let taskAssigneeFilter = '';    // '' | director login | 'all'
 let taskDueFilter = '';         // '' | 'overdue' | 'today' | 'soon3' | 'week' | 'none'
 let editingTaskId = null;
+
+// Тапсырма "Дайын" деп белгіленген соң бірден мұрағатқа кетпейді — сол күні
+// (белгіленген сәттен 24 сағат бойы) әлі "Белсенді" тізімде ✅ күйінде көрініп
+// тұрады, содан кейін ғана мұрағатқа өтеді. Осылайша директор "бүгін не
+// істелді" дегенді бірден көре алады.
+function isRecentlyDone(t){
+  if(t.status!=='done' || !t.completed_at) return false;
+  return (Date.now() - new Date(t.completed_at).getTime()) < 24*60*60*1000;
+}
 let expandedTasks = new Set();  // қай негізгі тапсырмалардың subtask тізімі ашық тұрғанын сақтайды
 let subtaskParentId = null;
 let quickPayStudent = null;
@@ -1478,6 +1487,11 @@ function localDateStr(d){
   const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
+// Бүгіннен n күн бұрынғы датаны 'YYYY-MM-DD' форматында қайтарады (дашборд ескертулері үшін).
+function daysAgoStr(n){
+  const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-n);
+  return localDateStr(d);
+}
 const EXPENSE_COLORS={
   'Аренда':'#4f8ef7','Маркетинг':'#a78bfa','Хозтовары':'#34d399',
   'Жалақы':'#f87171','Салық':'#fbbf24','Басқа':'#fb923c'
@@ -1569,7 +1583,7 @@ function getPayStatus(student){
   const due=parseLocalDate(student.next_pay_date);
   const diff=Math.floor((due-today)/(1000*60*60*24));
   if(diff<0) return 'overdue';
-  if(diff<=5) return 'pending';
+  if(diff<=7) return 'pending';
   return 'active';
 }
 function daysUntil(ds){
@@ -1629,11 +1643,11 @@ async function reloadTasks(){
   try{
     const {data:tk}=await sb.from('tasks').select('*').order('created_at',{ascending:false});
     if(tk) DATA.tasks=tk;
-  }catch(e){}
+  }catch(e){ console.error('reloadTasks (tasks) error:', e); }
   try{
     const {data:sub}=await sb.from('task_subtasks').select('*').order('created_at',{ascending:true});
     if(sub) DATA.subtasks=sub;
-  }catch(e){}
+  }catch(e){ console.error('reloadTasks (subtasks) error:', e); }
   updateBadges();
 }
 
@@ -1774,7 +1788,9 @@ function renderTasks(){
   const wrap = document.getElementById('tasksList');
   if(!wrap) return;
 
-  let list = DATA.tasks.filter(t => taskView==='archive' ? t.status==='done' : t.status!=='done');
+  let list = DATA.tasks.filter(t => taskView==='archive'
+    ? (t.status==='done' && !isRecentlyDone(t))          // тек 24 сағаттан асқан "дайын" тапсырмалар мұрағатта
+    : (t.status!=='done' || isRecentlyDone(t)));          // белсенді тізімде: дайын емес НЕМЕСЕ соңғы 24 сағатта дайын болған
   if(taskView==='active' && taskStatusFilter) list = list.filter(t=>t.status===taskStatusFilter);
   if(taskView==='active' && taskDueFilter) list = list.filter(t=>{
     const c = taskDueCategory(t);
@@ -1789,6 +1805,12 @@ function renderTasks(){
   });
   list = list.slice().sort((a,b)=>{
     if(taskView==='archive') return new Date(b.completed_at||b.created_at) - new Date(a.completed_at||a.created_at);
+    // Белсенді тізімде: 1) Орындалуда 2) Басталмаған 3) (соңғы 24 сағатта) Дайын —
+    // әр топтың ішінде мерзімі бойынша (дайындар — ең соңғы дайын болғаны жоғарыда).
+    const rank = t => t.status==='in_progress' ? 0 : t.status==='done' ? 2 : 1;
+    const ra=rank(a), rb=rank(b);
+    if(ra!==rb) return ra-rb;
+    if(ra===2) return new Date(b.completed_at||b.created_at) - new Date(a.completed_at||a.created_at);
     return new Date(a.due_date||'9999-12-31') - new Date(b.due_date||'9999-12-31');
   });
 
@@ -1798,42 +1820,56 @@ function renderTasks(){
   }
 
   wrap.innerHTML = list.map(t=>{
+    const isArchiveRow = taskView==='archive';                 // мұрағат — әрдайым "дайын", 24 сағаттан асқан
+    const isDoneRecent = taskView==='active' && t.status==='done'; // белсенді тізімде, бірақ соңғы 24 сағатта дайын болған
+    const isDoneItem = isArchiveRow || isDoneRecent;
+
     const statusLabel = t.status==='todo' ? `<span class="badge" style="background:var(--surface2);color:var(--text2);cursor:pointer" onclick="toggleTaskStatus('${t.id}')" title="Басу арқылы «Орындалуда» ету">⚪ Басталмаған</span>`
       : t.status==='in_progress' ? `<span class="badge badge-blue" style="cursor:pointer" onclick="toggleTaskStatus('${t.id}')" title="Басу арқылы «Басталмаған» ету">🔵 Орындалуда</span>`
       : '<span class="badge badge-green">✅ Дайын</span>';
     const dueInfo = taskDueInfo(t.due_date);
-    const subs = taskView==='active' ? getSubtasks(t.id) : [];
+    const subs = (taskView==='active' && !isDoneRecent) ? getSubtasks(t.id) : [];
     const prog = taskProgress(t.id);
     const hasSubs = prog.total>0;
     const progLine = hasSubs ? ` · ${prog.done}/${prog.total} кіші тапсырма дайын` : '';
-    const metaLine = taskView==='archive'
-      ? `Дайын болды${t.completed_at ? ' — '+localDateStr(new Date(t.completed_at)) : ''}`
+    const metaLine = isDoneItem
+      ? `✅ Дайын болды${t.completed_at ? ' — '+localDateStr(new Date(t.completed_at)) : ''}`
       : `<span style="color:${dueInfo.color}">${dueInfo.text}</span>${progLine}`;
     const isExpanded = expandedTasks.has(t.id);
 
+    const expandBtn = (taskView==='active' && !isDoneRecent)
+      ? `<button class="btn-ghost btn-sm" style="border:none;padding:2px 4px;flex-shrink:0;font-size:11px" onclick="toggleTaskExpand('${t.id}')" title="Кіші тапсырмалар">${isExpanded?'▾':'▸'}</button>`
+      : '';
+
+    const checkboxHtml = isArchiveRow
+      ? `<span style="font-size:16px;flex-shrink:0">✅</span>`
+      : isDoneRecent
+        ? `<input type="checkbox" checked onclick="restoreTask('${t.id}')" title="Басу арқылы қайта белсендіру" style="width:17px;height:17px;flex-shrink:0;cursor:pointer" />`
+        : `<input type="checkbox" onclick="markTaskDone('${t.id}')" style="width:17px;height:17px;flex-shrink:0;cursor:pointer" />`;
+
+    const canOpenModal = taskView==='active' && !isDoneRecent;
+
+    const trailingButtons = isArchiveRow
+      ? `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="restoreTask('${t.id}')" title="Қалпына келтіру">↩️</button>
+         <button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Мұрағаттан өшіру">🗑️</button>`
+      : `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Өшіру">🗑️</button>`;
+
     return `
     <div class="task-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
-      ${taskView==='active'
-        ? `<button class="btn-ghost btn-sm" style="border:none;padding:2px 4px;flex-shrink:0;font-size:11px" onclick="toggleTaskExpand('${t.id}')" title="Кіші тапсырмалар">${isExpanded?'▾':'▸'}</button>`
-        : ''}
-      ${taskView==='active'
-        ? `<input type="checkbox" onclick="markTaskDone('${t.id}')" style="width:17px;height:17px;flex-shrink:0;cursor:pointer" />`
-        : `<span style="font-size:16px;flex-shrink:0">✅</span>`}
-      <div style="flex:1;min-width:0;cursor:pointer" onclick="${taskView==='active'?`openTaskModal('${t.id}')`:''}">
-        <div style="font-size:14px;font-weight:600;margin-bottom:3px;${taskView==='archive'?'text-decoration:line-through;color:var(--text2)':''}">${t.title}</div>
+      ${expandBtn}
+      ${checkboxHtml}
+      <div style="flex:1;min-width:0;cursor:${canOpenModal?'pointer':'default'}" onclick="${canOpenModal?`openTaskModal('${t.id}')`:''}">
+        <div style="font-size:14px;font-weight:600;margin-bottom:3px;${isDoneItem?'text-decoration:line-through;color:var(--text2)':''}">${t.title}</div>
         <div style="font-size:12px;color:var(--text2)">${metaLine}</div>
       </div>
       ${taskPriorityBadge(t.priority)}
-      ${taskView==='active' ? statusLabel : ''}
+      ${(taskView==='active' && !isDoneRecent) ? statusLabel : ''}
       ${hasSubs
         ? `<span class="badge badge-blue" style="flex-shrink:0" title="Кіші тапсырмалар прогресі">${prog.done}/${prog.total}</span>`
         : `<div class="user-avatar" style="width:28px;height:28px;font-size:11px;flex-shrink:0;background:${taskAssigneeColor(t.assigned_to)}" title="${taskAssigneeLabel(t.assigned_to)}">${taskAssigneeInitials(t.assigned_to)}</div>`}
-      ${taskView==='active'
-        ? `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Өшіру">🗑️</button>`
-        : `<button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="restoreTask('${t.id}')" title="Қалпына келтіру">↩️</button>
-           <button class="btn-ghost btn-sm" style="border:none;padding:6px" onclick="deleteTask('${t.id}')" title="Мұрағаттан өшіру">🗑️</button>`}
+      ${trailingButtons}
     </div>
-    ${(taskView==='active' && isExpanded) ? renderSubtaskBlock(t.id, subs) : ''}`;
+    ${(taskView==='active' && !isDoneRecent && isExpanded) ? renderSubtaskBlock(t.id, subs) : ''}`;
   }).join('');
 }
 
@@ -1880,11 +1916,10 @@ async function saveTask(){
     due_date: document.getElementById('taskDue').value || null,
     created_by: currentUser.login
   };
-  if(editingTaskId){
-    await sb.from('tasks').update(payload).eq('id', editingTaskId);
-  } else {
-    await sb.from('tasks').insert(payload);
-  }
+  const {error} = editingTaskId
+    ? await sb.from('tasks').update(payload).eq('id', editingTaskId)
+    : await sb.from('tasks').insert(payload);
+  if(error){ toast('❌ Сақталмады! Қате: '+error.message, 'error'); return; }
   closeModal('taskModal');
   await reloadTasks();
   renderTasks();
@@ -1893,30 +1928,52 @@ async function saveTask(){
 
 async function markTaskDone(id){
   const t = DATA.tasks.find(x=>x.id===id);
-  if(t){ t.status='done'; t.completed_at=new Date().toISOString(); }
+  const prevStatus = t?.status, prevCompletedAt = t?.completed_at;
+  const completedAt = new Date().toISOString();
+  if(t){ t.status='done'; t.completed_at=completedAt; }
   renderTasks();
-  await sb.from('tasks').update({ status:'done', completed_at:new Date().toISOString() }).eq('id', id);
+  const {error} = await sb.from('tasks').update({ status:'done', completed_at:completedAt }).eq('id', id);
+  if(error){
+    if(t){ t.status=prevStatus; t.completed_at=prevCompletedAt; }
+    renderTasks();
+    toast('❌ Сақталмады! Қате: '+error.message, 'error');
+    return;
+  }
   await reloadTasks();
   renderTasks();
-  toast('Мұрағатқа өтті ✅');
+  toast('✅ Дайын деп белгіленді — бүгін тізімде қалады, ертең мұрағатқа өтеді');
 }
 
 async function toggleTaskStatus(id){
   const t = DATA.tasks.find(x=>x.id===id);
   if(!t) return;
+  const prevStatus = t.status;
   const next = t.status==='todo' ? 'in_progress' : 'todo';
   t.status = next;
   renderTasks();
-  await sb.from('tasks').update({ status: next }).eq('id', id);
+  const {error} = await sb.from('tasks').update({ status: next }).eq('id', id);
+  if(error){
+    t.status = prevStatus;
+    renderTasks();
+    toast('❌ Сақталмады! Қате: '+error.message, 'error');
+    return;
+  }
   await reloadTasks();
   renderTasks();
 }
 
 async function restoreTask(id){
   const t = DATA.tasks.find(x=>x.id===id);
+  const prevStatus = t?.status, prevCompletedAt = t?.completed_at;
   if(t){ t.status='todo'; t.completed_at=null; }
   renderTasks();
-  await sb.from('tasks').update({ status:'todo', completed_at:null }).eq('id', id);
+  const {error} = await sb.from('tasks').update({ status:'todo', completed_at:null }).eq('id', id);
+  if(error){
+    if(t){ t.status=prevStatus; t.completed_at=prevCompletedAt; }
+    renderTasks();
+    toast('❌ Сақталмады! Қате: '+error.message, 'error');
+    return;
+  }
   await reloadTasks();
   renderTasks();
   toast('Белсенді тізімге қайтарылды');
@@ -1924,10 +1981,19 @@ async function restoreTask(id){
 
 async function deleteTask(id){
   if(!confirm('Тапсырманы өшіресіз бе?')) return;
+  const removedTask = DATA.tasks.find(x=>x.id===id);
+  const removedSubs = DATA.subtasks.filter(x=>x.task_id===id);
   DATA.tasks = DATA.tasks.filter(x=>x.id!==id);
   DATA.subtasks = DATA.subtasks.filter(x=>x.task_id!==id);
   renderTasks();
-  await sb.from('tasks').delete().eq('id', id);
+  const {error} = await sb.from('tasks').delete().eq('id', id);
+  if(error){
+    if(removedTask) DATA.tasks.push(removedTask);
+    DATA.subtasks.push(...removedSubs);
+    renderTasks();
+    toast('❌ Өшірілмеді! Қате: '+error.message, 'error');
+    return;
+  }
   await reloadTasks();
   renderTasks();
 }
@@ -1958,9 +2024,10 @@ async function saveSubtask(){
     assigned_to: document.getElementById('subtaskAssignee').value,
     status: 'todo'
   };
+  const {error} = await sb.from('task_subtasks').insert(payload);
+  if(error){ toast('❌ Сақталмады! Қате: '+error.message, 'error'); return; }
   closeModal('subtaskModal');
   expandedTasks.add(subtaskParentId);
-  await sb.from('task_subtasks').insert(payload);
   await reloadTasks();
   renderTasks();
   toast('Кіші тапсырма қосылды');
@@ -1969,10 +2036,17 @@ async function saveSubtask(){
 async function toggleSubtaskDone(id){
   const s = DATA.subtasks.find(x=>x.id===id);
   if(!s) return;
+  const prevStatus = s.status, prevCompletedAt = s.completed_at;
   const next = s.status==='done' ? 'todo' : 'done';
   s.status = next; s.completed_at = next==='done' ? new Date().toISOString() : null;
   renderTasks();
-  await sb.from('task_subtasks').update({ status: next, completed_at: s.completed_at }).eq('id', id);
+  const {error} = await sb.from('task_subtasks').update({ status: next, completed_at: s.completed_at }).eq('id', id);
+  if(error){
+    s.status = prevStatus; s.completed_at = prevCompletedAt;
+    renderTasks();
+    toast('❌ Сақталмады! Қате: '+error.message, 'error');
+    return;
+  }
   await reloadTasks();
   renderTasks();
 }
@@ -2044,12 +2118,108 @@ function renderDashboard(){
 
   // Alerts (dir only) — оқушы төлем ескертулерін бұдан алып тастадық, себебі
   // олар "Жылдам төлем" карточкасында әрекетке шақыратын түрде (💳 батырмасымен)
-  // бұрыннан бар — сол екеуі қайталанбас үшін мұнда тек басқа (мұғалім
-  // жалақысы сияқты) ескертулер қалдырылады.
+  // бұрыннан бар — сол екеуі қайталанбас үшін мұнда тек басқа ескертулер
+  // қалдырылады: қаржы (мұғалім жалақысы), оқушылар, мұғалімдер, кесте.
   const aEl=document.getElementById('dashAlerts');
   if(aEl){
     const alerts=[];
-    DATA.teachers.forEach(t=>{const bal=Number(t.balance||0);if(bal>0)alerts.push({type:'info',msg:`💰 ${t.name} ${t.surname||''} — берілуі тиіс: ${fmt(bal)}₸`});});
+    const todayStr=localDateStr(now);
+    const dom=now.getDate();
+    const d14=daysAgoStr(14);   // соңғы 2 апта басы
+    const d28=daysAgoStr(28);   // алдыңғы 2 апта басы
+
+    // 1) 💰 Мұғалімге берілуі тиіс жалақы — тек айдың 24-30 аралығында көрсетіледі
+    //    (жалақы беру арқылы баланс 0-ге түскен соң ескертуден автоматты жоғалады).
+    if(dom>=24 && dom<=30){
+      DATA.teachers.forEach(t=>{
+        const bal=Number(t.balance||0);
+        if(bal>0) alerts.push({type:'info', msg:`💰 ${t.name} ${t.surname||''} — берілуі тиіс: ${fmt(bal)}₸`});
+      });
+    }
+
+    DATA.students.forEach(s=>{
+      const sName=`${s.name} ${s.surname||''}`.trim();
+
+      // 2) 📉 Қатысуы төмен — соңғы 2 аптада қатысу орташа <60%
+      const attEntries=DATA.journal_entries.filter(je=>je.student_id===s.id && je.attendance && je.lesson_date>=d14 && je.lesson_date<=todayStr);
+      if(attEntries.length>=2){
+        const pcts=attEntries.map(attendancePercent).filter(p=>p!=null);
+        if(pcts.length){
+          const avg=pcts.reduce((a,b)=>a+b,0)/pcts.length;
+          if(avg<60) alerts.push({type:'warning', msg:`📉 ${sName} — соңғы 2 аптада қатысу ${Math.round(avg)}%`});
+        }
+      }
+
+      // 3) 📝 Үй жұмысын істемей жүрген оқушылар — соңғы 2 аптада бағаланған
+      //    ҮЖ жазбаларының барлығы 0 болса
+      const hwEntries=DATA.journal_entries.filter(je=>je.student_id===s.id && je.homework!=null && je.lesson_date>=d14 && je.lesson_date<=todayStr);
+      if(hwEntries.length>=2 && hwEntries.every(e=>Number(e.homework)===0)){
+        alerts.push({type:'warning', msg:`📝 ${sName} — соңғы 2 аптада үй жұмысын істемей жүр`});
+      }
+
+      // 4) 📊 Рейтингі күрт төмендеген — соңғы 2 апта алдыңғы 2 аптамен салыстырғанда
+      const progNow=progressForDateRange(s.id, d14, todayStr);
+      const progPrev=progressForDateRange(s.id, d28, d14);
+      if(progNow!=null && progPrev!=null && (progPrev-progNow)>=15){
+        alerts.push({type:'danger', msg:`📊 ${sName} — рейтингі ${progPrev}% → ${progNow}%-ке төмендеді`});
+      }
+
+      // 5) 🚫 Ешбір топқа тіркелмеген оқушы
+      if(!DATA.student_groups.some(sg=>sg.student_id===s.id)){
+        alerts.push({type:'warning', msg:`🚫 ${sName} — ешбір топқа тіркелмеген`});
+      }
+
+      // 6) 💸 Ешқандай төлем жасамаған оқушы — тіркелген сәттен-ақ, кідіріссіз
+      if(!DATA.payments.some(p=>p.student_id===s.id)){
+        alerts.push({type:'danger', msg:`💸 ${sName} — әлі ешқандай төлем жасамаған`});
+      }
+
+      // 7) ⛔ Ұзақ уақыт сабаққа келмеген — соңғы 3 жазба қатарынан "келмеді"
+      const allAttEntries=DATA.journal_entries
+        .filter(je=>je.student_id===s.id && je.attendance)
+        .sort((a,b)=> a.lesson_date<b.lesson_date?1:(a.lesson_date>b.lesson_date?-1:0));
+      if(allAttEntries.length>=3){
+        const last3=allAttEntries.slice(0,3);
+        if(last3.every(e=>e.attendance==='absent_excused'||e.attendance==='absent_unexcused')){
+          alerts.push({type:'danger', msg:`⛔ ${sName} — соңғы 3 сабаққа қатарынан келмеді`});
+        }
+      }
+    });
+
+    // 8) 📔 Журналды толтырмаған мұғалім — бүгінгі сабақ біткен уақыттан 3 сағат
+    //    өтсе, қай мұғалім/қай топ екені көрсетіліп шығады
+    const nowMinutes=now.getHours()*60+now.getMinutes();
+    DATA.lessons.filter(l=>Number(l.day)===today).forEach(l=>{
+      if(!l.end_time) return;
+      const[eh,em]=l.end_time.split(':').map(Number);
+      const endMinutes=eh*60+em;
+      if(nowMinutes-endMinutes>=180 && !isLessonFullyJournaled(l.group_id, todayStr)){
+        const g=DATA.groups.find(g=>g.id===l.group_id);
+        const t=DATA.teachers.find(t=>t.id===l.teacher_id);
+        alerts.push({type:'danger', msg:`📔 ${t?(t.name+' '+(t.surname||'')).trim():'—'} — «${g?g.name:'—'}» тобының журналын толтырмаған`});
+      }
+    });
+
+    // 9) 👨‍🏫 Жүктемесі/тобы жоқ мұғалім (бір ескерту ретінде)
+    DATA.teachers.forEach(t=>{
+      if(!DATA.groups.some(g=>g.teacher_id===t.id)){
+        alerts.push({type:'info', msg:`👨‍🏫 ${t.name} ${t.surname||''} — жүктемесі (тобы) жоқ`});
+      }
+    });
+
+    // 10) 🕐 Уақыты қойылмаған сабақтар
+    DATA.lessons.filter(l=>!l.start_time || !l.end_time).forEach(l=>{
+      const g=DATA.groups.find(g=>g.id===l.group_id);
+      alerts.push({type:'warning', msg:`🕐 «${g?g.name:'—'}» тобының сабағында уақыт қойылмаған`});
+    });
+
+    // 11) 👥 Бос топ — оқушысы жоқ топ
+    DATA.groups.forEach(g=>{
+      if(!DATA.student_groups.some(sg=>sg.group_id===g.id)){
+        alerts.push({type:'info', msg:`👥 «${g.name}» тобында оқушы жоқ`});
+      }
+    });
+
     aEl.innerHTML=alerts.length?alerts.map(a=>`<div class="alert-item ${a.type}">${a.msg}</div>`).join(''):'<div class="empty-state"><div class="empty-icon">✅</div><p>Ескертулер жоқ</p></div>';
   }
 
@@ -3438,6 +3608,38 @@ function calcProgressJournal(studentId, minLessons=3, groupId=null){
   const totalW = parts.reduce((a,p)=>a+p.w,0);
   const prog = Math.max(0, Math.min(100, Math.round(parts.reduce((a,p)=>a+p.v*p.w,0)/totalW)));
   return { prog, attAvg: attAvg!=null?Math.round(attAvg):null, lessons: entries.length };
+}
+
+// calcProgressJournal-дың мерзім бойынша нұсқасы (бастапқы/соңғы дата аралығымен
+// шектелген) — дашбордтағы "рейтингі күрт төмендеген оқушылар" ескертуі үшін.
+// Кемінде 2 жазба болмаса null қайтарады (кездейсоқ 1 жазбамен алаң көтермеу үшін).
+function progressForDateRange(studentId, start, end){
+  const entries = DATA.journal_entries.filter(je=>je.student_id===studentId && je.attendance && je.lesson_date>=start && je.lesson_date<=end);
+  if(entries.length < 2) return null;
+
+  const pcts = entries.map(attendancePercent).filter(p=>p!=null);
+  const attAvg = pcts.length ? pcts.reduce((a,b)=>a+b,0)/pcts.length : null;
+
+  const acts = entries.filter(e=>e.activity!=null && e.attendance!=='absent_excused' && e.attendance!=='absent_unexcused').map(e=>Number(e.activity));
+  const actAvg = acts.length ? acts.reduce((a,b)=>a+b,0)/acts.length : null;
+
+  const hws = entries.filter(e=>e.homework!=null).map(e=>Number(e.homework));
+  const hwAvg = hws.length ? hws.reduce((a,b)=>a+b,0)/hws.length : null;
+
+  const mocks = entries.filter(e=>e.mock_score!=null && e.mock_total!=null && Number(e.mock_total)>0);
+  const mockAvgScore = mocks.length ? mocks.reduce((a,e)=>a+Number(e.mock_score),0)/mocks.length : null;
+  const mockAvgTotal = mocks.length ? mocks.reduce((a,e)=>a+Number(e.mock_total),0)/mocks.length : null;
+  const mockPct = (mockAvgScore!=null && mockAvgTotal>0) ? (mockAvgScore/mockAvgTotal*100) : null;
+
+  const parts=[];
+  if(attAvg!=null)  parts.push({v:attAvg,        w:0.10});
+  if(actAvg!=null)  parts.push({v:actAvg/5*100,  w:0.30});
+  if(hwAvg!=null)   parts.push({v:hwAvg/10*100,  w:0.30});
+  if(mockPct!=null) parts.push({v:mockPct,       w:0.30});
+  if(!parts.length) return null;
+
+  const totalW2 = parts.reduce((a,p)=>a+p.w,0);
+  return Math.max(0, Math.min(100, Math.round(parts.reduce((a,p)=>a+p.v*p.w,0)/totalW2)));
 }
 
 // Course name (lowercased) for a group, used to guess the mock-test max score.
