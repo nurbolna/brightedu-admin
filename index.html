@@ -317,11 +317,36 @@ details[open] summary::before{content:'▾ '}
         <button class="theme-toggle" onclick="toggleTheme()" id="loginThemeBtn">☀️ Күндіз</button>
       </div>
     </div>
-    <div class="login-sub">Логин мен паролді енгізіңіз</div>
-    <div class="form-group"><label>Логин</label><input type="text" id="loginInput" placeholder="логин" /></div>
-    <div class="form-group"><label>Пароль</label><input type="password" id="passInput" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" /></div>
-    <button class="btn-primary" onclick="doLogin()">Кіру →</button>
-    <div class="login-error" id="loginError">Логин немесе пароль қате!</div>
+    <!-- ШАГ 1: логин+пароль -->
+    <div id="loginStep1">
+      <div class="login-sub">Логин мен паролді енгізіңіз</div>
+      <div class="form-group"><label>Логин</label><input type="text" id="loginInput" placeholder="логин" /></div>
+      <div class="form-group"><label>Пароль</label><input type="password" id="passInput" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+      <button class="btn-primary" id="loginBtn" onclick="doLogin()">Кіру →</button>
+      <div class="login-error" id="loginError">Логин немесе пароль қате!</div>
+    </div>
+
+    <!-- ШАГ 2: Telegram OTP код -->
+    <div id="loginStep2" style="display:none">
+      <div class="login-sub">Telegram-ға жіберілген 6 таңбалы кодты енгізіңіз</div>
+      <div class="form-group"><label>Код</label><input type="text" inputmode="numeric" maxlength="6" id="otpInput" placeholder="000000" onkeydown="if(event.key==='Enter')doVerifyOtp()" /></div>
+      <button class="btn-primary" onclick="doVerifyOtp()">Растау →</button>
+      <div style="display:flex;justify-content:space-between;margin-top:12px">
+        <span class="sw-link" style="cursor:pointer;color:var(--text2);font-size:13px" onclick="backToStep1()">← Артқа</span>
+        <span class="sw-link" style="cursor:pointer;color:var(--accent);font-size:13px" onclick="doResendOtp()">🔄 Кодты қайта жіберу</span>
+      </div>
+      <div class="login-error" id="otpError">Код қате немесе мерзімі өтті!</div>
+    </div>
+
+    <!-- ШАГ 2b: Telegram байланыстырылмаған -->
+    <div id="loginStepNeedsTelegram" style="display:none">
+      <div class="login-sub">Қауіпсіздік үшін Telegram байланыстыру қажет</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">Ботты ашып, <b>START</b> батырмасын басыңыз. Одан кейін қайта кіріп көріңіз.</p>
+      <a id="tgLinkBtn" href="#" target="_blank" class="btn-primary" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box">✈ Telegram-да ашу →</a>
+      <div style="margin-top:12px;text-align:center">
+        <span class="sw-link" style="cursor:pointer;color:var(--text2);font-size:13px" onclick="backToStep1()">← Артқа</span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -958,11 +983,8 @@ details[open] summary::before{content:'▾ '}
 const SB_URL = 'https://hslcdmtlnribxpnlmkxg.supabase.co';
 const SB_KEY = 'sb_publishable_bsFB2bPrgFykLSXdKtL28A_bV5K181Y';
 
-// Жергілікті аккаунттар
-const LOCAL_ACCOUNTS = [
-  { login:'director', pass:'009900', role:'director', name:'Директор' },
-  { login:'admin',    pass:'Qwerty123',  role:'admin',    name:'Администратор' }
-];
+const EDGE_URL = SB_URL + '/functions/v1';
+const TG_BOT_USERNAME = 'brightedu_staff_bot';
 
 let sb = null;
 let currentUser = null; // { email, role, name }
@@ -1022,36 +1044,135 @@ sb = window.supabase.createClient(SB_URL, SB_KEY);
 // ================================================================
 // AUTH
 // ================================================================
+let pendingUser = null;   // логин+пароль тексерілген, OTP күтіп тұрған қолданушы
+let pendingPhone = null;  // OTP жіберілген телефон
+
 async function doLogin(){
   const login = document.getElementById('loginInput').value.trim();
   const pass  = document.getElementById('passInput').value.trim();
   const err   = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
   err.style.display = 'none';
+  if(!login || !pass){ err.textContent='Логин мен парольді енгізіңіз!'; err.style.display='block'; return; }
 
-  // Директор / Админ тексеру
-  const localUser = LOCAL_ACCOUNTS.find(u => u.login === login && u.pass === pass);
-  if(localUser){
-    currentUser = { login: localUser.login, role: localUser.role, name: localUser.name };
-    saveSession();
-    startApp();
-    return;
-  }
-
-  // Мұғалім тексеру (teachers кестесінен)
+  btn.disabled = true; btn.textContent = 'Тексерілуде...';
   try{
+    // Директор / Админ тексеру (staff_accounts кестесінен)
+    const {data:staffRows} = await sb.from('staff_accounts').select('*').eq('login', login);
+    const staff = staffRows && staffRows[0];
+    if(staff && staff.pass === pass){
+      pendingUser = { login: staff.login, role: staff.role, name: staff.name };
+      pendingPhone = staff.phone;
+      await sendOtpAndShowStep(login);
+      return;
+    }
+
+    // Мұғалім тексеру (teachers кестесінен)
     const {data:teachers} = await sb.from('teachers').select('*').eq('email', login);
     if(teachers && teachers.length>0){
-      const t=teachers[0];
-      if(t.pass && t.pass===pass){
-        currentUser={ login, role:'teacher', name:t.name+' '+(t.surname||''), teacherId:t.id };
-        saveSession();
-        startApp();
+      const t = teachers[0];
+      if(t.pass && t.pass === pass){
+        pendingUser = { login, role:'teacher', name:t.name+' '+(t.surname||''), teacherId:t.id };
+        pendingPhone = t.phone;
+        await sendOtpAndShowStep(login);
         return;
       }
     }
-  }catch(e){}
 
-  err.style.display = 'block';
+    err.textContent = 'Логин немесе пароль қате!';
+    err.style.display = 'block';
+  }catch(e){
+    err.textContent = 'Қате шықты, қайталап көріңіз.';
+    err.style.display = 'block';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Кіру →';
+  }
+}
+
+async function sendOtpAndShowStep(login){
+  const err = document.getElementById('loginError');
+  try{
+    const r = await fetch(EDGE_URL + '/send-otp', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ login })
+    });
+    const res = await r.json();
+
+    if(res.error){
+      err.textContent = 'Қате шықты, қайталап көріңіз.';
+      err.style.display = 'block';
+      return;
+    }
+
+    if(res.needs_telegram){
+      showLoginStep('needsTelegram');
+      const phoneDigits = (pendingPhone||'').replace(/\D/g,'');
+      const link = document.getElementById('tgLinkBtn');
+      link.href = phoneDigits
+        ? `https://t.me/${TG_BOT_USERNAME}?start=${phoneDigits}`
+        : `https://t.me/${TG_BOT_USERNAME}`;
+      return;
+    }
+
+    showLoginStep('otp');
+  }catch(e){
+    err.textContent = 'Қате шықты, қайталап көріңіз.';
+    err.style.display = 'block';
+  }
+}
+
+async function doVerifyOtp(){
+  const code = document.getElementById('otpInput').value.trim();
+  const err  = document.getElementById('otpError');
+  err.style.display = 'none';
+  if(!code || code.length !== 6){ err.textContent='6 таңбалы кодты толық енгізіңіз!'; err.style.display='block'; return; }
+  if(!pendingUser || !pendingPhone){ backToStep1(); return; }
+
+  try{
+    const now = new Date().toISOString();
+    const {data} = await sb.from('otp_codes')
+      .select('*').eq('phone', pendingPhone).eq('code', code).eq('purpose','login')
+      .eq('used', false).gte('expires_at', now).maybeSingle();
+
+    if(!data){
+      err.textContent = 'Код қате немесе мерзімі өтті!';
+      err.style.display = 'block';
+      return;
+    }
+
+    await sb.from('otp_codes').update({used:true}).eq('id', data.id);
+
+    currentUser = pendingUser;
+    saveSession();
+    pendingUser = null; pendingPhone = null;
+    startApp();
+  }catch(e){
+    err.textContent = 'Қате шықты, қайталап көріңіз.';
+    err.style.display = 'block';
+  }
+}
+
+async function doResendOtp(){
+  if(!pendingUser) return;
+  await sendOtpAndShowStep(pendingUser.login);
+}
+
+function showLoginStep(step){
+  document.getElementById('loginStep1').style.display = step==='login' ? 'block' : 'none';
+  document.getElementById('loginStep2').style.display = step==='otp' ? 'block' : 'none';
+  document.getElementById('loginStepNeedsTelegram').style.display = step==='needsTelegram' ? 'block' : 'none';
+  if(step==='otp'){
+    document.getElementById('otpInput').value = '';
+    document.getElementById('otpError').style.display = 'none';
+    setTimeout(()=>document.getElementById('otpInput').focus(), 50);
+  }
+}
+
+function backToStep1(){
+  pendingUser = null; pendingPhone = null;
+  document.getElementById('passInput').value = '';
+  showLoginStep('login');
 }
 
 function saveSession(){
@@ -1075,11 +1196,14 @@ function checkSession(){
 
 function logout(){
   currentUser = null;
+  pendingUser = null;
+  pendingPhone = null;
   localStorage.removeItem('academy_session');
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginPage').style.display = 'flex';
   document.getElementById('loginInput').value = '';
   document.getElementById('passInput').value = '';
+  showLoginStep('login');
 }
 
 function startApp(){
