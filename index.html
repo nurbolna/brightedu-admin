@@ -437,7 +437,8 @@ details[open] summary::before{content:'▾ '}
         </div>
 
         <div id="taskStatusFilters" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"></div>
-        <div id="taskAssigneeFilters" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"></div>
+        <div id="taskAssigneeFilters" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"></div>
+        <div id="taskDueFilters" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"></div>
 
         <div class="card" style="padding:6px 0"><div id="tasksList"></div></div>
       </div>
@@ -1053,6 +1054,7 @@ let DATA = {
 let taskView = 'active';        // 'active' | 'archive'
 let taskStatusFilter = '';      // '' | 'todo' | 'in_progress'
 let taskAssigneeFilter = '';    // '' | director login | 'all'
+let taskDueFilter = '';         // '' | 'overdue' | 'today' | 'soon3' | 'week' | 'none'
 let editingTaskId = null;
 let expandedTasks = new Set();  // қай негізгі тапсырмалардың subtask тізімі ашық тұрғанын сақтайды
 let subtaskParentId = null;
@@ -1668,12 +1670,26 @@ function taskAssigneeColor(login){
   return idx===1 ? 'var(--accent2)' : 'var(--accent)';
 }
 
+function taskDueCategory(t){
+  if(!t.due_date) return 'none';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = parseLocalDate(t.due_date);
+  const diff = Math.floor((d-today)/(1000*60*60*24));
+  if(diff<0) return 'overdue';
+  if(diff===0) return 'today';
+  if(diff<=3) return 'soon3';
+  if(diff<=7) return 'week';
+  return 'later';
+}
+function setTaskDueFilter(v){ taskDueFilter = v; renderTasks(); }
+
 function renderTaskFilters(){
   const statusWrap = document.getElementById('taskStatusFilters');
   const assigneeWrap = document.getElementById('taskAssigneeFilters');
-  if(!statusWrap || !assigneeWrap) return;
+  const dueWrap = document.getElementById('taskDueFilters');
+  if(!statusWrap || !assigneeWrap || !dueWrap) return;
 
-  if(taskView==='archive'){ statusWrap.innerHTML=''; }
+  if(taskView==='archive'){ statusWrap.innerHTML=''; dueWrap.innerHTML=''; }
   else{
     const activeTasks = DATA.tasks.filter(t=>t.status!=='done');
     const counts = { '':activeTasks.length, todo:activeTasks.filter(t=>t.status==='todo').length, in_progress:activeTasks.filter(t=>t.status==='in_progress').length };
@@ -1681,6 +1697,30 @@ function renderTaskFilters(){
     statusWrap.innerHTML = chips.map(([val,label])=>{
       const active = taskStatusFilter===val;
       return `<button class="btn btn-sm ${active?'btn-blue':'btn-ghost'}" onclick="setTaskStatusFilter('${val}')">${label} · ${counts[val]}</button>`;
+    }).join('');
+
+    const cats = activeTasks.map(taskDueCategory);
+    const dueCounts = {
+      overdue: cats.filter(c=>c==='overdue').length,
+      today: cats.filter(c=>c==='today').length,
+      soon3: cats.filter(c=>c==='overdue'||c==='today'||c==='soon3').length,
+      week: cats.filter(c=>c==='overdue'||c==='today'||c==='soon3'||c==='week').length,
+      none: cats.filter(c=>c==='none').length
+    };
+    const dueChips = [
+      ['', '📅 Барлығы', activeTasks.length],
+      ['overdue', '❌ Мерзімі өткен', dueCounts.overdue],
+      ['today', '⏳ Бүгін', dueCounts.today],
+      ['soon3', '3 күнге дейін', dueCounts.soon3],
+      ['week', '1 аптаға дейін', dueCounts.week],
+      ['none', '➖ Мерзімсіз', dueCounts.none]
+    ];
+    dueWrap.innerHTML = dueChips.map(([val,label,cnt])=>{
+      const active = taskDueFilter===val;
+      const danger = val==='overdue' && cnt>0;
+      const cls = active ? 'btn-blue' : (danger ? '' : 'btn-ghost');
+      const style = danger && !active ? 'style="background:rgba(248,113,113,0.12);color:var(--red);border:none"' : '';
+      return `<button class="btn btn-sm ${cls}" ${style} onclick="setTaskDueFilter('${val}')">${label} · ${cnt}</button>`;
     }).join('');
   }
 
@@ -1718,6 +1758,17 @@ function renderSubtaskBlock(taskId, subs){
     </div>`;
 }
 
+function taskDueInfo(due_date){
+  if(!due_date) return { text:'Мерзімі көрсетілмеген', color:'var(--text2)' };
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = parseLocalDate(due_date);
+  const diff = Math.floor((d-today)/(1000*60*60*24));
+  if(diff<0) return { text:`❌ Мерзімі ${Math.abs(diff)} күн бұрын өтті — ${due_date}`, color:'var(--red)' };
+  if(diff===0) return { text:`⏳ Бүгін мерзімі — ${due_date}`, color:'var(--yellow)' };
+  if(diff<=3) return { text:`${diff} күн қалды — ${due_date}`, color:'var(--yellow)' };
+  return { text:`${diff} күн қалды — ${due_date}`, color:'var(--text2)' };
+}
+
 function renderTasks(){
   renderTaskFilters();
   const wrap = document.getElementById('tasksList');
@@ -1725,6 +1776,12 @@ function renderTasks(){
 
   let list = DATA.tasks.filter(t => taskView==='archive' ? t.status==='done' : t.status!=='done');
   if(taskView==='active' && taskStatusFilter) list = list.filter(t=>t.status===taskStatusFilter);
+  if(taskView==='active' && taskDueFilter) list = list.filter(t=>{
+    const c = taskDueCategory(t);
+    if(taskDueFilter==='soon3') return c==='overdue'||c==='today'||c==='soon3';
+    if(taskDueFilter==='week') return c==='overdue'||c==='today'||c==='soon3'||c==='week';
+    return c===taskDueFilter;
+  });
   if(taskAssigneeFilter) list = list.filter(t=>{
     const subs = getSubtasks(t.id);
     if(subs.length) return subs.some(s=>s.assigned_to===taskAssigneeFilter);
@@ -1740,20 +1797,18 @@ function renderTasks(){
     return;
   }
 
-  const today = localDateStr(new Date());
   wrap.innerHTML = list.map(t=>{
-    const overdue = taskView==='active' && t.due_date && t.due_date<today;
     const statusLabel = t.status==='todo' ? `<span class="badge" style="background:var(--surface2);color:var(--text2);cursor:pointer" onclick="toggleTaskStatus('${t.id}')" title="Басу арқылы «Орындалуда» ету">⚪ Басталмаған</span>`
       : t.status==='in_progress' ? `<span class="badge badge-blue" style="cursor:pointer" onclick="toggleTaskStatus('${t.id}')" title="Басу арқылы «Басталмаған» ету">🔵 Орындалуда</span>`
       : '<span class="badge badge-green">✅ Дайын</span>';
-    const dueText = t.due_date ? `${overdue?'<span style="color:var(--red)">❌ Мерзімі өтті — ':''}${t.due_date}${overdue?'</span>':''}` : '';
+    const dueInfo = taskDueInfo(t.due_date);
     const subs = taskView==='active' ? getSubtasks(t.id) : [];
     const prog = taskProgress(t.id);
     const hasSubs = prog.total>0;
     const progLine = hasSubs ? ` · ${prog.done}/${prog.total} кіші тапсырма дайын` : '';
     const metaLine = taskView==='archive'
       ? `Дайын болды${t.completed_at ? ' — '+localDateStr(new Date(t.completed_at)) : ''}`
-      : ((dueText || 'Мерзімі көрсетілмеген') + progLine);
+      : `<span style="color:${dueInfo.color}">${dueInfo.text}</span>${progLine}`;
     const isExpanded = expandedTasks.has(t.id);
 
     return `
