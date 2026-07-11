@@ -1128,18 +1128,23 @@ details[open] summary::before{content:'▾ '}
         </select>
       </div>
     </div>
+    <div class="form-group">
+      <label>Причина неквала</label>
+      <div style="display:flex;gap:8px">
+        <select id="leadDisqualReason" style="flex:1"><option value="">—</option></select>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="addDisqualReasonPrompt()">+ Жаңа себеп</button>
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group"><label>Эксперт</label><select id="leadExpert"></select></div>
       <div class="form-group"><label>Выручка (₸)</label><input type="number" id="leadRevenue" /></div>
     </div>
+    <div class="form-group"><label>Причина отказа</label><input type="text" id="leadRejectReason" placeholder="Отказ болса — себебі" /></div>
     <div class="form-group"><label>Ескертпе</label><textarea id="leadNote" rows="2"></textarea></div>
 
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">📋 Қосымша ақпарат (міндетті емес)</div>
-      <div class="form-row">
-        <div class="form-group"><label>Сумма предоплаты (₸)</label><input type="number" id="leadPrepayment" /></div>
-        <div class="form-group"><label>Адрес</label><input type="text" id="leadAddress" /></div>
-      </div>
+      <div class="form-group"><label>Сумма предоплаты (₸)</label><input type="number" id="leadPrepayment" /></div>
       <div class="form-row">
         <div class="form-group"><label>Школа</label><input type="text" id="leadSchool" /></div>
         <div class="form-group"><label>Класс</label>
@@ -1202,7 +1207,7 @@ let DATA = {
   courses:[], teachers:[], groups:[], students:[], student_groups:[],
   lessons:[], payments:[], holidays:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
-  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[], leads:[]
+  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[], leads:[], lead_disqual_reasons:[]
 };
 let crmView = 'table';           // 'table' | 'board'
 let taskView = 'active';        // 'active' | 'archive'
@@ -1645,6 +1650,10 @@ async function loadAll(){
     const {data:lv}=await sb.from('leads').select('*').order('created_at',{ascending:false});
     if(lv) DATA.leads=lv;
   }catch(e){ DATA.leads=DATA.leads||[]; }
+  try{
+    const {data:dr}=await sb.from('lead_disqual_reasons').select('*').order('name',{ascending:true});
+    if(dr) DATA.lead_disqual_reasons=dr;
+  }catch(e){ DATA.lead_disqual_reasons=DATA.lead_disqual_reasons||[]; }
   try{
     const {data:dirs}=await sb.from('staff_accounts').select('login,name').eq('role','director');
     if(dirs) DATA.directors=dirs;
@@ -3604,6 +3613,27 @@ function crmCardClick(ev, leadId){
   openLeadModal(leadId);
 }
 
+function populateDisqualReasonSelect(selected){
+  const sel = document.getElementById('leadDisqualReason');
+  sel.innerHTML = '<option value="">—</option>' + DATA.lead_disqual_reasons.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
+  sel.value = selected || '';
+}
+
+async function addDisqualReasonPrompt(){
+  const name = (prompt('Жаңа неквал себебін жазыңыз:')||'').trim();
+  if(!name) return;
+  const exists = DATA.lead_disqual_reasons.find(r=>r.name.toLowerCase()===name.toLowerCase());
+  if(exists){ document.getElementById('leadDisqualReason').value = exists.name; return; }
+  try{
+    const {data,error} = await sb.from('lead_disqual_reasons').insert({name}).select().single();
+    if(error) throw error;
+    DATA.lead_disqual_reasons.push(data);
+    DATA.lead_disqual_reasons.sort((a,b)=>a.name.localeCompare(b.name));
+    populateDisqualReasonSelect(data.name);
+    toast('✅ Себеп қосылды');
+  }catch(e){ alert('❌ Себеп сақталмады! Қате: '+e.message); }
+}
+
 function openLeadModal(id){
   populateCrmFilters();
   const statusSel = document.getElementById('leadStatus');
@@ -3620,11 +3650,12 @@ function openLeadModal(id){
     document.getElementById('leadTraffic').value=l.traffic||'organic';
     document.getElementById('leadStatus').value=l.status||CRM_STATUSES[0].name;
     document.getElementById('leadQual').value=l.qual||'';
+    populateDisqualReasonSelect(l.disqual_reason||'');
     document.getElementById('leadExpert').value=l.expert||'';
     document.getElementById('leadRevenue').value=l.revenue||'';
+    document.getElementById('leadRejectReason').value=l.reject_reason||'';
     document.getElementById('leadNote').value=l.note||'';
     document.getElementById('leadPrepayment').value=l.prepayment_amount||'';
-    document.getElementById('leadAddress').value=l.address||'';
     document.getElementById('leadSchool').value=l.school||'';
     document.getElementById('leadGrade').value=l.grade||'';
     document.getElementById('leadEnglishLevel').value=l.english_level||'';
@@ -3640,11 +3671,12 @@ function openLeadModal(id){
     document.getElementById('leadTraffic').value='organic';
     document.getElementById('leadStatus').value=CRM_STATUSES[0].name;
     document.getElementById('leadQual').value='';
+    populateDisqualReasonSelect('');
     document.getElementById('leadExpert').value='';
     document.getElementById('leadRevenue').value='';
+    document.getElementById('leadRejectReason').value='';
     document.getElementById('leadNote').value='';
     document.getElementById('leadPrepayment').value='';
-    document.getElementById('leadAddress').value='';
     document.getElementById('leadSchool').value='';
     document.getElementById('leadGrade').value='';
     document.getElementById('leadEnglishLevel').value='';
@@ -3666,11 +3698,12 @@ async function saveLead(){
     traffic: document.getElementById('leadTraffic').value,
     status: document.getElementById('leadStatus').value,
     qual: document.getElementById('leadQual').value,
+    disqual_reason: document.getElementById('leadDisqualReason').value || null,
     expert: document.getElementById('leadExpert').value.trim(),
     revenue: Number(document.getElementById('leadRevenue').value)||0,
+    reject_reason: document.getElementById('leadRejectReason').value.trim() || null,
     note: document.getElementById('leadNote').value.trim(),
     prepayment_amount: document.getElementById('leadPrepayment').value ? Number(document.getElementById('leadPrepayment').value) : null,
-    address: document.getElementById('leadAddress').value.trim() || null,
     school: document.getElementById('leadSchool').value.trim() || null,
     grade: document.getElementById('leadGrade').value || null,
     english_level: document.getElementById('leadEnglishLevel').value || null,
@@ -4639,6 +4672,19 @@ create table if not exists unit_econ_settings(
   unique(month, year)
 );
 
+-- Лидтің "неквал" себебі — таңдау опциялары (пайдаланушылар жаңа себеп қоса алады, тізім ортақ сақталады).
+create table if not exists lead_disqual_reasons(
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz default now()
+);
+insert into lead_disqual_reasons(name) values
+  ('игнор'),('Нечаянно оставил'),('Уже работает с другими'),('Номер фэйк'),
+  ('Нет потребности'),('Слишком рано(8-9 класс)'),('временно нет потребности'),
+  ('нет бабок'),('далбаеб'),('Дубль'),('Магистратура'),('Родители отказались'),
+  ('не явка на консу')
+on conflict (name) do nothing;
+
 -- 2. Alter existing tables (add missing columns):
 alter table teachers add column if not exists hourly_rate numeric;
 alter table teachers add column if not exists email text;
@@ -4654,11 +4700,14 @@ alter table students add column if not exists sales_manager text; -- сатқа�
 alter table students add column if not exists marketing_note text; -- CRM ескертпесі (мыс. алдын ала төлем/рассрочка жағдайы)
 alter table payments add column if not exists cash_account text default 'Kaspi Pay'; -- касса түрі (қазір тек Kaspi Pay)
 alter table unit_econ_settings add column if not exists planned_items jsonb; -- бұрын тек planned_expense (жалғыз сан) болған болса, осы баған жетіспей қалуы мүмкін
+alter table leads add column if not exists disqual_reason text; -- "Причина неквала" — lead_disqual_reasons ішінен таңдалады
+alter table leads add column if not exists reject_reason text; -- "Причина отказа" — еркін мәтін
+alter table leads drop column if exists address; -- форматтан алынып тасталды
 -- pay_type бағаны бұрыннан бар, енді мәндер: 'normal' | 'installment_12' | 'installment_24'
 
 -- 3. RLS Policies:
 do $$ declare t text; begin
-  foreach t in array array['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance','salary_logs','expenses','journal_entries','unit_econ_settings']
+  foreach t in array array['courses','teachers','groups','students','lessons','payments','grades','holidays','achievements','attendance','salary_logs','expenses','journal_entries','unit_econ_settings','leads','lead_disqual_reasons']
   loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "allow all" on %I', t);
