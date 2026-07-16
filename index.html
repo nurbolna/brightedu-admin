@@ -1244,6 +1244,36 @@ let DATA = {
   journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[], leads:[], lead_disqual_reasons:[]
 };
 let crmView = 'table';           // 'table' | 'board'
+
+// ================================================================
+// Fix: STALE-WHILE-REVALIDATE кэш — бет жаңартқанда пайдаланушы бос
+// экранды/спиннерді ұзақ күтпес үшін, алдыңғы сеанстан қалған деректерді
+// дереу localStorage-тен оқып көрсетеміз, содан кейін фонда серверден
+// жаңасын сұрап, келгенде ауыстырамыз. Пайдаланушыға байланысты бөлек
+// кілт қолданылады — ортақ құрылғыда деректер араласпасын үшін.
+// ================================================================
+function dataCacheKey(){
+  return 'academy_data_cache_' + (currentUser?.login || 'guest');
+}
+function loadDataCache(){
+  try{
+    const raw = localStorage.getItem(dataCacheKey());
+    if(!raw) return false;
+    const cached = JSON.parse(raw);
+    if(!cached || typeof cached !== 'object') return false;
+    DATA = Object.assign({}, DATA, cached);
+    return true;
+  }catch(e){ return false; }
+}
+function saveDataCache(){
+  try{
+    localStorage.setItem(dataCacheKey(), JSON.stringify(DATA));
+  }catch(e){
+    // localStorage толып қалса (quota) немесе басқа қате болса — үнсіз
+    // елемей өтеміз, кэш жоқ болғанмен қолданба DB-тен әдеттегідей жұмыс істей береді.
+  }
+}
+
 let taskView = 'active';        // 'active' | 'archive'
 let taskStatusFilter = '';      // '' | 'todo' | 'in_progress'
 let taskAssigneeFilter = '';    // '' | director login | 'all'
@@ -1388,6 +1418,7 @@ async function doLogin(){
         return;
       }
       currentUser = { login: staff.login, role: staff.role, name: staff.name };
+      currentUser._hasTelegram = true; // telegram_chat_id жоғарыда staff-тен тексерілді
       saveSession();
       startApp();
       return;
@@ -1406,6 +1437,7 @@ async function doLogin(){
           return;
         }
         currentUser = { login: normalizedLogin, role:'teacher', name:t.name+' '+(t.surname||''), teacherId:t.id };
+        currentUser._hasTelegram = true; // telegram_chat_id жоғарыда teachers-тен тексерілді
         saveSession();
         startApp();
         return;
@@ -1520,6 +1552,7 @@ async function retryAfterTelegramLink(){
 
     if(resp.ok && result.ok){
       currentUser = pendingUser;
+      currentUser._hasTelegram = true; // Telegram жаңа ғана расталды
       saveSession();
       pendingUser = null; pendingPhone = null;
       savePending();
@@ -1580,6 +1613,10 @@ async function checkSession(){
     }
 
     currentUser = u;
+    // Fix: setupUI() бұрын telegram_chat_id-ды ТАҒЫ БІР рет DB-тен сұрайтын —
+    // енді жоғарыдағы сұраныстың нәтижесін бірден пайдаланамыз, қайталама
+    // сұраныс жасамаймыз.
+    currentUser._hasTelegram = true;
     startApp();
     return true;
   }catch(e){
@@ -1589,6 +1626,7 @@ async function checkSession(){
 }
 
 function logout(){
+  try{ localStorage.removeItem(dataCacheKey()); }catch(e){}
   currentUser = null;
   pendingUser = null;
   pendingPhone = null;
@@ -1605,7 +1643,23 @@ function startApp(){
   document.getElementById('app').style.display = 'block';
   setupUI();
   loadTaskFilters();
-  loadAll().then(restoreLastPage);
+
+  // Fix: кэштелген деректер бар болса, оны бірден рендерлеп көрсетеміз —
+  // пайдаланушы бос/қатқан экранды көрмейді. Сосын loadAll() фонда
+  // серверден нақты деректерді сұрап, келгенде экранды өзі жаңартады.
+  const hadCache = loadDataCache();
+  if(hadCache){
+    renderDashboard();
+    updateBadges();
+    populateJournalGroups();
+    populateAnalysisGroups();
+    populateStudentGroupFilter();
+    populateStudentCourseFilter();
+    restoreLastPage();
+    loadAll(); // фондық жаңарту — бетті екінші рет ауыстырмаймыз
+  } else {
+    loadAll().then(restoreLastPage);
+  }
 }
 
 // Беттi жаңартқанда (F5) пайдаланушыны басты бетке емес, тұрған бөлімінде
@@ -1635,15 +1689,21 @@ function setupUI(){
   document.getElementById('uRole').textContent =
     r==='director' ? 'Толық рұқсат' : r==='admin' ? 'Шектеулі рұқсат' : 'Мұғалім рұқсаты';
 
-  // Fix 2: Telegram байланыстыру батырмасын DB-тен тексеру
-  (async()=>{
-    try{
-      const table = r === 'teacher' ? 'teachers' : 'staff_accounts';
-      const field  = r === 'teacher' ? 'phone' : 'login';
-      const {data} = await sb.from(table).select('telegram_chat_id').eq(field, currentUser.login).maybeSingle();
-      updateTelegramBtn(!!(data && data.telegram_chat_id));
-    }catch(e){ updateTelegramBtn(true); /* қате болса батырманы жасырамыз */ }
-  })();
+  // Fix: telegram_chat_id checkSession()/login кезінде тексерілсе, оны
+  // қайта DB-тен сұрамай, дереу пайдаланамыз — бұл әр бет жаңартқанда
+  // болатын қосымша сұранысты жояды.
+  if(currentUser._hasTelegram){
+    updateTelegramBtn(true);
+  } else {
+    (async()=>{
+      try{
+        const table = r === 'teacher' ? 'teachers' : 'staff_accounts';
+        const field  = r === 'teacher' ? 'phone' : 'login';
+        const {data} = await sb.from(table).select('telegram_chat_id').eq(field, currentUser.login).maybeSingle();
+        updateTelegramBtn(!!(data && data.telegram_chat_id));
+      }catch(e){ updateTelegramBtn(true); /* қате болса батырманы жасырамыз */ }
+    })();
+  }
 
   // dir-only: visible only for director
   document.querySelectorAll('.dir-only').forEach(el =>
@@ -1789,52 +1849,91 @@ function renderStudy(){
 // ================================================================
 // LOAD ALL DATA
 // ================================================================
+// Fix: барлық кестелер бұрын ішінара тізбектей (sequential) жүктелетін —
+// әр await келесі сұранысты күтіп тұрғандықтан жалпы жүктелу уақыты
+// (8 сұраныс × ~200-400мс) қосымша 2-3 секундқа созылатын. Енді барлық
+// 19 кесте бір Promise.all ішінде толығымен ПАРАЛЛЕЛЬ сұралады —
+// жалпы уақыт ең баяу бір сұраныстың уақытына тең болады, қосынды емес.
+const LOAD_ALL_SPEC = [
+  {key:'courses',   table:'courses',            order:{col:'created_at',asc:true}},
+  {key:'teachers',  table:'teachers',            order:{col:'created_at',asc:true}},
+  {key:'groups',    table:'groups',              order:{col:'created_at',asc:true}},
+  {key:'students',  table:'students',            order:{col:'created_at',asc:true}},
+  {key:'student_groups', table:'student_groups', order:{col:'created_at',asc:true}},
+  {key:'lessons',   table:'lessons',             order:{col:'created_at',asc:true}},
+  {key:'payments',  table:'payments',            order:{col:'created_at',asc:true}},
+  {key:'holidays',  table:'holidays',            order:{col:'created_at',asc:true}},
+  {key:'achievements', table:'achievements',     order:{col:'created_at',asc:true}},
+  {key:'attendance', table:'attendance',         order:{col:'created_at',asc:true}},
+  {key:'journal_entries', table:'journal_entries', order:{col:'created_at',asc:true}},
+  {key:'salary_logs', table:'salary_logs',       order:{col:'created_at',asc:false}, fallback:[]},
+  {key:'expenses',  table:'expenses',            order:{col:'created_at',asc:false}, fallback:[]},
+  {key:'unit_econ_settings', table:'unit_econ_settings', order:null, fallback:[]},
+  {key:'tasks',     table:'tasks',               order:{col:'created_at',asc:false}, fallback:[]},
+  {key:'subtasks',  table:'task_subtasks',       order:{col:'created_at',asc:true}, fallback:[]},
+  {key:'leads',     table:'leads',               order:{col:'created_at',asc:false}, fallback:'keep'},
+  {key:'lead_disqual_reasons', table:'lead_disqual_reasons', order:{col:'name',asc:true}, fallback:'keep'},
+  {key:'directors', table:'staff_accounts',      order:null, fallback:[], select:'login,name', eq:{col:'role',val:'director'}},
+];
+
 async function loadAll(){
   if(!sb) return;
-  const tables = ['courses','teachers','groups','students','student_groups','lessons','payments','holidays','achievements','attendance','journal_entries'];
-  await Promise.all(tables.map(async t=>{
-    const {data,error}=await sb.from(t).select('*').order('created_at',{ascending:true});
-    if(!error&&data) DATA[t]=data;
-  }));
+  showDataLoading(true);
   try{
-    const {data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false});
-    if(sl) DATA.salary_logs=sl;
-  }catch(e){ DATA.salary_logs=[]; }
-  try{
-    const {data:ex}=await sb.from('expenses').select('*').order('created_at',{ascending:false});
-    if(ex) DATA.expenses=ex;
-  }catch(e){ DATA.expenses=[]; }
-  try{
-    const {data:ue}=await sb.from('unit_econ_settings').select('*');
-    if(ue) DATA.unit_econ_settings=ue;
-  }catch(e){ DATA.unit_econ_settings=[]; }
-  try{
-    const {data:tk}=await sb.from('tasks').select('*').order('created_at',{ascending:false});
-    if(tk) DATA.tasks=tk;
-  }catch(e){ DATA.tasks=[]; }
-  try{
-    const {data:sub}=await sb.from('task_subtasks').select('*').order('created_at',{ascending:true});
-    if(sub) DATA.subtasks=sub;
-  }catch(e){ DATA.subtasks=[]; }
-  try{
-    const {data:lv}=await sb.from('leads').select('*').order('created_at',{ascending:false});
-    if(lv) DATA.leads=lv;
-  }catch(e){ DATA.leads=DATA.leads||[]; }
-  try{
-    const {data:dr}=await sb.from('lead_disqual_reasons').select('*').order('name',{ascending:true});
-    if(dr) DATA.lead_disqual_reasons=dr;
-  }catch(e){ DATA.lead_disqual_reasons=DATA.lead_disqual_reasons||[]; }
-  try{
-    const {data:dirs}=await sb.from('staff_accounts').select('login,name').eq('role','director');
-    if(dirs) DATA.directors=dirs;
-  }catch(e){ DATA.directors=[]; }
+    const results = await Promise.all(LOAD_ALL_SPEC.map(async spec=>{
+      try{
+        let q = sb.from(spec.table).select(spec.select || '*');
+        if(spec.eq) q = q.eq(spec.eq.col, spec.eq.val);
+        if(spec.order) q = q.order(spec.order.col, {ascending: spec.order.asc});
+        const {data, error} = await q;
+        if(error) throw error;
+        return {key: spec.key, data, ok:true};
+      }catch(e){
+        return {key: spec.key, error:e, ok:false, fallback: spec.fallback};
+      }
+    }));
 
+    results.forEach(r=>{
+      if(r.ok){
+        if(r.data) DATA[r.key] = r.data;
+      }else if(r.fallback === 'keep'){
+        DATA[r.key] = DATA[r.key] || [];
+      }else if(r.fallback !== undefined){
+        DATA[r.key] = r.fallback;
+      }
+    });
+  } finally {
+    showDataLoading(false);
+  }
+
+  saveDataCache();
   renderDashboard();
   updateBadges();
   populateJournalGroups();
   populateAnalysisGroups();
   populateStudentGroupFilter();
   populateStudentCourseFilter();
+}
+
+// Жүктелу индикаторы: деректер сұралып жатқанда пайдаланушыға көрсету үшін.
+// #app әлі көрінбейтін болуы мүмкін (алғашқы кіру кезінде), сол жағдайда
+// индикаторды body-ге тіркейміз.
+function showDataLoading(isLoading){
+  let el = document.getElementById('dataLoadingBar');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'dataLoadingBar';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;height:3px;z-index:5000;background:var(--accent);transform-origin:left;transition:transform .25s ease,opacity .25s ease;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  if(isLoading){
+    el.style.opacity = '1';
+    el.style.transform = 'scaleX(0.3)';
+    requestAnimationFrame(()=>{ el.style.transform = 'scaleX(0.75)'; });
+  }else{
+    el.style.transform = 'scaleX(1)';
+    setTimeout(()=>{ el.style.opacity = '0'; }, 200);
+  }
 }
 
 // ================================================================
