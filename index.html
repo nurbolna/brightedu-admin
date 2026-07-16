@@ -1105,7 +1105,7 @@ details[open] summary::before{content:'▾ '}
     <input type="hidden" id="leadId" />
     <div class="form-row">
       <div class="form-group"><label>Аты *</label><input type="text" id="leadName" /></div>
-      <div class="form-group"><label>Whatsapp</label><input type="text" id="leadWhatsapp" /></div>
+      <div class="form-group"><label>Whatsapp <a href="#" onclick="event.preventDefault();openWaFromInput('leadWhatsapp')" style="color:var(--green);font-weight:600;text-decoration:none;margin-left:6px">💬 Ашу</a></label><input type="text" id="leadWhatsapp" /></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Қала</label><input type="text" id="leadCity" /></div>
@@ -1138,6 +1138,10 @@ details[open] summary::before{content:'▾ '}
     <div class="form-row">
       <div class="form-group"><label>Эксперт</label><select id="leadExpert"></select></div>
       <div class="form-group"><label>Выручка (₸)</label><input type="number" id="leadRevenue" /></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Ата-ана аты</label><input type="text" id="leadParentName" /></div>
+      <div class="form-group"><label>Ата-ана нөмірі <a href="#" onclick="event.preventDefault();openWaFromInput('leadParentPhone')" style="color:var(--green);font-weight:600;text-decoration:none;margin-left:6px">💬 Ашу</a></label><input type="text" id="leadParentPhone" /></div>
     </div>
     <div class="form-group"><label>Причина отказа</label><input type="text" id="leadRejectReason" placeholder="Отказ болса — себебі" /></div>
     <div class="form-group"><label>Ескертпе</label><textarea id="leadNote" rows="2"></textarea></div>
@@ -3212,6 +3216,13 @@ function waLink(phone){
   return digits?`https://wa.me/${digits}`:'';
 }
 
+function openWaFromInput(inputId){
+  const val=document.getElementById(inputId)?.value||'';
+  const link=waLink(val);
+  if(!link){ alert('Нөмір енгізілмеген'); return; }
+  window.open(link,'_blank','noopener');
+}
+
 function showStudentDetail(id){
   const s=DATA.students.find(s=>s.id===id); if(!s)return;
   const sGroups=getStudentGroups(s.id);
@@ -3661,6 +3672,8 @@ function openLeadModal(id){
     document.getElementById('leadExpert').value=l.expert||'';
     document.getElementById('leadRevenue').value=l.revenue||'';
     document.getElementById('leadRejectReason').value=l.reject_reason||'';
+    document.getElementById('leadParentName').value=l.parent_name||'';
+    document.getElementById('leadParentPhone').value=l.parent_phone||'';
     document.getElementById('leadNote').value=l.note||'';
     document.getElementById('leadPrepayment').value=l.prepayment_amount||'';
     document.getElementById('leadSchool').value=l.school||'';
@@ -3682,6 +3695,8 @@ function openLeadModal(id){
     document.getElementById('leadExpert').value='';
     document.getElementById('leadRevenue').value='';
     document.getElementById('leadRejectReason').value='';
+    document.getElementById('leadParentName').value='';
+    document.getElementById('leadParentPhone').value='';
     document.getElementById('leadNote').value='';
     document.getElementById('leadPrepayment').value='';
     document.getElementById('leadSchool').value='';
@@ -3709,6 +3724,8 @@ async function saveLead(){
     expert: document.getElementById('leadExpert').value.trim(),
     revenue: Number(document.getElementById('leadRevenue').value)||0,
     reject_reason: document.getElementById('leadRejectReason').value.trim() || null,
+    parent_name: document.getElementById('leadParentName').value.trim() || null,
+    parent_phone: document.getElementById('leadParentPhone').value.trim() || null,
     note: document.getElementById('leadNote').value.trim(),
     prepayment_amount: document.getElementById('leadPrepayment').value ? Number(document.getElementById('leadPrepayment').value) : null,
     school: document.getElementById('leadSchool').value.trim() || null,
@@ -4709,6 +4726,8 @@ alter table payments add column if not exists cash_account text default 'Kaspi P
 alter table unit_econ_settings add column if not exists planned_items jsonb; -- бұрын тек planned_expense (жалғыз сан) болған болса, осы баған жетіспей қалуы мүмкін
 alter table leads add column if not exists disqual_reason text; -- "Причина неквала" — lead_disqual_reasons ішінен таңдалады
 alter table leads add column if not exists reject_reason text; -- "Причина отказа" — еркін мәтін
+alter table leads add column if not exists parent_name text;  -- Ата-ана аты
+alter table leads add column if not exists parent_phone text; -- Ата-ана WhatsApp нөмірі
 alter table leads drop column if exists address; -- форматтан алынып тасталды
 -- pay_type бағаны бұрыннан бар, енді мәндер: 'normal' | 'installment_12' | 'installment_24'
 
