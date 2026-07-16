@@ -3206,6 +3206,12 @@ function toggleAccordion(headerEl){
   if(arrow) arrow.textContent=isOpen?'▾':'▴';
 }
 
+function waLink(phone){
+  if(!phone) return '';
+  const digits=String(phone).replace(/[^0-9]/g,'');
+  return digits?`https://wa.me/${digits}`:'';
+}
+
 function showStudentDetail(id){
   const s=DATA.students.find(s=>s.id===id); if(!s)return;
   const sGroups=getStudentGroups(s.id);
@@ -3217,6 +3223,7 @@ function showStudentDetail(id){
   const role=currentUser?.role;
   document.getElementById('sdTitle').textContent=s.name+' '+(s.surname||'');
   document.getElementById('sdContent').innerHTML=`
+    ${s.phone?`<div style="margin-bottom:12px">${waLink(s.phone)?`<a href="${waLink(s.phone)}" target="_blank" rel="noopener" style="color:var(--green);font-weight:600;text-decoration:none">📱 ${s.phone}</a>`:`<span>📱 ${s.phone}</span>`}</div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Группалар</div><div class="font-bold">${gNames}</div></div>
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Мұғалімдер</div><div class="font-bold">${tNames}</div></div>
@@ -3255,7 +3262,7 @@ function showStudentDetail(id){
         }).join(''):'<div class="text-muted text-sm">Оқушы ешбір топқа тіркелмеген</div>'}
       </div>
     </div>
-    ${s.parent_name?`<div class="text-sm" style="margin-bottom:10px">📞 <b>${s.parent_name}</b> — ${s.parent_phone||''}</div>`:''}
+    ${s.parent_name?`<div class="text-sm" style="margin-bottom:10px">👨‍👩‍👧 <b>${s.parent_name}</b>${s.parent_phone?` — ${waLink(s.parent_phone)?`<a href="${waLink(s.parent_phone)}" target="_blank" rel="noopener" style="color:var(--green);font-weight:600;text-decoration:none">📱 ${s.parent_phone}</a>`:s.parent_phone}`:''}</div>`:''}
     ${(s.lead_source||s.sales_manager||s.marketing_note)?`<div class="card" style="margin:0 0 12px;padding:12px">
       <div class="text-muted text-sm" style="margin-bottom:6px">📈 Сату (CRM)</div>
       ${s.lead_source?`<div class="text-sm" style="margin-bottom:3px">Дереккөз: <b>${s.lead_source}</b></div>`:''}
