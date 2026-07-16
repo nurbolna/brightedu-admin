@@ -352,6 +352,19 @@ details[open] summary::before{content:'▾ '}
     <div id="loginStepNeedsTelegram" style="display:none">
       <div class="login-sub">Қауіпсіздік үшін Telegram байланыстыру қажет</div>
       <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">Ботты ашып, <b>START</b> батырмасын басыңыз (тіл таңдау сұралады). Одан кейін төмендегі "Тексеру" батырмасын басыңыз — бұл бір рет қана керек, келесі жолы тікелей логин+парольмен кіресіз.</p>
+
+      <!-- Fix 1: Телефон жоқ болса ескерту + енгізу өрісі -->
+      <div id="tgPhoneWarning" style="display:none;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--yellow);margin-bottom:12px">
+        ⚠️ Профиліңізде телефон нөмірі жоқ. Бот сізді тану үшін нөміріңізді енгізіңіз:
+      </div>
+      <div id="tgPhoneInputBox" style="display:none;margin-bottom:14px">
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Телефон нөміріңіз</label>
+          <input type="tel" id="tgManualPhone" placeholder="77001234567" style="width:100%;padding:11px 15px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none"/>
+        </div>
+        <button onclick="applyManualPhone()" class="btn-primary" style="width:100%;margin-bottom:10px">Нөмірді растап, QR/сілтемені жасау →</button>
+      </div>
+
       <div id="tgBotNameBox" style="display:none;text-align:center;margin-bottom:14px">
         <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Telegram бот: <b id="tgBotNameText" style="color:var(--text)"></b></div>
         <img id="tgQrImg" src="" alt="Telegram QR" style="width:200px;height:200px;border-radius:10px;background:#fff;padding:8px;box-sizing:border-box" />
@@ -406,6 +419,8 @@ details[open] summary::before{content:'▾ '}
       <div class="sidebar-bottom">
         <button class="theme-toggle lang-toggle" data-full="1" onclick="cycleLang()" id="sidebarLangBtn" style="width:100%;justify-content:center;margin-bottom:8px">🌐 KK</button>
         <button class="theme-toggle" onclick="toggleTheme()" id="sidebarThemeBtn" style="width:100%;justify-content:center">☀️ Күндіз режимі</button>
+        <!-- Fix 2: Telegram байланыстыру батырмасы (тек telegram_chat_id жоқ болса) -->
+        <button id="tgConnectSidebarBtn" onclick="openTgConnectModal()" style="display:none;width:100%;padding:8px;background:rgba(41,182,246,0.12);border:1px solid rgba(41,182,246,0.35);border-radius:10px;color:#29b6f6;font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;cursor:pointer;margin-top:2px">📲 Telegram байланыстыру</button>
         <div class="sidebar-user">
           <div class="user-avatar" id="uAvatar">Д</div>
           <div class="user-info"><div class="user-name" id="uName">—</div><div class="user-role" id="uRole">—</div></div>
@@ -1318,6 +1333,27 @@ const sbMock = window.supabase.createClient(MOCK_SB_URL, MOCK_SB_KEY);
 let pendingUser = null;   // логин+пароль тексерілген, тек Telegram байланысы жоқ қолданушы
 let pendingPhone = null;
 
+function savePending(){
+  try{
+    if(pendingUser){
+      sessionStorage.setItem('pending_user', JSON.stringify(pendingUser));
+      sessionStorage.setItem('pending_phone', pendingPhone||'');
+    } else {
+      sessionStorage.removeItem('pending_user');
+      sessionStorage.removeItem('pending_phone');
+    }
+  }catch(e){}
+}
+function loadPending(){
+  try{
+    const u = sessionStorage.getItem('pending_user');
+    if(!u) return false;
+    pendingUser = JSON.parse(u);
+    pendingPhone = sessionStorage.getItem('pending_phone')||'';
+    return true;
+  }catch(e){ return false; }
+}
+
 async function doLogin(){
   const login = document.getElementById('loginInput').value.trim();
   const pass  = document.getElementById('passInput').value.trim();
@@ -1377,12 +1413,30 @@ function isMobileDevice(){
 }
 
 function showNeedsTelegram(){
+  savePending(); // Fix 5: sessionStorage-ке сақтау
   showLoginStep('needsTelegram');
-  const phoneDigits = (pendingPhone||'').replace(/\D/g,'');
+
+  const phoneDigits = normalizePhone(pendingPhone||'').replace(/\D/g,'');
+
+  // Fix 1: телефон жоқ болса — енгізу өрісін көрсету
+  const phoneWarning = document.getElementById('tgPhoneWarning');
+  const phoneInputBox = document.getElementById('tgPhoneInputBox');
+  if(!phoneDigits){
+    if(phoneWarning) phoneWarning.style.display = 'block';
+    if(phoneInputBox) phoneInputBox.style.display = 'block';
+    document.getElementById('tgLinkBtn').style.display = 'none';
+    document.getElementById('tgBotNameBox').style.display = 'none';
+    return;
+  }
+  if(phoneWarning) phoneWarning.style.display = 'none';
+  if(phoneInputBox) phoneInputBox.style.display = 'none';
+
+  refreshTelegramLink(phoneDigits);
+}
+
+function refreshTelegramLink(phoneDigits){
+  const tgUrl = `https://t.me/${TG_BOT_USERNAME}?start=${phoneDigits}`;
   const link = document.getElementById('tgLinkBtn');
-  const tgUrl = phoneDigits
-    ? `https://t.me/${TG_BOT_USERNAME}?start=${phoneDigits}`
-    : `https://t.me/${TG_BOT_USERNAME}`;
   link.href = tgUrl;
 
   const qrBox = document.getElementById('tgBotNameBox');
@@ -1397,6 +1451,21 @@ function showNeedsTelegram(){
   }
 }
 
+// Fix 1: Қолмен телефон енгізіп, байланыстыру сілтемесін жаңарту
+function applyManualPhone(){
+  const val = document.getElementById('tgManualPhone').value.trim();
+  const digits = normalizePhone(val).replace(/\D/g,'');
+  if(!digits || digits.length < 10){
+    alert('Дұрыс телефон нөмірін енгізіңіз (мыс. 77001234567)');
+    return;
+  }
+  pendingPhone = '+'+digits;
+  savePending();
+  document.getElementById('tgPhoneWarning').style.display = 'none';
+  document.getElementById('tgPhoneInputBox').style.display = 'none';
+  refreshTelegramLink(digits);
+}
+
 // Пайдаланушы ботта /start басып, қайта "Кіру" дегенде осы шақырылады —
 // telegram_chat_id жазылған-жазылмағанын қайта тексереді.
 async function retryAfterTelegramLink(){
@@ -1406,15 +1475,21 @@ async function retryAfterTelegramLink(){
   try{
     const table = pendingUser.role === 'teacher' ? 'teachers' : 'staff_accounts';
     const field = pendingUser.role === 'teacher' ? 'email' : 'login';
-    const {data} = await sb.from(table).select('telegram_chat_id').eq(field, pendingUser.login).maybeSingle();
+    const {data, error} = await sb.from(table).select('telegram_chat_id').eq(field, pendingUser.login).maybeSingle();
+    if(error) throw error;
     if(data && data.telegram_chat_id){
       currentUser = pendingUser;
       saveSession();
       pendingUser = null; pendingPhone = null;
+      savePending(); // Fix 5: sessionStorage тазалау
+      updateTelegramBtn(true); // Fix 2: батырманы жасыру
       startApp();
     } else {
       alert('Әлі байланыстырылмаған. Ботта START батырмасын басқаныңызды тексеріңіз.');
     }
+  } catch(e) {
+    // Fix 4: желі/DB қатесін өңдеу
+    alert('Тексеру кезінде қате шықты: ' + (e?.message || e));
   } finally {
     if(btn){ btn.disabled = false; btn.textContent = '🔄 Тексеру'; }
   }
@@ -1427,6 +1502,7 @@ function showLoginStep(step){
 
 function backToStep1(){
   pendingUser = null; pendingPhone = null;
+  savePending(); // sessionStorage тазалау
   document.getElementById('passInput').value = '';
   showLoginStep('login');
 }
@@ -1435,12 +1511,32 @@ function saveSession(){
   localStorage.setItem('academy_session', JSON.stringify(currentUser));
 }
 
-function checkSession(){
+async function checkSession(){
   try{
     const saved = localStorage.getItem('academy_session');
-    if(!saved) return false;
+    if(!saved){
+      // Fix 5: бет жаңартқанда pendingUser қалпына келтіру
+      if(loadPending()){ showNeedsTelegram(); }
+      return false;
+    }
     const u = JSON.parse(saved);
     if(!u || !u.role || !u.name) return false;
+
+    // Fix 3: DB-тен telegram_chat_id тексеру
+    const table = u.role === 'teacher' ? 'teachers' : 'staff_accounts';
+    const field  = u.role === 'teacher' ? 'email' : 'login';
+    const {data} = await sb.from(table).select('telegram_chat_id,phone').eq(field, u.login).maybeSingle();
+
+    if(!data || !data.telegram_chat_id){
+      // Telegram байланыстырылмаған — логин бетіне қайту
+      localStorage.removeItem('academy_session');
+      pendingUser  = u;
+      pendingPhone = data?.phone || '';
+      savePending();
+      showNeedsTelegram();
+      return false;
+    }
+
     currentUser = u;
     startApp();
     return true;
@@ -1496,6 +1592,16 @@ function setupUI(){
     r==='director' ? 'Директор' : r==='admin' ? 'Администратор' : 'Мұғалім';
   document.getElementById('uRole').textContent =
     r==='director' ? 'Толық рұқсат' : r==='admin' ? 'Шектеулі рұқсат' : 'Мұғалім рұқсаты';
+
+  // Fix 2: Telegram байланыстыру батырмасын DB-тен тексеру
+  (async()=>{
+    try{
+      const table = r === 'teacher' ? 'teachers' : 'staff_accounts';
+      const field  = r === 'teacher' ? 'email' : 'login';
+      const {data} = await sb.from(table).select('telegram_chat_id').eq(field, currentUser.login).maybeSingle();
+      updateTelegramBtn(!!(data && data.telegram_chat_id));
+    }catch(e){ updateTelegramBtn(true); /* қате болса батырманы жасырамыз */ }
+  })();
 
   // dir-only: visible only for director
   document.querySelectorAll('.dir-only').forEach(el =>
@@ -2642,7 +2748,7 @@ function openTeacherModal(t=null){
 }
 async function saveTeacher(){
   const name=document.getElementById('teacherName').value.trim(); if(!name) return alert('Атын енгізіңіз');
-  const row={name,surname:document.getElementById('teacherSurname').value,phone:document.getElementById('teacherPhone').value,subject:document.getElementById('teacherSubject').value,hourly_rate:document.getElementById('teacherRate').value||null,birth_date:document.getElementById('teacherBirth').value||null,email:document.getElementById('teacherEmail').value,pass:document.getElementById('teacherPass').value,note:document.getElementById('teacherNote').value};
+  const row={name,surname:document.getElementById('teacherSurname').value,phone:normalizePhone(document.getElementById('teacherPhone').value.trim()),subject:document.getElementById('teacherSubject').value,hourly_rate:document.getElementById('teacherRate').value||null,birth_date:document.getElementById('teacherBirth').value||null,email:document.getElementById('teacherEmail').value,pass:document.getElementById('teacherPass').value,note:document.getElementById('teacherNote').value};
   const id=document.getElementById('teacherId').value;
   if(id) await sb.from('teachers').update(row).eq('id',id); else await sb.from('teachers').insert({...row,balance:0});
   closeModal('teacherModal'); await loadAll(); renderTeachers(); toast('✅ Сақталды!');
@@ -3232,6 +3338,19 @@ function waLink(phone){
   if(!phone) return '';
   const digits=String(phone).replace(/[^0-9]/g,'');
   return digits?`https://wa.me/${digits}`:'';
+}
+
+// Кез келген форматтағы (87..., 77..., +77..., бос орын/сызықшамен) қазақстандық
+// нөмірді бірыңғай +77XXXXXXXXX форматына келтіреді. Мұғалім/директор
+// телефондары үшін қолданылады — Telegram бот дәл осы форматпен салыстырады.
+function normalizePhone(phone){
+  if(!phone) return phone;
+  let digits=String(phone).replace(/\D/g,'');
+  if(!digits) return phone;
+  if(digits.length===11 && digits[0]==='8') digits='7'+digits.slice(1);
+  if(digits.length===10) digits='7'+digits;
+  if(digits.length!==11 || digits[0]!=='7') return phone; // танылмаған формат — өзгертпей қалдырамыз
+  return '+'+digits;
 }
 
 function openWaFromInput(inputId){
@@ -4675,6 +4794,74 @@ function renderTeacherDashboard(){
   }
 }
 
+
+// ================================================================
+// Fix 2: TELEGRAM БАЙЛАНЫСТЫРУ (кіргеннен кейін)
+// ================================================================
+function updateTelegramBtn(hasLinked){
+  const btn = document.getElementById('tgConnectSidebarBtn');
+  if(btn) btn.style.display = hasLinked ? 'none' : 'block';
+}
+
+async function openTgConnectModal(){
+  if(!currentUser) return;
+  // DB-тен телефон нөмірін алу
+  const table = currentUser.role === 'teacher' ? 'teachers' : 'staff_accounts';
+  const field  = currentUser.role === 'teacher' ? 'email' : 'login';
+  const {data} = await sb.from(table).select('phone,telegram_chat_id').eq(field, currentUser.login).maybeSingle();
+  if(data?.telegram_chat_id){
+    alert('✅ Telegram қазірдің өзінде байланыстырылған!');
+    updateTelegramBtn(true);
+    return;
+  }
+  const phoneDigits = normalizePhone(data?.phone||'').replace(/\D/g,'');
+  const tgUrl = phoneDigits
+    ? `https://t.me/${TG_BOT_USERNAME}?start=${phoneDigits}`
+    : `https://t.me/${TG_BOT_USERNAME}`;
+
+  document.getElementById('tgModalBotName').textContent = '@'+TG_BOT_USERNAME;
+  const modal = document.getElementById('tgConnectModal');
+  modal.style.display = 'flex';
+
+  if(isMobileDevice()){
+    document.getElementById('tgModalQrBox').style.display = 'none';
+    const lnk = document.getElementById('tgModalLinkBtn');
+    lnk.href = tgUrl; lnk.style.display = 'block';
+  } else {
+    document.getElementById('tgModalQrImg').src =
+      'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(tgUrl);
+    document.getElementById('tgModalQrBox').style.display = 'block';
+    document.getElementById('tgModalLinkBtn').style.display = 'none';
+  }
+}
+
+function closeTgConnectModal(){
+  document.getElementById('tgConnectModal').style.display = 'none';
+}
+
+async function retryTgFromModal(){
+  if(!currentUser) return;
+  const btn = document.getElementById('tgModalRetryBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Тексерілуде...'; }
+  try{
+    const table = currentUser.role === 'teacher' ? 'teachers' : 'staff_accounts';
+    const field  = currentUser.role === 'teacher' ? 'email' : 'login';
+    const {data, error} = await sb.from(table).select('telegram_chat_id').eq(field, currentUser.login).maybeSingle();
+    if(error) throw error;
+    if(data?.telegram_chat_id){
+      updateTelegramBtn(true);
+      closeTgConnectModal();
+      alert('✅ Telegram сәтті байланыстырылды!');
+    } else {
+      alert('Әлі байланыстырылмаған. Ботта START батырмасын басқаныңызды тексеріңіз.');
+    }
+  } catch(e){
+    alert('Тексеру кезінде қате шықты: ' + (e?.message||e));
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Тексеру'; }
+  }
+}
+
 // ================================================================
 // STARTUP
 // ================================================================
@@ -4767,6 +4954,30 @@ alter table leads add column if not exists ielts_score numeric; -- IELTS score (
 alter table leads drop column if exists has_experience; -- "Оқыған тәжірибесі бар ма" алынып тасталды
 alter table leads drop column if exists address; -- форматтан алынып тасталды
 -- pay_type бағаны бұрыннан бар, енді мәндер: 'normal' | 'installment_12' | 'installment_24'
+
+-- Мұғалім/директор телефондарын бірыңғай +77XXXXXXXXX форматына келтіру
+-- (Telegram бот дәл осы форматпен салыстырады). Бір рет орындау жеткілікті.
+update teachers
+set phone = '+7' || substring(regexp_replace(phone,'\D','','g') from 2)
+where phone is not null
+  and length(regexp_replace(phone,'\D','','g')) = 11
+  and left(regexp_replace(phone,'\D','','g'),1) = '8';
+
+update teachers
+set phone = '+7' || regexp_replace(phone,'\D','','g')
+where phone is not null
+  and length(regexp_replace(phone,'\D','','g')) = 10;
+
+update staff_accounts
+set phone = '+7' || substring(regexp_replace(phone,'\D','','g') from 2)
+where phone is not null
+  and length(regexp_replace(phone,'\D','','g')) = 11
+  and left(regexp_replace(phone,'\D','','g'),1) = '8';
+
+update staff_accounts
+set phone = '+7' || regexp_replace(phone,'\D','','g')
+where phone is not null
+  and length(regexp_replace(phone,'\D','','g')) = 10;
 
 -- 3. RLS Policies:
 do $$ declare t text; begin
@@ -4920,5 +5131,23 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
+<!-- Fix 2: Telegram байланыстыру модалы (кіргеннен кейін) -->
+<div id="tgConnectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:2000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px;width:360px;max-width:92vw;box-shadow:var(--shadow)">
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">📲 Telegram байланыстыру</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.6">Ботты ашып <b>START</b> батырмасын басыңыз. Одан кейін <b>«Тексеру»</b> батырмасын басыңыз.</p>
+    <div id="tgModalQrBox" style="text-align:center;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Telegram бот: <b id="tgModalBotName" style="color:var(--text)"></b></div>
+      <img id="tgModalQrImg" src="" alt="QR" style="width:180px;height:180px;border-radius:10px;background:#fff;padding:8px;box-sizing:border-box"/>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px">QR-кодты сканерлеп ботты ашыңыз</div>
+    </div>
+    <a id="tgModalLinkBtn" href="#" target="_blank" class="btn-primary" style="display:none;text-align:center;text-decoration:none;box-sizing:border-box;margin-bottom:10px;padding:13px;border-radius:10px;color:#fff;background:var(--accent);font-weight:600;font-size:15px">✈ Telegram-да ашу →</a>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="btn btn-ghost" onclick="closeTgConnectModal()" style="flex:1">Болдырмау</button>
+      <button class="btn btn-green" id="tgModalRetryBtn" onclick="retryTgFromModal()" style="flex:1">🔄 Тексеру</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
