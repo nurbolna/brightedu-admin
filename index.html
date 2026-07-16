@@ -1510,7 +1510,10 @@ async function retryAfterTelegramLink(){
     const phone = normalizePhone(pendingPhone||'');
     const resp  = await fetch(`${EDGE_URL}/tg-verify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SB_KEY}`,
+      },
       body: JSON.stringify({ phone, code }),
     });
     const result = await resp.json();
