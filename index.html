@@ -352,6 +352,11 @@ details[open] summary::before{content:'▾ '}
     <div id="loginStepNeedsTelegram" style="display:none">
       <div class="login-sub">Қауіпсіздік үшін Telegram байланыстыру қажет</div>
       <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">Ботты ашып, <b>START</b> батырмасын басыңыз (тіл таңдау сұралады). Одан кейін төмендегі "Тексеру" батырмасын басыңыз — бұл бір рет қана керек, келесі жолы тікелей логин+парольмен кіресіз.</p>
+      <div id="tgBotNameBox" style="display:none;text-align:center;margin-bottom:14px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Telegram бот: <b id="tgBotNameText" style="color:var(--text)"></b></div>
+        <img id="tgQrImg" src="" alt="Telegram QR" style="width:200px;height:200px;border-radius:10px;background:#fff;padding:8px;box-sizing:border-box" />
+        <div style="font-size:12px;color:var(--text2);margin-top:8px">Телефоныңызбен осы QR-кодты сканерлеп, ботты ашыңыз</div>
+      </div>
       <a id="tgLinkBtn" href="#" target="_blank" class="btn-primary" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box;margin-bottom:10px">✈ Telegram-да ашу →</a>
       <button class="btn-primary" id="tgRetryBtn" onclick="retryAfterTelegramLink()" style="background:var(--green)">🔄 Тексеру</button>
       <div style="margin-top:12px;text-align:center">
@@ -1367,13 +1372,29 @@ async function doLogin(){
   }
 }
 
+function isMobileDevice(){
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
 function showNeedsTelegram(){
   showLoginStep('needsTelegram');
   const phoneDigits = (pendingPhone||'').replace(/\D/g,'');
   const link = document.getElementById('tgLinkBtn');
-  link.href = phoneDigits
+  const tgUrl = phoneDigits
     ? `https://t.me/${TG_BOT_USERNAME}?start=${phoneDigits}`
     : `https://t.me/${TG_BOT_USERNAME}`;
+  link.href = tgUrl;
+
+  const qrBox = document.getElementById('tgBotNameBox');
+  if(isMobileDevice()){
+    qrBox.style.display = 'none';
+    link.style.display = 'block';
+  } else {
+    document.getElementById('tgBotNameText').textContent = '@'+TG_BOT_USERNAME;
+    document.getElementById('tgQrImg').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(tgUrl);
+    qrBox.style.display = 'block';
+    link.style.display = 'none';
+  }
 }
 
 // Пайдаланушы ботта /start басып, қайта "Кіру" дегенде осы шақырылады —
