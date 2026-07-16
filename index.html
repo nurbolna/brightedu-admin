@@ -1174,11 +1174,8 @@ details[open] summary::before{content:'▾ '}
             <option value="Advanced">Advanced</option>
           </select>
         </div>
-        <div class="form-group">
-          <label style="display:flex;align-items:center;gap:9px;cursor:pointer;margin-top:8px">
-            <input type="checkbox" id="leadHasExperience" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer" />
-            Оқыған тәжірибесі бар ма
-          </label>
+        <div class="form-group"><label>IELTS score</label>
+          <input type="number" step="0.5" min="1" max="9" id="leadIeltsScore" placeholder="мыс. 6.5" oninput="applyIeltsToLevel()" />
         </div>
       </div>
       <div class="form-row">
@@ -3223,6 +3220,23 @@ function openWaFromInput(inputId){
   window.open(link,'_blank','noopener');
 }
 
+function ieltsToLevel(score){
+  const v=Number(score);
+  if(!v) return '';
+  if(v<=3.5) return 'Beginner';
+  if(v<=4.0) return 'Elementary';
+  if(v<=5.0) return 'Pre-Intermediate';
+  if(v<=6.0) return 'Intermediate';
+  if(v<=7.0) return 'Upper-Intermediate';
+  return 'Advanced';
+}
+
+function applyIeltsToLevel(){
+  const score=document.getElementById('leadIeltsScore').value;
+  const level=ieltsToLevel(score);
+  if(level) document.getElementById('leadEnglishLevel').value=level;
+}
+
 function showStudentDetail(id){
   const s=DATA.students.find(s=>s.id===id); if(!s)return;
   const sGroups=getStudentGroups(s.id);
@@ -3679,7 +3693,7 @@ function openLeadModal(id){
     document.getElementById('leadSchool').value=l.school||'';
     document.getElementById('leadGrade').value=l.grade||'';
     document.getElementById('leadEnglishLevel').value=l.english_level||'';
-    document.getElementById('leadHasExperience').checked=!!l.has_experience;
+    document.getElementById('leadIeltsScore').value=l.ielts_score||'';
     document.getElementById('leadConsultationAt').value=l.consultation_at ? l.consultation_at.slice(0,16) : '';
     document.getElementById('leadRescheduleDate').value=l.reschedule_date||'';
   }else{
@@ -3702,7 +3716,7 @@ function openLeadModal(id){
     document.getElementById('leadSchool').value='';
     document.getElementById('leadGrade').value='';
     document.getElementById('leadEnglishLevel').value='';
-    document.getElementById('leadHasExperience').checked=false;
+    document.getElementById('leadIeltsScore').value='';
     document.getElementById('leadConsultationAt').value='';
     document.getElementById('leadRescheduleDate').value='';
   }
@@ -3731,7 +3745,7 @@ async function saveLead(){
     school: document.getElementById('leadSchool').value.trim() || null,
     grade: document.getElementById('leadGrade').value || null,
     english_level: document.getElementById('leadEnglishLevel').value || null,
-    has_experience: document.getElementById('leadHasExperience').checked,
+    ielts_score: document.getElementById('leadIeltsScore').value ? Number(document.getElementById('leadIeltsScore').value) : null,
     consultation_at: document.getElementById('leadConsultationAt').value || null,
     reschedule_date: document.getElementById('leadRescheduleDate').value || null
   };
@@ -4728,6 +4742,8 @@ alter table leads add column if not exists disqual_reason text; -- "Причин
 alter table leads add column if not exists reject_reason text; -- "Причина отказа" — еркін мәтін
 alter table leads add column if not exists parent_name text;  -- Ата-ана аты
 alter table leads add column if not exists parent_phone text; -- Ата-ана WhatsApp нөмірі
+alter table leads add column if not exists ielts_score numeric; -- IELTS score (болса, ағылшын деңгейі автоматты есептеледі)
+alter table leads drop column if exists has_experience; -- "Оқыған тәжірибесі бар ма" алынып тасталды
 alter table leads drop column if exists address; -- форматтан алынып тасталды
 -- pay_type бағаны бұрыннан бар, енді мәндер: 'normal' | 'installment_12' | 'installment_24'
 
