@@ -430,6 +430,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-item dir-only" onclick="showPage('teachers',this)">👨‍🏫 Мұғалімдер</div>
         <div class="nav-section">Қаржы</div>
         <div class="nav-item dir-only" onclick="showPage('payments',this)">💳 Төлемдер<span class="nav-badge hidden" id="badgePay">0</span></div>
+        <div class="nav-item dir-only" onclick="showPage('expenses',this)">🧾 Шығыстар</div>
         <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
         <div class="nav-item dir-only" onclick="showPage('unit-economics',this)">📈 Юнит-экономика</div>
         <div class="nav-item teacher-only" onclick="openMySalary()">💰 Жалақым</div>
@@ -611,6 +612,43 @@ details[open] summary::before{content:'▾ '}
           <th>Әрекет</th>
         </tr></thead><tbody id="paymentsTable"></tbody></table></div>
         <div id="paymentsPagination" style="display:flex;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap"></div>
+      </div>
+
+      <!-- ========== EXPENSES (dedicated page) ========== -->
+      <div class="page dir-only" id="page-expenses">
+        <div class="page-header">
+          <div><div class="page-title">Шығыстар</div><div class="page-subtitle">Барлық шығыстар тарихы</div></div>
+          <button class="btn btn-blue" onclick="openExpenseModal()">+ Шығыс қосу</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+          <input type="text" placeholder="🔍 Ескертпе/алушы бойынша іздеу..." oninput="filterExpenses(this.value)" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+          <select id="expFilterCatSel" onchange="expFilterCat=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық категория</option></select>
+          <select id="expFilterMonthSel" onchange="expFilterMonth=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық ай</option></select>
+          <select id="expFilterStatusSel" onchange="expFilterStatus=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+            <option value="">Барлық статус</option>
+            <option value="paid">✅ Төленген</option>
+            <option value="planned">⏳ Жоспарланған</option>
+            <option value="overdue">❌ Кешіктірілген</option>
+          </select>
+          <select id="expFilterPaidBySel" onchange="expFilterPaidBy=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Кім төлегені бойынша</option></select>
+          <button class="btn btn-ghost" onclick="exportExpensesCSV()">📥 CSV экспорт</button>
+        </div>
+        <div id="expensesStats" class="text-sm text-muted" style="margin-bottom:8px"></div>
+        <div id="expensesCategoryBreakdown" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+        <div class="table-wrap"><table><thead><tr>
+          <th>#</th>
+          <th class="pay-sortable" onclick="setExpSort('date')">Күні<span id="expSortIcon-date"></span></th>
+          <th class="pay-sortable" onclick="setExpSort('category')">Категория<span id="expSortIcon-category"></span></th>
+          <th class="pay-sortable" onclick="setExpSort('amount')">Сомасы<span id="expSortIcon-amount"></span></th>
+          <th>Алушы</th>
+          <th>Кім төледі</th>
+          <th>Статус</th>
+          <th>Тег</th>
+          <th>🔁</th>
+          <th>Ескертпе</th>
+          <th>Әрекет</th>
+        </tr></thead><tbody id="expensesPageTable"></tbody></table></div>
+        <div id="expensesPagination" style="display:flex;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap"></div>
       </div>
 
       <!-- ========== FINANCE ========== -->
@@ -1081,6 +1119,23 @@ details[open] summary::before{content:'▾ '}
       <div class="form-group"><label>Сомасы (₸)</label><input type="number" id="expenseAmount" /></div>
       <div class="form-group"><label>Күні</label><input type="date" id="expenseDate" /></div>
     </div>
+    <div class="form-row">
+      <div class="form-group"><label>Алушы (кімге төленді)</label><input type="text" id="expensePayee" placeholder="мыс. Kaspi аренда" /></div>
+      <div class="form-group"><label>Кім төледі</label><select id="expensePaidBy"><option value="">—</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Статус</label>
+        <select id="expenseStatus">
+          <option value="paid">✅ Төленген</option>
+          <option value="planned">⏳ Жоспарланған</option>
+          <option value="overdue">❌ Кешіктірілген</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Тег (еркін белгі)</label><input type="text" id="expenseTag" placeholder="мыс. жедел қажеттілік" /></div>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="expenseRecurring" style="width:auto" /><label for="expenseRecurring" style="margin:0">🔁 Бұл тұрақты (қайталанатын) шығын</label>
+    </div>
     <div class="form-group"><label>Заметка (міндетті) *</label><textarea id="expenseNote" rows="3" placeholder="Бұл ақша не үшін жұмсалды?"></textarea></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('expenseModal')">Бас тарту</button>
@@ -1368,6 +1423,18 @@ let paySortDir = 'desc';
 let payPage = 1;
 const PAY_PAGE_SIZE = 30;
 let _payExportList = []; // renderPayments() әр шақырылғанда сүзілген (беттеуге дейінгі) тізіммен жаңарады
+
+// Шығыстар бетіндегі фильтр/сұрыптау/беттеу күйі
+let expFilter = '';
+let expFilterCat = '';
+let expFilterMonth = '';
+let expFilterStatus = '';
+let expFilterPaidBy = '';
+let expSortCol = 'date';
+let expSortDir = 'desc';
+let expPage = 1;
+const EXP_PAGE_SIZE = 30;
+let _expExportList = [];
 
 // ================================================================
 // THEME
@@ -1846,7 +1913,7 @@ function showPage(name, el){
   const renders={
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
-    payments:renderPayments, journal:renderJournal, analysis:renderAnalysis,
+    payments:renderPayments, expenses:renderExpensesPage, journal:renderJournal, analysis:renderAnalysis,
     reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM
   };
   renders[name]?.();
@@ -4302,6 +4369,12 @@ function openExpenseModal(){
   document.getElementById('expenseAmount').value='';
   document.getElementById('expenseNote').value='';
   document.getElementById('expenseDate').value=localDateStr(new Date());
+  document.getElementById('expensePayee').value='';
+  document.getElementById('expenseTag').value='';
+  document.getElementById('expenseStatus').value='paid';
+  document.getElementById('expenseRecurring').checked=false;
+  const pbSel=document.getElementById('expensePaidBy');
+  pbSel.innerHTML='<option value="">—</option>'+DATA.directors.map(d=>`<option value="${d.name}">👤 ${d.name}</option>`).join('');
   openModal('expenseModal');
 }
 async function saveExpense(){
@@ -4309,10 +4382,176 @@ async function saveExpense(){
   const note=document.getElementById('expenseNote').value.trim();
   if(!amount)return alert('Сомасын енгізіңіз');
   if(!note)return alert('Заметка міндетті өріс!');
-  await sb.from('expenses').insert({amount:Number(amount),category:document.getElementById('expenseCategory').value,notes:note,date:document.getElementById('expenseDate').value});
-  closeModal('expenseModal'); await loadAll(); renderFinance(); toast('✅ Шығыс сақталды!');
+  const {error:expErr}=await sb.from('expenses').insert({
+    amount:Number(amount),
+    category:document.getElementById('expenseCategory').value,
+    notes:note,
+    date:document.getElementById('expenseDate').value,
+    payee:document.getElementById('expensePayee').value.trim()||null,
+    paid_by:document.getElementById('expensePaidBy').value||null,
+    status:document.getElementById('expenseStatus').value,
+    tag:document.getElementById('expenseTag').value.trim()||null,
+    is_recurring:document.getElementById('expenseRecurring').checked
+  });
+  if(expErr){ alert('❌ Сақталмады! Қате: '+expErr.message); return; }
+  closeModal('expenseModal'); await loadAll();
+  renderFinance(); renderExpensesPage(); toast('✅ Шығыс сақталды!');
 }
-async function deleteExpense(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('expenses').delete().eq('id',id); await loadAll(); renderFinance(); }
+async function deleteExpense(id){
+  if(!confirm('Өшіресіз бе?'))return;
+  const {error:delErr}=await sb.from('expenses').delete().eq('id',id);
+  if(delErr){ alert('❌ Өшірілмеді! Қате: '+delErr.message); return; }
+  await loadAll();
+  renderFinance(); renderExpensesPage();
+}
+
+// ---- Шығыстар беті (Payments бетімен бірдей функционал: іздеу, сұрыптау,
+// фильтр, статистика, категория бөлінісі, CSV экспорт, беттеу) ----
+function filterExpenses(val){ expFilter=val; expPage=1; renderExpensesPage(); }
+function setExpSort(col){
+  if(expSortCol===col){ expSortDir = expSortDir==='asc'?'desc':'asc'; }
+  else { expSortCol=col; expSortDir='asc'; }
+  expPage=1;
+  renderExpensesPage();
+}
+function goExpPage(n){ expPage=n; renderExpensesPage(); }
+function renderExpensesPage(){
+  const statusL={paid:'✅ Төленген',planned:'⏳ Жоспарланған',overdue:'❌ Кешіктірілген'};
+
+  // Фильтр dropdown-тарын бір рет толтырамыз
+  const catSel=document.getElementById('expFilterCatSel');
+  if(catSel && catSel.options.length<=1){
+    const cats=[...new Set(DATA.expenses.map(e=>e.category).filter(Boolean))];
+    catSel.innerHTML='<option value="">Барлық категория</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  }
+  const monthSel=document.getElementById('expFilterMonthSel');
+  if(monthSel && monthSel.options.length<=1){
+    const combos=[...new Set(DATA.expenses.filter(e=>e.date).map(e=>e.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+    monthSel.innerHTML='<option value="">Барлық ай</option>'+combos.map(ym=>{ const[y,m]=ym.split('-'); return `<option value="${ym}">${MONTHS[Number(m)]} ${y}</option>`; }).join('');
+  }
+  const paidBySel=document.getElementById('expFilterPaidBySel');
+  if(paidBySel && paidBySel.options.length<=1){
+    paidBySel.innerHTML='<option value="">Кім төлегені бойынша</option>'+DATA.directors.map(d=>`<option value="${d.name}">👤 ${d.name}</option>`).join('');
+  }
+
+  // 1) Фильтр (ескертпе/алушы іздеу + категория + ай + статус + кім төледі — AND)
+  let list=[...DATA.expenses];
+  if(expFilter){
+    const q=expFilter.toLowerCase();
+    list=list.filter(e=>(e.notes||'').toLowerCase().includes(q)||(e.payee||'').toLowerCase().includes(q));
+  }
+  if(expFilterCat) list=list.filter(e=>e.category===expFilterCat);
+  if(expFilterMonth) list=list.filter(e=>(e.date||'').slice(0,7)===expFilterMonth);
+  if(expFilterStatus) list=list.filter(e=>(e.status||'paid')===expFilterStatus);
+  if(expFilterPaidBy) list=list.filter(e=>e.paid_by===expFilterPaidBy);
+
+  // 2) Сүзілген нәтиженің жиынтық статистикасы
+  const statsEl=document.getElementById('expensesStats');
+  if(statsEl){
+    const cnt=list.length;
+    const totalAmt=list.reduce((s,e)=>s+Number(e.amount||0),0);
+    const avgAmt=cnt?totalAmt/cnt:0;
+    statsEl.textContent = cnt
+      ? `Табылды: ${cnt} шығыс · Жалпы сома: ${fmt(totalAmt)}₸ · Орташа чек: ${fmt(Math.round(avgAmt))}₸`
+      : 'Бұл фильтрге сай шығыс табылмады';
+  }
+
+  // Категория бойынша шағын бөлінісі
+  const catBrEl=document.getElementById('expensesCategoryBreakdown');
+  if(catBrEl){
+    const byCat={};
+    list.forEach(e=>{
+      const name=e.category||'Категория белгісіз';
+      if(!byCat[name]) byCat[name]={cnt:0,sum:0};
+      byCat[name].cnt++; byCat[name].sum+=Number(e.amount||0);
+    });
+    catBrEl.innerHTML=Object.entries(byCat).map(([name,v])=>
+      `<span class="badge badge-red">${name}: ${v.cnt} · ${fmt(v.sum)}₸</span>`
+    ).join('');
+  }
+
+  _expExportList=list;
+
+  // 3) Сұрыптау
+  const getSortVal=(e,col)=>{
+    switch(col){
+      case 'category': return (e.category||'').toLowerCase();
+      case 'amount': return Number(e.amount||0);
+      case 'date': default: return e.date||'';
+    }
+  };
+  list.sort((a,b)=>{
+    const va=getSortVal(a,expSortCol), vb=getSortVal(b,expSortCol);
+    const cmp=(typeof va==='number'&&typeof vb==='number') ? va-vb : String(va).localeCompare(String(vb));
+    return expSortDir==='asc' ? cmp : -cmp;
+  });
+  ['date','category','amount'].forEach(col=>{
+    const iconEl=document.getElementById('expSortIcon-'+col);
+    if(iconEl) iconEl.textContent = (col===expSortCol) ? (expSortDir==='asc'?' ▲':' ▼') : '';
+  });
+
+  // 4) Беттеу — 30 жол/бет
+  const totalPages=Math.max(1,Math.ceil(list.length/EXP_PAGE_SIZE));
+  if(expPage>totalPages) expPage=totalPages;
+  if(expPage<1) expPage=1;
+  const pageStart=(expPage-1)*EXP_PAGE_SIZE;
+  const pageItems=list.slice(pageStart,pageStart+EXP_PAGE_SIZE);
+
+  const tbody=document.getElementById('expensesPageTable');
+  if(tbody){
+    tbody.innerHTML=pageItems.map((e,i)=>`<tr>
+      <td>${pageStart+i+1}</td>
+      <td>${e.date||'—'}</td>
+      <td><span class="badge" style="background:${EXPENSE_COLORS[e.category]||'var(--surface2)'}20;color:${EXPENSE_COLORS[e.category]||'var(--text2)'}">${e.category||'—'}</span></td>
+      <td class="font-bold" style="color:var(--red)">${fmt(e.amount)}₸</td>
+      <td class="text-sm">${e.payee||'—'}</td>
+      <td class="text-sm">${e.paid_by||'—'}</td>
+      <td class="text-sm">${statusL[e.status]||statusL.paid}</td>
+      <td class="text-sm text-muted">${e.tag||''}</td>
+      <td class="text-sm">${e.is_recurring?'🔁':''}</td>
+      <td class="text-muted text-sm">${e.notes||''}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteExpense('${e.id}')">🗑️</button></td>
+    </tr>`).join('')||'<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🧾</div><p>Шығыстар жоқ</p></div></td></tr>';
+  }
+
+  // 5) Беттеу навигациясы
+  const pagEl=document.getElementById('expensesPagination');
+  if(pagEl){
+    if(totalPages<=1){ pagEl.innerHTML=''; }
+    else{
+      let html=`<button class="pagination-btn" ${expPage===1?'disabled':''} onclick="goExpPage(${expPage-1})">◀</button>`;
+      for(let pg=1; pg<=totalPages; pg++){
+        html+=`<button class="pagination-btn ${pg===expPage?'active':''}" onclick="goExpPage(${pg})">${pg}</button>`;
+      }
+      html+=`<button class="pagination-btn" ${expPage===totalPages?'disabled':''} onclick="goExpPage(${expPage+1})">▶</button>`;
+      pagEl.innerHTML=html;
+    }
+  }
+}
+
+// Сүзілген (беттеуге дейінгі) шығыстар тізімін CSV файл ретінде жүктеп алу
+function exportExpensesCSV(){
+  const statusL={paid:'Төленген',planned:'Жоспарланған',overdue:'Кешіктірілген'};
+  const rows=[['Күні','Категория','Сомасы','Алушы','Кім төледі','Статус','Тег','Тұрақты','Ескертпе']];
+  _expExportList.forEach(e=>{
+    rows.push([
+      e.date||'', e.category||'', e.amount||0, e.payee||'', e.paid_by||'',
+      statusL[e.status]||statusL.paid, e.tag||'', e.is_recurring?'Иә':'Жоқ',
+      (e.notes||'').replace(/[\r\n]+/g,' ')
+    ]);
+  });
+  const csv='\uFEFF'+rows.map(r=>r.map(v=>{
+    const s=String(v);
+    return /[",;\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`shygystar_${localDateStr(new Date())}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 
 // ================================================================
 // FINANCE
