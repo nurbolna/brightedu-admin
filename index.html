@@ -2781,17 +2781,18 @@ async function confirmQuickPay(){
   // Timezone-safe: next_pay_date негізінде ай анықтаймыз
   const dueDate=quickPayStudent.next_pay_date?parseLocalDate(quickPayStudent.next_pay_date):now;
   const payMonth=dueDate.getMonth()+1; const payYear=dueDate.getFullYear();
-  await sb.from('payments').insert({
+  const {error:qpErr} = await sb.from('payments').insert({
     student_id:quickPayStudent.id, amount, month:payMonth, year:payYear,
     pay_date:localDateStr(now), pay_type:type, cash_account:cashAccount, note
   });
+  if(qpErr){ alert('❌ Сақталмады! Қате: '+qpErr.message); return; }
   // Келесі мерзімді 1 айға алға жылжыту
   const nd=new Date(dueDate.getFullYear(), dueDate.getMonth()+1, dueDate.getDate());
   const ndStr=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`;
   await sb.from('students').update({next_pay_date:ndStr}).eq('id',quickPayStudent.id);
   closeModal('quickPayModal');
   await loadAll();
-  renderStudents();
+  renderStudents(); renderPayments(); renderFinance(); renderFinancePayments();
   toast(`✅ ${quickPayStudent.name} — ${fmt(amount)}₸ қабылданды!`);
 }
 
@@ -3737,13 +3738,14 @@ async function savePayment(){
   const now=new Date();
   const payM=Number(document.getElementById('paymentMonth').value);
   const payY=Number(document.getElementById('paymentYear').value);
-  await sb.from('payments').insert({
+  const {error:payErr} = await sb.from('payments').insert({
     student_id:sId, course_id:courseId, amount:Number(amt), month:payM, year:payY,
     pay_date:document.getElementById('paymentDate').value,
     pay_type:document.getElementById('paymentType').value,
     cash_account:document.getElementById('paymentCashAccount').value,
     note:document.getElementById('paymentNote').value
   });
+  if(payErr){ alert('❌ Сақталмады! Қате: '+payErr.message); return; }
   // next_pay_date автоматты жылжыту
   const s2=DATA.students.find(s=>s.id===sId);
   if(s2){
@@ -3752,9 +3754,17 @@ async function savePayment(){
     const ndStr=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`;
     await sb.from('students').update({next_pay_date:ndStr}).eq('id',sId);
   }
-  closeModal('paymentModal'); await loadAll(); renderPayments(); toast('✅ Төлем сақталды!');
+  closeModal('paymentModal'); await loadAll();
+  renderPayments(); renderFinance(); renderFinancePayments(); renderStudents();
+  toast('✅ Төлем сақталды!');
 }
-async function deletePayment(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('payments').delete().eq('id',id); await loadAll(); renderPayments(); }
+async function deletePayment(id){
+  if(!confirm('Өшіресіз бе?'))return;
+  const {error:delErr} = await sb.from('payments').delete().eq('id',id);
+  if(delErr){ alert('❌ Өшірілмеді! Қате: '+delErr.message); return; }
+  await loadAll();
+  renderPayments(); renderFinance(); renderFinancePayments(); renderStudents();
+}
 function filterPayments(val){ payFilter=val; renderPayments(); }
 function renderPayments(){
   const typeL={normal:'✅ Қалыпты төлем',installment_12:'📆 Рассрочка 0-0-12',installment_24:'📆 Рассрочка 0-0-24'};
@@ -4374,7 +4384,7 @@ function renderFinancePayments(){
       <td>${typeL[p.pay_type]||'—'}</td>
       <td class="text-sm" title="Комиссия: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).commission)}₸ | Салық: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).tax)}₸">${fmt(calcPaymentBreakdown(p.amount,p.pay_type).net)}₸</td>
       <td class="text-muted text-sm">${p.note||''}</td>
-      <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}');setTimeout(()=>{loadAll().then(renderFinance)},400)">🗑️</button></td>
+      <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}')">🗑️</button></td>
     </tr>`;
   }).join('')||`<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text2)">${MONTHS[m]||m} ${y} — төлем жоқ</td></tr>`;
 
