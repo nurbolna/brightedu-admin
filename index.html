@@ -537,8 +537,7 @@ details[open] summary::before{content:'▾ '}
           <div><div class="page-title">Оқушылар</div><div class="page-subtitle">Толық тізім</div></div>
           <button class="btn btn-blue dir-admin" onclick="openStudentModal()">+ Оқушы қосу</button>
         </div>
-        <div class="dir-only">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="dir-only" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
           <div class="card">
             <div class="card-title">📚 Курс бойынша бөлінісі</div>
             <div style="position:relative;height:190px"><canvas id="stuCourseChartCanvas" role="img" aria-label="Оқушылардың курс бойынша бөлінісі"></canvas></div>
@@ -554,7 +553,6 @@ details[open] summary::before{content:'▾ '}
             <div style="position:relative;height:190px"><canvas id="stuProgressChartCanvas" role="img" aria-label="Оқушылардың үлгерім деңгейі бойынша үлестірілуі"></canvas></div>
             <div id="stuProgressChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
           </div>
-        </div>
         </div>
         <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <input type="text" placeholder="🔍 Іздеу..." oninput="filterStudents(this.value)" style="flex:1;min-width:180px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
@@ -855,10 +853,12 @@ details[open] summary::before{content:'▾ '}
         </div>
         <div class="card">
           <div class="card-title">💾 Деректерді басқару</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div id="backupReminder" style="display:none;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--orange)"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
             <button class="btn btn-ghost" onclick="exportData()">📥 JSON экспорт</button>
             <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">📤 JSON импорт</button>
             <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)" />
+            <span id="lastBackupInfo" class="text-sm" style="color:var(--text2)"></span>
           </div>
         </div>
       </div>
@@ -2216,6 +2216,11 @@ const KASPI_BASE_COMMISSION={ normal:0.0095, installment_12:0.135, installment_2
 const TAX_RATE=0.03; // упрощенка — толық сомадан есептеледі
 function calcPaymentBreakdown(amount, payType){
   const amt=Number(amount||0);
+  if(!(payType in KASPI_BASE_COMMISSION)){
+    // Белгісіз/бос pay_type — үнсіз 0% комиссия қоймай, консольге ескерту
+    // қалдырамыз, әйтпесе есеп байқаусызда төмен шығып кетуі мүмкін.
+    console.warn(`⚠️ Белгісіз pay_type: "${payType}" — комиссия 0% деп есептелді. Тексеріңіз!`);
+  }
   const baseRate=KASPI_BASE_COMMISSION[payType]??0;
   const commission=amt*baseRate*KASPI_VAT;
   const tax=amt*TAX_RATE;
@@ -2895,6 +2900,7 @@ function renderDashboard(){
   }
 
   renderDashboardBirthdays();
+  checkBackupReminder(); // 11) апта сайын backup еске салғыш
 }
 
 // Берілген туған күннен келесі туылу күніне дейін қанша күн қалғанын және
@@ -2969,10 +2975,14 @@ async function confirmQuickPay(){
   const cashAccount=document.getElementById('qpCashAccount').value;
   const note=document.getElementById('qpNote').value;
   if(!amount) return alert('Сомасын енгізіңіз');
+  if(amount<=0) return alert('Сома 0-ден үлкен болуы керек');
   const now=new Date();
   // Timezone-safe: next_pay_date негізінде ай анықтаймыз
   const dueDate=quickPayStudent.next_pay_date?parseLocalDate(quickPayStudent.next_pay_date):now;
   const payMonth=dueDate.getMonth()+1; const payYear=dueDate.getFullYear();
+  // 13) Дубликат тексеру
+  const dupQ=DATA.payments.find(p=>p.student_id===quickPayStudent.id&&Number(p.amount)===Number(amount)&&p.month==payMonth&&p.year==payYear);
+  if(dupQ && !confirm(`⚠️ Бұл оқушыға осы айға дәл осындай сома (${fmt(amount)}₸) бұрын енгізілген. Сонда да сақтайсыз ба?`)) return;
   const {error:qpErr} = await sb.from('payments').insert({
     student_id:quickPayStudent.id, amount, month:payMonth, year:payYear,
     pay_date:localDateStr(now), pay_type:type, cash_account:cashAccount, note
@@ -3972,13 +3982,20 @@ async function savePayment(){
   const courseId=document.getElementById('paymentCourse').value;
   if(!sId||!amt)return alert('Оқушы және сомасын енгізіңіз');
   if(!courseId)return alert('Қай курс үшін төленгенін таңдаңыз');
+  // 15) Валидация: сома 0-ден үлкен болуы керек, pay_type танылатын түрде болуы керек
+  if(Number(amt)<=0) return alert('Сома 0-ден үлкен болуы керек');
+  const payType=document.getElementById('paymentType').value;
+  if(!(payType in KASPI_BASE_COMMISSION)) return alert('Төлем түрі дұрыс емес — қайта таңдаңыз');
   const now=new Date();
   const payM=Number(document.getElementById('paymentMonth').value);
   const payY=Number(document.getElementById('paymentYear').value);
+  // 13) Дубликат тексеру: сол оқушы + сома + ай/жыл + курс бойынша ұқсас жазба бар ма
+  const dup=DATA.payments.find(p=>p.student_id===sId&&Number(p.amount)===Number(amt)&&p.month==payM&&p.year==payY&&p.course_id===courseId);
+  if(dup && !confirm(`⚠️ Бұл оқушыға осы айға дәл осындай сома (${fmt(amt)}₸) бұрын енгізілген. Сонда да сақтайсыз ба? (қайталанған жазба болуы мүмкін)`)) return;
   const {error:payErr} = await sb.from('payments').insert({
     student_id:sId, course_id:courseId, amount:Number(amt), month:payM, year:payY,
     pay_date:document.getElementById('paymentDate').value,
-    pay_type:document.getElementById('paymentType').value,
+    pay_type:payType,
     cash_account:document.getElementById('paymentCashAccount').value,
     note:document.getElementById('paymentNote').value
   });
@@ -4528,11 +4545,18 @@ async function saveExpense(){
   const note=document.getElementById('expenseNote').value.trim();
   if(!amount)return alert('Сомасын енгізіңіз');
   if(!note)return alert('Заметка міндетті өріс!');
+  // 15) Валидация: сома 0-ден үлкен болуы керек
+  if(Number(amount)<=0) return alert('Сома 0-ден үлкен болуы керек');
+  const category=document.getElementById('expenseCategory').value;
+  const expDate=document.getElementById('expenseDate').value;
+  // 13) Дубликат тексеру: сол сома + күн + категория + заметка бойынша ұқсас жазба бар ма
+  const dup=DATA.expenses.find(e=>Number(e.amount)===Number(amount)&&e.date===expDate&&e.category===category&&(e.notes||'')===note);
+  if(dup && !confirm(`⚠️ Дәл осындай шығын (${fmt(amount)}₸, ${category}, ${expDate}) бұрын енгізілген. Сонда да сақтайсыз ба? (қайталанған жазба болуы мүмкін)`)) return;
   const {error:expErr}=await sb.from('expenses').insert({
     amount:Number(amount),
-    category:document.getElementById('expenseCategory').value,
+    category,
     notes:note,
-    date:document.getElementById('expenseDate').value,
+    date:expDate,
     payee:document.getElementById('expensePayee').value.trim()||null,
     paid_by:document.getElementById('expensePaidBy').value||null,
     status:document.getElementById('expenseStatus').value,
@@ -5474,7 +5498,34 @@ function renderReports(){
 // ================================================================
 // EXPORT / IMPORT
 // ================================================================
-function exportData(){ const blob=new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='academy_'+localDateStr(new Date())+'.json';a.click(); }
+function exportData(){
+  const blob=new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='academy_'+localDateStr(new Date())+'.json';a.click();
+  // 11) Соңғы backup күнін сақтаймыз, еске салғышты жаңартамыз
+  localStorage.setItem('last_backup_date', localDateStr(new Date()));
+  checkBackupReminder();
+}
+// 11) Апта сайын JSON backup жасауды еске салады (соңғы экспорттан 7+ күн өтсе)
+function checkBackupReminder(){
+  const remEl=document.getElementById('backupReminder');
+  const infoEl=document.getElementById('lastBackupInfo');
+  if(!remEl||!infoEl) return;
+  const last=localStorage.getItem('last_backup_date');
+  if(!last){
+    infoEl.textContent='Соңғы backup жасалмаған';
+    remEl.style.display='block';
+    remEl.textContent='⚠️ Әлі бірде-бір JSON backup жасалмаған. Деректерді жоғалтпау үшін қазір "📥 JSON экспорт" басыңыз.';
+    return;
+  }
+  const daysSince=Math.floor((new Date()-parseLocalDate(last))/(1000*60*60*24));
+  infoEl.textContent=`Соңғы backup: ${last} (${daysSince} күн бұрын)`;
+  if(daysSince>=7){
+    remEl.style.display='block';
+    remEl.textContent=`⚠️ Соңғы backup ${daysSince} күн бұрын жасалған. Апта сайын "📥 JSON экспорт" басып, деректерді сақтап отырыңыз.`;
+  } else {
+    remEl.style.display='none';
+  }
+}
 function importData(input){ const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const d=JSON.parse(e.target.result);if(confirm('Импорт жасалсын ба?')){DATA=d;renderDashboard();alert('✅ Импорт сәтті!');}}catch(e){alert('JSON қате');}};reader.readAsText(file);input.value=''; }
 
 // ================================================================
