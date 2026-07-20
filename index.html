@@ -602,7 +602,7 @@ details[open] summary::before{content:'▾ '}
           <div class="fin-card netreal"><div class="fin-value" id="finNetReal">0₸</div><div class="fin-label">Нақты таза пайда</div></div>
         </div>
         <div class="text-muted text-sm" style="margin:-12px 0 16px">💡 Салық — есептелген сома ғана (әлі төленбеген). Нақты төлеген кезде (жылына 2 рет) «Шығыс қосу → Салық» арқылы жазыңыз.</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
           <div class="card">
             <div class="card-title">📊 Шығыстар диаграммасы</div>
             <div style="position:relative;height:240px"><canvas id="expenseChartCanvas" role="img" aria-label="Осы айдағы шығыстардың категория бойынша үлесі"></canvas></div>
@@ -616,6 +616,11 @@ details[open] summary::before{content:'▾ '}
             </div>
             <div style="position:relative;height:190px"><canvas id="leadSourceChartCanvas" role="img" aria-label="Осы ай жаңа оқушылардың маркетинг каналы бойынша үлесі"></canvas></div>
             <div id="leadSourceLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📚 Оқушылар курс бойынша</div>
+            <div style="position:relative;height:190px;margin-top:38px"><canvas id="courseChartCanvas" role="img" aria-label="Оқушылардың курстар бойынша бөлінісі"></canvas></div>
+            <div id="courseChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
           </div>
         </div>
         <div class="card">
@@ -4189,6 +4194,17 @@ function renderFinance(){
   newStudentsThisMonth.forEach(s=>{ const src=s.lead_source||'Белгісіз'; leadTotals[src]=(leadTotals[src]||0)+1; });
   renderPieChart('leadSourceChartCanvas','leadSourceLegend',leadTotals,
     Object.keys(leadTotals).length?null:'Бұл айда жаңа оқушы жоқ');
+
+  // Оқушылар — қай курста оқитыны бойынша бөлінісі (барлық белсенді оқушы,
+  // бір оқушы бірнеше курста болса, әр курсқа бөлек қосылады)
+  const courseTotals={};
+  DATA.students.forEach(s=>{
+    const cNames=[...new Set(getStudentGroups(s.id).map(g=>DATA.courses.find(c=>c.id===g.course_id)).filter(Boolean).map(c=>c.name))];
+    if(!cNames.length){ courseTotals['Курс тағайындалмаған']=(courseTotals['Курс тағайындалмаған']||0)+1; return; }
+    cNames.forEach(name=>{ courseTotals[name]=(courseTotals[name]||0)+1; });
+  });
+  renderPieChart('courseChartCanvas','courseChartLegend',courseTotals,
+    Object.keys(courseTotals).length?null:'Оқушылар жоқ');
 
   // Expense chart — pie
   const catTotals={};
