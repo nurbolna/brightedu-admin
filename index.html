@@ -618,37 +618,49 @@ details[open] summary::before{content:'▾ '}
       <div class="page dir-only" id="page-expenses">
         <div class="page-header">
           <div><div class="page-title">Шығыстар</div><div class="page-subtitle">Барлық шығыстар тарихы</div></div>
-          <button class="btn btn-blue" onclick="openExpenseModal()">+ Шығыс қосу</button>
+          <button class="btn btn-blue" id="expAddBtn" onclick="openExpenseModal()">+ Шығыс қосу</button>
         </div>
-        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-          <input type="text" placeholder="🔍 Ескертпе/алушы бойынша іздеу..." oninput="filterExpenses(this.value)" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
-          <select id="expFilterCatSel" onchange="expFilterCat=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық категория</option></select>
-          <select id="expFilterMonthSel" onchange="expFilterMonth=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық ай</option></select>
-          <select id="expFilterStatusSel" onchange="expFilterStatus=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
-            <option value="">Барлық статус</option>
-            <option value="paid">✅ Төленген</option>
-            <option value="planned">⏳ Жоспарланған</option>
-            <option value="overdue">❌ Кешіктірілген</option>
-          </select>
-          <select id="expFilterPaidBySel" onchange="expFilterPaidBy=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Кім төлегені бойынша</option></select>
-          <button class="btn btn-ghost" onclick="exportExpensesCSV()">📥 CSV экспорт</button>
+        <div class="crm-view-toggle" style="margin-bottom:16px;width:fit-content">
+          <button id="expTabBtn1" class="active" onclick="switchExpTab('list')">🧾 Шығыстар</button>
+          <button id="expTabBtn2" onclick="switchExpTab('salary')">👨‍🏫 Жалақылар<span id="expSalTabBadge"></span></button>
         </div>
-        <div id="expensesStats" class="text-sm text-muted" style="margin-bottom:8px"></div>
-        <div id="expensesCategoryBreakdown" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
-        <div class="table-wrap"><table><thead><tr>
-          <th>#</th>
-          <th class="pay-sortable" onclick="setExpSort('date')">Күні<span id="expSortIcon-date"></span></th>
-          <th class="pay-sortable" onclick="setExpSort('category')">Категория<span id="expSortIcon-category"></span></th>
-          <th class="pay-sortable" onclick="setExpSort('amount')">Сомасы<span id="expSortIcon-amount"></span></th>
-          <th>Алушы</th>
-          <th>Кім төледі</th>
-          <th>Статус</th>
-          <th>Тег</th>
-          <th>🔁</th>
-          <th>Ескертпе</th>
-          <th>Әрекет</th>
-        </tr></thead><tbody id="expensesPageTable"></tbody></table></div>
-        <div id="expensesPagination" style="display:flex;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap"></div>
+
+        <div id="expTabContent1">
+          <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+            <input type="text" placeholder="🔍 Ескертпе/алушы бойынша іздеу..." oninput="filterExpenses(this.value)" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+            <select id="expFilterCatSel" onchange="expFilterCat=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық категория</option></select>
+            <select id="expFilterMonthSel" onchange="expFilterMonth=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық ай</option></select>
+            <select id="expFilterStatusSel" onchange="expFilterStatus=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+              <option value="">Барлық статус</option>
+              <option value="paid">✅ Төленген</option>
+              <option value="planned">⏳ Жоспарланған</option>
+              <option value="overdue">❌ Кешіктірілген</option>
+            </select>
+            <select id="expFilterPaidBySel" onchange="expFilterPaidBy=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Кім төлегені бойынша</option></select>
+            <button class="btn btn-ghost" onclick="exportExpensesCSV()">📥 CSV экспорт</button>
+          </div>
+          <div id="expensesStats" class="text-sm text-muted" style="margin-bottom:8px"></div>
+          <div id="expensesCategoryBreakdown" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+          <div class="table-wrap"><table><thead><tr>
+            <th>#</th>
+            <th class="pay-sortable" onclick="setExpSort('date')">Күні<span id="expSortIcon-date"></span></th>
+            <th class="pay-sortable" onclick="setExpSort('category')">Категория<span id="expSortIcon-category"></span></th>
+            <th class="pay-sortable" onclick="setExpSort('amount')">Сомасы<span id="expSortIcon-amount"></span></th>
+            <th>Алушы</th>
+            <th>Кім төледі</th>
+            <th>Статус</th>
+            <th>Тег</th>
+            <th>🔁</th>
+            <th>Ескертпе</th>
+            <th>Әрекет</th>
+          </tr></thead><tbody id="expensesPageTable"></tbody></table></div>
+          <div id="expensesPagination" style="display:flex;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap"></div>
+        </div>
+
+        <div id="expTabContent2" style="display:none">
+          <div class="card"><div class="card-title">👨‍🏫 Мұғалім жалақылары</div><div id="expSalTeachers"></div></div>
+          <div class="card"><div class="card-title">📤 Жалақы тарихы</div><div id="expSalaryHistory"></div></div>
+        </div>
       </div>
 
       <!-- ========== FINANCE ========== -->
@@ -710,8 +722,6 @@ details[open] summary::before{content:'▾ '}
             </table>
           </div>
         </div>
-        <div class="card"><div class="card-title">👨‍🏫 Мұғалім жалақылары</div><div id="finTeachers"></div></div>
-        <div class="card"><div class="card-title">📤 Жалақы тарихы</div><div id="salaryHistory"></div></div>
       </div>
 
       <!-- ========== UNIT ECONOMICS ========== -->
@@ -1913,7 +1923,7 @@ function showPage(name, el){
   const renders={
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
-    payments:renderPayments, expenses:renderExpensesPage, journal:renderJournal, analysis:renderAnalysis,
+    payments:renderPayments, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
     reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM
   };
   renders[name]?.();
@@ -3361,6 +3371,7 @@ async function voidSalaryHistoryEntry(id, tId){
   const log=DATA.salary_logs.find(sl=>sl.id===id); if(!log) return;
   if(!confirm(`Бұл жазбаны (${fmt(Math.abs(Number(log.amount||0)))}₸) өшіресіз бе? Баланс сол сомаға қайта есептеледі.`)) return;
   await sb.from('salary_logs').delete().eq('id',id);
+  await sb.from('expenses').delete().eq('source_salary_log_id',id); // байланысты шығыс жазбасын да өшіреміз
   const t=DATA.teachers.find(t=>t.id===tId);
   if(t){
     const nb=Math.max(0, Math.round(Number(t.balance||0) - Number(log.amount||0)));
@@ -3368,10 +3379,12 @@ async function voidSalaryHistoryEntry(id, tId){
     t.balance=nb;
   }
   try{ const{data:sl}=await sb.from('salary_logs').select('*').order('created_at',{ascending:false}); if(sl)DATA.salary_logs=sl; }catch(e){}
+  try{ const{data:ex}=await sb.from('expenses').select('*').order('created_at',{ascending:false}); if(ex)DATA.expenses=ex; }catch(e){}
   if(t) renderSalaryHeader(t);
   renderSalaryHistory(tId);
   renderTeachers();
   if(document.getElementById('finMonth')) renderFinance();
+  if(document.getElementById('expensesPageTable')){ renderExpensesPage(); renderExpenseSalaryTab(); }
   toast('✅ Жазба өшірілді, баланс жаңартылды','success');
 }
 
@@ -3455,10 +3468,20 @@ async function confirmPayout(){
 
   if(!confirm(`${t.name} ${t.surname||''} — ${fmt(bal)}₸ берілді деп белгілеу?`))return;
   const now2=new Date();
-  await sb.from('salary_logs').insert({teacher_id:t.id,lesson_id:null,date:localDateStr(now2),amount:-bal,note:'payout'});
+  const payDate=localDateStr(now2);
+  const {data:slRow, error:slErr}=await sb.from('salary_logs').insert({teacher_id:t.id,lesson_id:null,date:payDate,amount:-bal,note:'payout'}).select().single();
+  if(slErr){ alert('❌ Сақталмады! Қате: '+slErr.message); return; }
+  const {error:expErr}=await sb.from('expenses').insert({
+    amount:bal, category:'Жалақы', date:payDate, status:'paid',
+    notes:`${t.name} ${t.surname||''} — жалақы төлемі`,
+    source_salary_log_id: slRow?.id||null
+  });
+  if(expErr){ alert('⚠️ Жалақы берілді, бірақ Шығыстарға автоматты жазылмады. Қате: '+expErr.message); }
   await sb.from('teachers').update({balance:0}).eq('id',t.id);
   closeModal('salaryModal');
   await loadAll(); renderTeachers();
+  if(document.getElementById('finMonth')) renderFinance();
+  if(document.getElementById('expensesPageTable')){ renderExpensesPage(); renderExpenseSalaryTab(); }
   toast(`💸 ${fmt(bal)}₸ берілді! Баланс 0₸ болды.`,'success');
 }
 
@@ -4398,6 +4421,11 @@ async function saveExpense(){
   renderFinance(); renderExpensesPage(); toast('✅ Шығыс сақталды!');
 }
 async function deleteExpense(id){
+  const exp=DATA.expenses.find(e=>e.id===id);
+  if(exp && exp.source_salary_log_id){
+    alert('Бұл — жалақы төлемінен автоматты жазылған шығыс. Оны "👨‍🏫 Жалақылар" табындағы "Жалақы тарихы" арқылы өшіріңіз.');
+    return;
+  }
   if(!confirm('Өшіресіз бе?'))return;
   const {error:delErr}=await sb.from('expenses').delete().eq('id',id);
   if(delErr){ alert('❌ Өшірілмеді! Қате: '+delErr.message); return; }
@@ -4552,6 +4580,37 @@ function exportExpensesCSV(){
   URL.revokeObjectURL(url);
 }
 
+// ---- Шығыстар бетіндегі таб қосқышы (Шығыстар / Мұғалім жалақылары) ----
+function switchExpTab(tab){
+  const isList=tab==='list';
+  document.getElementById('expTabContent1').style.display=isList?'':'none';
+  document.getElementById('expTabContent2').style.display=isList?'none':'';
+  document.getElementById('expAddBtn').style.display=isList?'':'none';
+  document.getElementById('expTabBtn1').classList.toggle('active',isList);
+  document.getElementById('expTabBtn2').classList.toggle('active',!isList);
+  if(!isList) renderExpenseSalaryTab();
+}
+// Мұғалім баланстары мен жалақы тарихы — бұрын Қаржы бетінде болған, енді осы жерге көшті
+function renderExpenseSalaryTab(){
+  const teachersEl=document.getElementById('expSalTeachers');
+  if(teachersEl){
+    teachersEl.innerHTML=DATA.teachers.map(t=>{
+      const bal=Number(t.balance||0);
+      return`<div class="attend-row"><div><div class="attend-name">${t.name} ${t.surname||''}</div><div class="attend-info">Баланс: ${fmt(bal)}₸</div></div><span class="badge ${bal>0?'badge-yellow':'badge-green'}">${bal>0?'⏳ Берілмеген':'✅ Берілді'}</span></div>`;
+    }).join('')||'<div class="empty-state"><div class="empty-icon">👨‍🏫</div><p>Жоқ</p></div>';
+  }
+  const histEl=document.getElementById('expSalaryHistory');
+  if(histEl){
+    const payouts=[...DATA.salary_logs].filter(sl=>sl.note==='payout').sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,10);
+    histEl.innerHTML=payouts.length?`<div class="table-wrap"><table><thead><tr><th>Күні</th><th>Мұғалім</th><th>Сома</th><th>Әрекет</th></tr></thead><tbody>${payouts.map(sl=>{const t=DATA.teachers.find(t=>t.id===sl.teacher_id);return`<tr><td>${sl.date}</td><td>${t?t.name+' '+(t.surname||''):'—'}</td><td style="color:var(--red);font-weight:700">-${fmt(Math.abs(sl.amount))}₸</td><td><button class="btn btn-red btn-sm" onclick="voidSalaryHistoryEntry('${sl.id}','${sl.teacher_id}')">🗑️</button></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">💰</div><p>Тарих жоқ</p></div>';
+  }
+  const badgeEl=document.getElementById('expSalTabBadge');
+  if(badgeEl){
+    const unpaidCnt=DATA.teachers.filter(t=>Number(t.balance||0)>0).length;
+    badgeEl.textContent = unpaidCnt ? ` (${unpaidCnt})` : '';
+  }
+}
+
 
 // ================================================================
 // FINANCE
@@ -4572,12 +4631,9 @@ function renderFinance(){
     totalCommission+=commission; totalTax+=tax;
   });
 
-  // Expenses for this month
+  // Expenses for this month (жалақы төлемдері де осы кестеде — automат жазылады)
   const monthExp=DATA.expenses.filter(e=>e.date?.startsWith(`${y}-${mPad}`));
-  // Salary payouts
-  const salExp=DATA.salary_logs.filter(sl=>sl.note==='payout'&&sl.date?.startsWith(`${y}-${mPad}`)).reduce((s,l)=>s+Math.abs(Number(l.amount||0)),0);
-  const otherExp=monthExp.reduce((s,e)=>s+Number(e.amount||0),0);
-  const totalExpense=salExp+otherExp;
+  const totalExpense=monthExp.reduce((s,e)=>s+Number(e.amount||0),0);
 
   document.getElementById('finIncome').textContent=fmt(income)+'₸';
   document.getElementById('finExpense').textContent=fmt(totalExpense)+'₸';
@@ -4585,12 +4641,6 @@ function renderFinance(){
   document.getElementById('finCommission').textContent=fmt(totalCommission)+'₸';
   document.getElementById('finTax').textContent=fmt(totalTax)+'₸';
   document.getElementById('finNetReal').textContent=fmt(income-totalExpense-totalCommission-totalTax)+'₸';
-
-  // Teacher salaries
-  document.getElementById('finTeachers').innerHTML=DATA.teachers.map(t=>{
-    const bal=Number(t.balance||0);
-    return`<div class="attend-row"><div><div class="attend-name">${t.name} ${t.surname||''}</div><div class="attend-info">Баланс: ${fmt(bal)}₸</div></div><span class="badge ${bal>0?'badge-yellow':'badge-green'}">${bal>0?'⏳ Берілмеген':'✅ Берілді'}</span></div>`;
-  }).join('')||'<div class="empty-state"><div class="empty-icon">👨‍🏫</div><p>Жоқ</p></div>';
 
   // Оқушылар — жалпы саны, осы ай жаңа келгендер, маркетинг каналы бойынша үлесі
   document.getElementById('stuTotalCount').textContent=DATA.students.length;
@@ -4615,34 +4665,15 @@ function renderFinance(){
   // Expense chart — pie
   const catTotals={};
   monthExp.forEach(e=>{ catTotals[e.category]=(catTotals[e.category]||0)+Number(e.amount||0); });
-  if(salExp>0) catTotals['Жалақы']=(catTotals['Жалақы']||0)+salExp;
   renderPieChart('expenseChartCanvas','expenseChartLegend',catTotals,
     Object.keys(catTotals).length?null:'Шығыстар жоқ', v=>fmt(v)+'₸');
 
-  // Expenses table — нақты шығыстармен қатар, осы айдағы жалақы төлемдерін де
-  // (salary_logs, note='payout') бір тізімге қосамыз, себебі олар да нақты
-  // шығын болғанымен бөлек кестеде (Жалақы тарихы) сақталады. Сомалар мұнда
-  // тек КӨРСЕТУ үшін қосылады — жоғарыдағы totalExpense есебі бұрынғыдай
-  // salExp+otherExp түрінде бөлек есептеледі, сондықтан қосарланып саналмайды.
-  const salPayoutsForExp=DATA.salary_logs.filter(sl=>sl.note==='payout'&&sl.date?.startsWith(`${y}-${mPad}`));
-  const expenseRows=[
-    ...monthExp.map(e=>({date:e.date, category:e.category, amount:Number(e.amount||0),
-      notes:e.notes||'', del:`deleteExpense('${e.id}')`})),
-    ...salPayoutsForExp.map(sl=>{
-      const t=DATA.teachers.find(t=>t.id===sl.teacher_id);
-      return {date:sl.date, category:'Жалақы', amount:Math.abs(Number(sl.amount||0)),
-        notes:(t?t.name+' '+(t.surname||''):'—')+' — жалақы төлемі',
-        del:`voidSalaryHistoryEntry('${sl.id}','${sl.teacher_id}')`};
-    })
-  ].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  document.getElementById('expensesTable').innerHTML=expenseRows.map(e=>`
+  // Expenses table — жалақы төлемдері енді осы `expenses` кестесінің өзінде
+  // (категория "Жалақы") сақталады, сондықтан бөлек merge қажет емес.
+  document.getElementById('expensesTable').innerHTML=[...monthExp].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(e=>`
     <tr><td>${e.date}</td><td><span class="badge" style="background:${EXPENSE_COLORS[e.category]||'var(--surface2)'}20;color:${EXPENSE_COLORS[e.category]||'var(--text2)'}">${e.category}</span></td>
     <td style="color:var(--red);font-weight:700">${fmt(e.amount)}₸</td><td class="text-muted text-sm">${e.notes||''}</td>
-    <td><button class="btn btn-red btn-sm" onclick="${e.del}">🗑️</button></td></tr>`).join('')||'<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🧾</div><p>Шығыстар жоқ</p></div></td></tr>';
-
-  // Salary history
-  const payouts=DATA.salary_logs.filter(sl=>sl.note==='payout').slice(0,10);
-  document.getElementById('salaryHistory').innerHTML=payouts.length?`<div class="table-wrap"><table><thead><tr><th>Күні</th><th>Мұғалім</th><th>Сома</th></tr></thead><tbody>${payouts.map(sl=>{const t=DATA.teachers.find(t=>t.id===sl.teacher_id);return`<tr><td>${sl.date}</td><td>${t?t.name+' '+(t.surname||''):'—'}</td><td style="color:var(--red);font-weight:700">-${fmt(Math.abs(sl.amount))}₸</td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-icon">💰</div><p>Тарих жоқ</p></div>';
+    <td><button class="btn btn-red btn-sm" onclick="deleteExpense('${e.id}')">🗑️</button></td></tr>`).join('')||'<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🧾</div><p>Шығыстар жоқ</p></div></td></tr>';
 }
 
 // ================================================================
