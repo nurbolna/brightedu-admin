@@ -136,6 +136,11 @@ body{font-family:'Manrope',sans-serif;background:var(--bg);color:var(--text);min
 
 /* ===================== TABLE ===================== */
 .table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);}
+.pay-sortable{cursor:pointer;user-select:none;white-space:nowrap;}
+.pay-sortable:hover{color:var(--accent);}
+.pagination-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:13px;cursor:pointer;}
+.pagination-btn.active{background:var(--accent);color:#fff;border-color:transparent;}
+.pagination-btn:disabled{opacity:.4;cursor:not-allowed;}
 table{width:100%;border-collapse:collapse;}
 thead{background:var(--surface2);}
 th{padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;}
@@ -578,9 +583,34 @@ details[open] summary::before{content:'▾ '}
           <button class="btn btn-blue" onclick="openPaymentModal()">+ Төлем қосу</button>
         </div>
         <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-          <input type="text" placeholder="🔍 Іздеу..." oninput="filterPayments(this.value)" style="flex:1;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+          <input type="text" placeholder="🔍 Іздеу..." oninput="filterPayments(this.value)" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+          <select id="payFilterCourseSel" onchange="payFilterCourse=this.value;payPage=1;renderPayments()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық курс</option></select>
+          <select id="payFilterMonthSel" onchange="payFilterMonth=this.value;payPage=1;renderPayments()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық ай</option></select>
+          <select id="payFilterTypeSel" onchange="payFilterType=this.value;payPage=1;renderPayments()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+            <option value="">Барлық түрі</option>
+            <option value="normal">✅ Қалыпты төлем</option>
+            <option value="installment_12">📆 Рассрочка 0-0-12</option>
+            <option value="installment_24">📆 Рассрочка 0-0-24</option>
+          </select>
+          <button class="btn btn-ghost" onclick="exportPaymentsCSV()">📥 CSV экспорт</button>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>#</th><th>Оқушы</th><th>Курс</th><th>Сомасы</th><th>Қай айға</th><th>Төлеген күні</th><th>Келесі төлем</th><th>Касса</th><th>Түрі</th><th>Таза түсім</th><th>Ескертпе</th><th>Әрекет</th></tr></thead><tbody id="paymentsTable"></tbody></table></div>
+        <div id="paymentsStats" class="text-sm text-muted" style="margin-bottom:8px"></div>
+        <div id="paymentsCourseBreakdown" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+        <div class="table-wrap"><table><thead><tr>
+          <th>#</th>
+          <th class="pay-sortable" onclick="setPaySort('student')">Оқушы<span id="paySortIcon-student"></span></th>
+          <th class="pay-sortable" onclick="setPaySort('course')">Курс<span id="paySortIcon-course"></span></th>
+          <th class="pay-sortable" onclick="setPaySort('amount')">Сомасы<span id="paySortIcon-amount"></span></th>
+          <th class="pay-sortable" onclick="setPaySort('month')">Қай айға<span id="paySortIcon-month"></span></th>
+          <th class="pay-sortable" onclick="setPaySort('pay_date')">Төлеген күні<span id="paySortIcon-pay_date"></span></th>
+          <th>Келесі төлем</th>
+          <th>Касса</th>
+          <th>Түрі</th>
+          <th>Таза түсім</th>
+          <th>Ескертпе</th>
+          <th>Әрекет</th>
+        </tr></thead><tbody id="paymentsTable"></tbody></table></div>
+        <div id="paymentsPagination" style="display:flex;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap"></div>
       </div>
 
       <!-- ========== FINANCE ========== -->
@@ -1329,6 +1359,15 @@ let currentJournalEntry = null; // {studentId, groupId, date, id} for journal mo
 let journalStatus = null; // selected status in journal modal
 let studentFilter = '';
 let payFilter = '';
+// Төлемдер бетіндегі жаңа фильтр/сұрыптау/беттеу күйі
+let payFilterCourse = '';
+let payFilterMonth = '';
+let payFilterType = '';
+let paySortCol = 'pay_date';
+let paySortDir = 'desc';
+let payPage = 1;
+const PAY_PAGE_SIZE = 30;
+let _payExportList = []; // renderPayments() әр шақырылғанда сүзілген (беттеуге дейінгі) тізіммен жаңарады
 
 // ================================================================
 // THEME
@@ -3770,19 +3809,102 @@ async function deletePayment(id){
   await loadAll();
   renderPayments(); renderFinance(); renderFinancePayments(); renderStudents();
 }
-function filterPayments(val){ payFilter=val; renderPayments(); }
+function filterPayments(val){ payFilter=val; payPage=1; renderPayments(); }
+function setPaySort(col){
+  if(paySortCol===col){ paySortDir = paySortDir==='asc'?'desc':'asc'; }
+  else { paySortCol=col; paySortDir='asc'; }
+  payPage=1;
+  renderPayments();
+}
+function goPayPage(n){ payPage=n; renderPayments(); }
 function renderPayments(){
   const typeL={normal:'✅ Қалыпты төлем',installment_12:'📆 Рассрочка 0-0-12',installment_24:'📆 Рассрочка 0-0-24'};
-  let sorted=[...DATA.payments].sort((a,b)=>(b.pay_date||'').localeCompare(a.pay_date||''));
-  if(payFilter)sorted=sorted.filter(p=>{const s=DATA.students.find(s=>s.id===p.student_id);return(s?s.name+' '+(s.surname||''):'').toLowerCase().includes(payFilter.toLowerCase());});
-  document.getElementById('paymentsTable').innerHTML=sorted.map((p,i)=>{
+
+  // Курс/ай фильтр dropdown-тарын бір рет толтырамыз (әр keystroke-те қайта
+  // құрмас үшін — әйтпесе ашық тұрған dropdown жабылып қалады)
+  const courseSel=document.getElementById('payFilterCourseSel');
+  if(courseSel && courseSel.options.length<=1){
+    courseSel.innerHTML='<option value="">Барлық курс</option>'+DATA.courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  }
+  const monthSel=document.getElementById('payFilterMonthSel');
+  if(monthSel && monthSel.options.length<=1){
+    const combos=[...new Set(DATA.payments.map(p=>`${p.month}_${p.year}`))]
+      .sort((a,b)=>{ const[am,ay]=a.split('_').map(Number); const[bm,by]=b.split('_').map(Number); return by-ay || bm-am; });
+    monthSel.innerHTML='<option value="">Барлық ай</option>'+combos.map(cb=>{ const[m,y]=cb.split('_'); return `<option value="${cb}">${MONTHS[m]} ${y}</option>`; }).join('');
+  }
+
+  // 1) Фильтр (оқушы іздеу + курс + ай + түрі — барлығы бірге, AND)
+  let list=[...DATA.payments];
+  if(payFilter) list=list.filter(p=>{const s=DATA.students.find(s=>s.id===p.student_id);return(s?s.name+' '+(s.surname||''):'').toLowerCase().includes(payFilter.toLowerCase());});
+  if(payFilterCourse) list=list.filter(p=>p.course_id===payFilterCourse);
+  if(payFilterMonth) list=list.filter(p=>`${p.month}_${p.year}`===payFilterMonth);
+  if(payFilterType) list=list.filter(p=>p.pay_type===payFilterType);
+
+  // 2) Сүзілген нәтиженің жиынтық статистикасы (беттеуден бұрын есептеледі)
+  const statsEl=document.getElementById('paymentsStats');
+  if(statsEl){
+    const cnt=list.length;
+    const totalAmt=list.reduce((s,p)=>s+Number(p.amount||0),0);
+    const totalNet=list.reduce((s,p)=>s+calcPaymentBreakdown(p.amount,p.pay_type).net,0);
+    const avgAmt=cnt?totalAmt/cnt:0;
+    statsEl.textContent = cnt
+      ? `Табылды: ${cnt} төлем · Жалпы сома: ${fmt(totalAmt)}₸ · Орташа чек: ${fmt(Math.round(avgAmt))}₸ · Нақты түсім (комиссия/салықсыз): ${fmt(Math.round(totalNet))}₸`
+      : 'Бұл фильтрге сай төлем табылмады';
+  }
+
+  // Курс бойынша шағын бөлінісі — сүзілген тізімге сай динамикалық
+  const courseBrEl=document.getElementById('paymentsCourseBreakdown');
+  if(courseBrEl){
+    const byCourse={};
+    list.forEach(p=>{
+      const c=DATA.courses.find(c=>c.id===p.course_id);
+      const name=c?c.name:'Курс белгісіз';
+      if(!byCourse[name]) byCourse[name]={cnt:0,sum:0};
+      byCourse[name].cnt++; byCourse[name].sum+=Number(p.amount||0);
+    });
+    courseBrEl.innerHTML=Object.entries(byCourse).map(([name,v])=>
+      `<span class="badge badge-blue">${name}: ${v.cnt} төлем · ${fmt(v.sum)}₸</span>`
+    ).join('');
+  }
+
+  // CSV экспорт батырмасы дәл осы сүзілген (беттеуге дейінгі) тізіммен жұмыс істейді
+  _payExportList=list;
+
+  // 3) Сұрыптау (баған атауын басқанда — toggle: өспелі → кемімелі)
+  const getSortVal=(p,col)=>{
+    switch(col){
+      case 'student': { const s=DATA.students.find(s=>s.id===p.student_id); return (s?s.name+' '+(s.surname||''):'').toLowerCase(); }
+      case 'course': { const c=DATA.courses.find(c=>c.id===p.course_id); return c?c.name.toLowerCase():''; }
+      case 'amount': return Number(p.amount||0);
+      case 'month': return Number(p.year)*100+Number(p.month);
+      case 'pay_date': default: return p.pay_date||'';
+    }
+  };
+  list.sort((a,b)=>{
+    const va=getSortVal(a,paySortCol), vb=getSortVal(b,paySortCol);
+    const cmp=(typeof va==='number'&&typeof vb==='number') ? va-vb : String(va).localeCompare(String(vb));
+    return paySortDir==='asc' ? cmp : -cmp;
+  });
+  ['student','course','amount','month','pay_date'].forEach(col=>{
+    const iconEl=document.getElementById('paySortIcon-'+col);
+    if(iconEl) iconEl.textContent = (col===paySortCol) ? (paySortDir==='asc'?' ▲':' ▼') : '';
+  });
+
+  // 4) Беттеу — 30 жол/бет
+  const totalPages=Math.max(1,Math.ceil(list.length/PAY_PAGE_SIZE));
+  if(payPage>totalPages) payPage=totalPages;
+  if(payPage<1) payPage=1;
+  const pageStart=(payPage-1)*PAY_PAGE_SIZE;
+  const pageItems=list.slice(pageStart,pageStart+PAY_PAGE_SIZE);
+
+  document.getElementById('paymentsTable').innerHTML=pageItems.map((p,i)=>{
     const s=DATA.students.find(s=>s.id===p.student_id);
     // Келесі мерзімді есептеу
     const payD=p.pay_date?parseLocalDate(p.pay_date):null;
     const nextD=payD?new Date(payD.getFullYear(),payD.getMonth()+1,payD.getDate()):null;
     const nextStr=nextD?`${nextD.getFullYear()}-${String(nextD.getMonth()+1).padStart(2,'0')}-${String(nextD.getDate()).padStart(2,'0')}`:'—';
     return`<tr>
-      <td>${i+1}</td>
+      <td>${pageStart+i+1}</td>
       <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
       <td>${(()=>{const c=DATA.courses.find(c=>c.id===p.course_id);return c?`<span class="badge badge-blue">${c.name}</span>`:'<span class="text-muted">—</span>';})()}</td>
       <td class="font-bold" style="color:var(--green)">${fmt(p.amount)}₸</td>
@@ -3796,6 +3918,51 @@ function renderPayments(){
       <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}')">🗑️</button></td>
     </tr>`;
   }).join('')||'<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">💳</div><p>Төлемдер жоқ</p></div></td></tr>';
+
+  // 5) Беттеу навигациясы
+  const pagEl=document.getElementById('paymentsPagination');
+  if(pagEl){
+    if(totalPages<=1){ pagEl.innerHTML=''; }
+    else{
+      let html=`<button class="pagination-btn" ${payPage===1?'disabled':''} onclick="goPayPage(${payPage-1})">◀</button>`;
+      for(let pg=1; pg<=totalPages; pg++){
+        html+=`<button class="pagination-btn ${pg===payPage?'active':''}" onclick="goPayPage(${pg})">${pg}</button>`;
+      }
+      html+=`<button class="pagination-btn" ${payPage===totalPages?'disabled':''} onclick="goPayPage(${payPage+1})">▶</button>`;
+      pagEl.innerHTML=html;
+    }
+  }
+}
+
+// Сүзілген (беттеуге дейінгі) тізімді CSV файл ретінде жүктеп алу
+function exportPaymentsCSV(){
+  const typeL={normal:'Қалыпты төлем',installment_12:'Рассрочка 0-0-12',installment_24:'Рассрочка 0-0-24'};
+  const rows=[['Оқушы','Курс','Сомасы','Қай айға','Төлеген күні','Касса','Түрі','Таза түсім','Ескертпе']];
+  _payExportList.forEach(p=>{
+    const s=DATA.students.find(s=>s.id===p.student_id);
+    const c=DATA.courses.find(c=>c.id===p.course_id);
+    rows.push([
+      s?s.name+' '+(s.surname||''):'—',
+      c?c.name:'—',
+      p.amount||0,
+      `${MONTHS[p.month]||p.month} ${p.year}`,
+      p.pay_date||'',
+      p.cash_account||'',
+      typeL[p.pay_type]||p.pay_type||'',
+      Math.round(calcPaymentBreakdown(p.amount,p.pay_type).net),
+      (p.note||'').replace(/[\r\n]+/g,' ')
+    ]);
+  });
+  const csv='\uFEFF'+rows.map(r=>r.map(v=>{
+    const s=String(v);
+    return /[",;\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`tolemder_${localDateStr(new Date())}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ================================================================
