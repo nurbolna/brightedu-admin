@@ -873,7 +873,7 @@ details[open] summary::before{content:'▾ '}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Мұғалім</label><select id="groupTeacher"><option value="">—</option></select></div>
-      <div class="form-group"><label>Бөлме</label><input type="text" id="groupRoom" /></div>
+      <div class="form-group"><label>Сабақ сілтемесі (Zoom/Meet)</label><input type="url" id="groupMeetingLink" placeholder="https://..." /></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Айлық төлем (₸)</label><input type="number" id="groupFee" /></div>
@@ -2845,7 +2845,7 @@ function renderCourses(){
 function openGroupModal(g=null){
   document.getElementById('groupId').value=g?.id||'';
   document.getElementById('groupName').value=g?.name||'';
-  document.getElementById('groupRoom').value=g?.room||'';
+  document.getElementById('groupMeetingLink').value=g?.meeting_link||'';
   document.getElementById('groupFee').value=g?.fee||'';
   document.getElementById('groupMax').value=g?.max_students||'';
   sel('groupCourse',DATA.courses.map(c=>({id:c.id,name:c.name})),g?.course_id||'');
@@ -2860,19 +2860,19 @@ function updateGroupLevels(){
 }
 async function saveGroup(){
   const name=document.getElementById('groupName').value.trim(); if(!name) return alert('Атауын енгізіңіз');
-  const row={name,course_id:document.getElementById('groupCourse').value||null,level:document.getElementById('groupLevel').value,teacher_id:document.getElementById('groupTeacher').value||null,room:document.getElementById('groupRoom').value,fee:document.getElementById('groupFee').value||null,max_students:document.getElementById('groupMax').value||null};
+  const row={name,course_id:document.getElementById('groupCourse').value||null,level:document.getElementById('groupLevel').value,teacher_id:document.getElementById('groupTeacher').value||null,meeting_link:document.getElementById('groupMeetingLink').value.trim(),fee:document.getElementById('groupFee').value||null,max_students:document.getElementById('groupMax').value||null};
   const id=document.getElementById('groupId').value;
   if(id) await sb.from('groups').update(row).eq('id',id); else await sb.from('groups').insert(row);
   closeModal('groupModal'); await loadAll(); renderGroups(); toast('✅ Сақталды!');
 }
 async function deleteGroup(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('groups').delete().eq('id',id); await loadAll(); renderGroups(); }
 function renderGroups(){
-  document.getElementById('groupsList').innerHTML=DATA.groups.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Группа</th><th>Курс</th><th>Деңгей</th><th>Мұғалім</th><th>Оқушы</th><th>Бөлме</th><th>Ай. төлем</th><th>Әрекет</th></tr></thead><tbody>${
+  document.getElementById('groupsList').innerHTML=DATA.groups.length?`<div class="table-wrap"><table><thead><tr><th>#</th><th>Группа</th><th>Курс</th><th>Деңгей</th><th>Мұғалім</th><th>Оқушы</th><th>Сілтеме</th><th>Ай. төлем</th><th>Әрекет</th></tr></thead><tbody>${
     DATA.groups.map((g,i)=>{
       const c=DATA.courses.find(c=>c.id===g.course_id);
       const t=DATA.teachers.find(t=>t.id===g.teacher_id);
       const sc=DATA.student_groups.filter(sg=>sg.group_id===g.id).length;
-      return`<tr><td>${i+1}</td><td class="font-bold">${g.name}</td><td>${c?c.name:'—'}</td><td><span class="badge badge-purple">${g.level||'—'}</span></td><td>${t?t.name+' '+(t.surname||''):'—'}</td><td><span class="badge badge-blue">${sc}/${g.max_students||'∞'}</span></td><td>${g.room||'—'}</td><td>${g.fee?fmt(g.fee)+'₸':'—'}</td>
+      return`<tr><td>${i+1}</td><td class="font-bold">${g.name}</td><td>${c?c.name:'—'}</td><td><span class="badge badge-purple">${g.level||'—'}</span></td><td>${t?t.name+' '+(t.surname||''):'—'}</td><td><span class="badge badge-blue">${sc}/${g.max_students||'∞'}</span></td><td>${g.meeting_link?`<a href="${g.meeting_link}" target="_blank" onclick="event.stopPropagation()">🔗 Сілтеме</a>`:'—'}</td><td>${g.fee?fmt(g.fee)+'₸':'—'}</td>
       <td><div style="display:flex;gap:5px"><button class="btn btn-ghost btn-sm" onclick='openGroupModal(${JSON.stringify(g).replace(/'/g,"&#39;")})'>✏️</button><button class="btn btn-red btn-sm" onclick="deleteGroup('${g.id}')">🗑️</button></div></td></tr>`;
     }).join('')
   }</tbody></table></div>`:'<div class="empty-state card"><div class="empty-icon">👥</div><p>Группалар жоқ</p></div>';
@@ -4905,7 +4905,7 @@ function renderTeacherDashboard(){
         return`<div class="attend-row">
           <div>
             <div class="attend-name">${g.name}</div>
-            <div class="attend-info">${c?c.name:'—'} | ${g.room||'—'}</div>
+            <div class="attend-info">${c?c.name:'—'} | ${g.meeting_link?`<a href="${g.meeting_link}" target="_blank" onclick="event.stopPropagation()">🔗 сілтеме</a>`:'сілтеме жоқ'}</div>
           </div>
           <span class="badge badge-blue">${sc} оқушы</span>
         </div>`;
