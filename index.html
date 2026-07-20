@@ -537,6 +537,23 @@ details[open] summary::before{content:'▾ '}
           <div><div class="page-title">Оқушылар</div><div class="page-subtitle">Толық тізім</div></div>
           <button class="btn btn-blue dir-admin" onclick="openStudentModal()">+ Оқушы қосу</button>
         </div>
+        <div class="dir-only" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card">
+            <div class="card-title">📚 Курс бойынша бөлінісі</div>
+            <div style="position:relative;height:190px"><canvas id="stuCourseChartCanvas" role="img" aria-label="Оқушылардың курс бойынша бөлінісі"></canvas></div>
+            <div id="stuCourseChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📣 Дереккөз бойынша бөлінісі</div>
+            <div style="position:relative;height:190px"><canvas id="stuSourceChartCanvas" role="img" aria-label="Оқушылардың маркетинг арнасы бойынша бөлінісі"></canvas></div>
+            <div id="stuSourceChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📈 Үлгерім деңгейі бойынша үлестіру</div>
+            <div style="position:relative;height:190px"><canvas id="stuProgressChartCanvas" role="img" aria-label="Оқушылардың үлгерім деңгейі бойынша үлестірілуі"></canvas></div>
+            <div id="stuProgressChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+          </div>
+        </div>
         <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <input type="text" placeholder="🔍 Іздеу..." oninput="filterStudents(this.value)" style="flex:1;min-width:180px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
           <select id="studentGroupFilter" onchange="renderStudents()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
@@ -583,6 +600,18 @@ details[open] summary::before{content:'▾ '}
           <div><div class="page-title">Төлемдер</div><div class="page-subtitle">Оқушы төлемдері тарихы</div></div>
           <button class="btn btn-blue" onclick="openPaymentModal()">+ Төлем қосу</button>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card">
+            <div class="card-title">📚 Курс бойынша кіріс</div>
+            <div style="position:relative;height:190px"><canvas id="payCourseChartCanvas" role="img" aria-label="Курс бойынша кіріс сомасы"></canvas></div>
+            <div id="payCourseChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">💳 Төлем түрі бойынша</div>
+            <div style="position:relative;height:190px"><canvas id="payTypeChartCanvas" role="img" aria-label="Төлем түрі бойынша бөліну"></canvas></div>
+            <div id="payTypeChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+          </div>
+        </div>
         <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
           <input type="text" placeholder="🔍 Іздеу..." oninput="filterPayments(this.value)" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
           <select id="payFilterCourseSel" onchange="payFilterCourse=this.value;payPage=1;renderPayments()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық курс</option></select>
@@ -626,6 +655,17 @@ details[open] summary::before{content:'▾ '}
         </div>
 
         <div id="expTabContent1">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+            <div class="card">
+              <div class="card-title">🧾 Категория бойынша бөліну</div>
+              <div style="position:relative;height:190px"><canvas id="expCatChartCanvas" role="img" aria-label="Шығыстардың категория бойынша бөлінісі"></canvas></div>
+              <div id="expCatChartLegend" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px"></div>
+            </div>
+            <div class="card">
+              <div class="card-title">📈 Ай сайынғы шығыс трендісі</div>
+              <div style="position:relative;height:190px"><canvas id="expTrendChartCanvas" role="img" aria-label="Ай сайынғы шығыс трендісі"></canvas></div>
+            </div>
+          </div>
           <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
             <input type="text" placeholder="🔍 Ескертпе/алушы бойынша іздеу..." oninput="filterExpenses(this.value)" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
             <select id="expFilterCatSel" onchange="expFilterCat=this.value;expPage=1;renderExpensesPage()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">Барлық категория</option></select>
@@ -2136,6 +2176,35 @@ function renderPieChart(canvasId, legendId, dataObj, emptyMsg, fmtFn){
   }
 }
 
+// Ай сайынғы трендке арналған жалпы бағаналы график көмекшісі (мыс. Шығыстар
+// бетіндегі "Ай сайынғы шығыс трендісі"). labels/data — хронологиялық ретпен.
+const barChartInstances={};
+function renderBarTrendChart(canvasId, labels, data, colorHex, fmtFn){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas) return;
+  if(barChartInstances[canvasId]){ barChartInstances[canvasId].destroy(); barChartInstances[canvasId]=null; }
+  if(!labels.length){
+    canvas.style.display='none';
+    return;
+  }
+  canvas.style.display='';
+  barChartInstances[canvasId]=new Chart(canvas,{
+    type:'bar',
+    data:{ labels, datasets:[{ data, backgroundColor:colorHex, borderRadius:4 }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label:ctx=>` ${fmtFn?fmtFn(ctx.parsed.y):ctx.parsed.y}` } }
+      },
+      scales:{
+        y:{ beginAtZero:true, ticks:{ font:{size:11}, color:'#888' } },
+        x:{ ticks:{ font:{size:11}, color:'#888' } }
+      }
+    }
+  });
+}
+
 // ================================================================
 // KASPI КОМИССИЯСЫ + УПРОЩЕНКА (3%) ЕСЕБІ
 // ================================================================
@@ -3584,6 +3653,38 @@ function renderStudents(){
   // Мұғалімге де қаржылық ақпарат жасырын
   const showFinance = role==='director';
 
+  // Диаграммалар — тек директорға (барлық оқушы бойынша, ағымдағы фильтрлерге
+  // байланбайды, себебі бұл "қазіргі жағдайдың суреті" — snapshot)
+  if(role==='director'){
+    const stuCourseTotals={};
+    DATA.students.forEach(s=>{
+      const cNames=[...new Set(getStudentGroups(s.id).map(g=>DATA.courses.find(c=>c.id===g.course_id)).filter(Boolean).map(c=>c.name))];
+      if(!cNames.length){ stuCourseTotals['Курс тағайындалмаған']=(stuCourseTotals['Курс тағайындалмаған']||0)+1; return; }
+      cNames.forEach(name=>{ stuCourseTotals[name]=(stuCourseTotals[name]||0)+1; });
+    });
+    renderPieChart('stuCourseChartCanvas','stuCourseChartLegend',stuCourseTotals,
+      Object.keys(stuCourseTotals).length?null:'Оқушылар жоқ');
+
+    const stuSourceTotals={};
+    DATA.students.forEach(s=>{
+      const src=s.lead_source||'Белгісіз';
+      stuSourceTotals[src]=(stuSourceTotals[src]||0)+1;
+    });
+    renderPieChart('stuSourceChartCanvas','stuSourceChartLegend',stuSourceTotals,
+      Object.keys(stuSourceTotals).length?null:'Оқушылар жоқ');
+
+    const progressBuckets={'0-25%':0,'25-50%':0,'50-75%':0,'75-100%':0};
+    DATA.students.forEach(s=>{
+      const p=calcProgress(s.id);
+      if(p<25) progressBuckets['0-25%']++;
+      else if(p<50) progressBuckets['25-50%']++;
+      else if(p<75) progressBuckets['50-75%']++;
+      else progressBuckets['75-100%']++;
+    });
+    renderPieChart('stuProgressChartCanvas','stuProgressChartLegend',progressBuckets,
+      DATA.students.length?null:'Оқушылар жоқ');
+  }
+
   document.getElementById('studentsTable').innerHTML=list.map((s,i)=>{
     const sGroups=getStudentGroups(s.id);
     const prog=calcProgress(s.id);
@@ -3956,6 +4057,26 @@ function renderPayments(){
       `<span class="badge badge-blue">${name}: ${v.cnt} төлем · ${fmt(v.sum)}₸</span>`
     ).join('');
   }
+
+  // Диаграмма 1: курс бойынша кіріс сомасы (₸) — ағымдағы фильтрлерге сай
+  const payCourseIncome={};
+  list.forEach(p=>{
+    const c=DATA.courses.find(c=>c.id===p.course_id);
+    const name=c?c.name:'Курс белгісіз';
+    payCourseIncome[name]=(payCourseIncome[name]||0)+Number(p.amount||0);
+  });
+  renderPieChart('payCourseChartCanvas','payCourseChartLegend',payCourseIncome,
+    Object.keys(payCourseIncome).length?null:'Бұл фильтрге сай төлем жоқ', v=>fmt(v)+'₸');
+
+  // Диаграмма 2: төлем түрі бойынша бөліну — ағымдағы фильтрлерге сай
+  const payTypeLabelsForChart={normal:'Қалыпты төлем',installment_12:'Рассрочка 0-0-12',installment_24:'Рассрочка 0-0-24'};
+  const payTypeTotals={};
+  list.forEach(p=>{
+    const label=payTypeLabelsForChart[p.pay_type]||p.pay_type||'Белгісіз';
+    payTypeTotals[label]=(payTypeTotals[label]||0)+1;
+  });
+  renderPieChart('payTypeChartCanvas','payTypeChartLegend',payTypeTotals,
+    Object.keys(payTypeTotals).length?null:'Бұл фильтрге сай төлем жоқ');
 
   // CSV экспорт батырмасы дәл осы сүзілген (беттеуге дейінгі) тізіммен жұмыс істейді
   _payExportList=list;
@@ -4472,6 +4593,36 @@ function renderExpensesPage(){
   if(expFilterMonth) list=list.filter(e=>(e.date||'').slice(0,7)===expFilterMonth);
   if(expFilterStatus) list=list.filter(e=>(e.status||'paid')===expFilterStatus);
   if(expFilterPaidBy) list=list.filter(e=>e.paid_by===expFilterPaidBy);
+
+  // Диаграммаларға арналған тізім — ай фильтрінен басқа барлық фильтр қолданылады
+  // (ай сайынғы трендке бірнеше ай деректі керек, сондықтан expFilterMonth-ты
+  // диаграммаларда әдейі елемейміз)
+  let chartList=[...DATA.expenses];
+  if(expFilter){
+    const q=expFilter.toLowerCase();
+    chartList=chartList.filter(e=>(e.notes||'').toLowerCase().includes(q)||(e.payee||'').toLowerCase().includes(q));
+  }
+  if(expFilterCat) chartList=chartList.filter(e=>e.category===expFilterCat);
+  if(expFilterStatus) chartList=chartList.filter(e=>(e.status||'paid')===expFilterStatus);
+  if(expFilterPaidBy) chartList=chartList.filter(e=>e.paid_by===expFilterPaidBy);
+
+  // Диаграмма 1: категория бойынша бөліну
+  const expCatTotals={};
+  chartList.forEach(e=>{ expCatTotals[e.category||'Белгісіз']=(expCatTotals[e.category||'Белгісіз']||0)+Number(e.amount||0); });
+  renderPieChart('expCatChartCanvas','expCatChartLegend',expCatTotals,
+    Object.keys(expCatTotals).length?null:'Шығыстар жоқ', v=>fmt(v)+'₸');
+
+  // Диаграмма 2: ай сайынғы шығыс трендісі (соңғы 6 ай, хронологиялық ретпен)
+  const monthTotals={};
+  chartList.forEach(e=>{
+    if(!e.date) return;
+    const ym=e.date.slice(0,7);
+    monthTotals[ym]=(monthTotals[ym]||0)+Number(e.amount||0);
+  });
+  const sortedMonths=Object.keys(monthTotals).sort().slice(-6);
+  const trendLabels=sortedMonths.map(ym=>{ const[y,m]=ym.split('-'); return `${MONTHS[Number(m)].slice(0,3)} ${y.slice(2)}`; });
+  const trendData=sortedMonths.map(ym=>monthTotals[ym]);
+  renderBarTrendChart('expTrendChartCanvas', trendLabels, trendData, '#f87171', v=>fmt(v)+'₸');
 
   // 2) Сүзілген нәтиженің жиынтық статистикасы
   const statsEl=document.getElementById('expensesStats');
