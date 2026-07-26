@@ -424,6 +424,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-section">Журнал</div>
         <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
         <div class="nav-item" onclick="showPage('analysis',this)">📊 Анализ</div>
+        <div class="nav-item dir-only" onclick="showPage('parent-reports',this)">📨 Ата-анаға жіберу</div>
         <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Рейтинг</div>
         <div class="nav-section">Адамдар</div>
         <div class="nav-item dir-admin" onclick="showPage('students',this)">👩‍🎓 Оқушылар</div>
@@ -838,6 +839,40 @@ details[open] summary::before{content:'▾ '}
         <div class="card" id="analysisDetailCard" style="display:none">
           <div class="page-header" style="margin-bottom:12px"><div><div class="card-title" id="analysisDetailTitle"></div></div><button class="btn btn-ghost btn-sm" onclick="closeAnalysisDetail()">✕ Жабу</button></div>
           <div id="analysisDetailContent"></div>
+        </div>
+      </div>
+
+      <!-- ========== PARENT REPORTS ========== -->
+      <div class="page dir-only" id="page-parent-reports">
+        <div class="page-header"><div><div class="page-title">Ата-анаға жіберу</div><div class="page-subtitle">2 апталық есептерді дайындау және жіберу тарихы</div></div></div>
+
+        <div class="crm-view-toggle" style="width:fit-content;margin-bottom:16px">
+          <button id="prTabBtn-current" class="active" onclick="switchParentReportsTab('current')">Ағымдағы кезең</button>
+          <button id="prTabBtn-history" onclick="switchParentReportsTab('history')">Жылдық тарих</button>
+        </div>
+
+        <!-- CURRENT PERIOD TAB -->
+        <div id="prTab-current">
+          <div class="card">
+            <div class="journal-toolbar">
+              <div class="form-group" style="margin:0"><label>Топ</label><select id="prGroup" onchange="renderParentReportsCurrent()"><option value="">— Барлық топтар —</option></select></div>
+              <div class="form-group" style="margin:0"><label>Кезең басы</label><input type="date" id="prStart" onchange="renderParentReportsCurrent()" /></div>
+              <div class="form-group" style="margin:0"><label>Кезең соңы</label><input type="date" id="prEnd" onchange="renderParentReportsCurrent()" /></div>
+            </div>
+          </div>
+          <div class="card" id="prSummaryCard" style="display:flex;align-items:center;gap:12px"></div>
+          <div id="prGroupsWrap"></div>
+        </div>
+
+        <!-- YEARLY HISTORY TAB -->
+        <div id="prTab-history" style="display:none">
+          <div class="card">
+            <div class="journal-toolbar">
+              <div class="form-group" style="margin:0"><label>Топ</label><select id="prHistGroup" onchange="renderParentReportsHistory()"><option value="">— Таңдаңыз —</option></select></div>
+              <div class="form-group" style="margin:0"><label>Жыл</label><select id="prHistYear" onchange="renderParentReportsHistory()"></select></div>
+            </div>
+            <div id="prHistWrap"><div class="empty-state"><div class="empty-icon">📨</div><p>Топ таңдаңыз</p></div></div>
+          </div>
         </div>
       </div>
 
@@ -1385,7 +1420,7 @@ let DATA = {
   courses:[], teachers:[], groups:[], students:[], student_groups:[],
   lessons:[], payments:[], holidays:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
-  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[], leads:[], lead_disqual_reasons:[]
+  journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[], leads:[], lead_disqual_reasons:[], parent_reports:[]
 };
 let crmView = 'table';           // 'table' | 'board'
 
@@ -1968,7 +2003,8 @@ function showPage(name, el){
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
     payments:renderPayments, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
-    reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM
+    reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM,
+    'parent-reports':renderParentReports
   };
   renders[name]?.();
 }
@@ -2046,6 +2082,7 @@ const LOAD_ALL_SPEC = [
   {key:'leads',     table:'leads',               order:{col:'created_at',asc:false}, fallback:'keep'},
   {key:'lead_disqual_reasons', table:'lead_disqual_reasons', order:{col:'name',asc:true}, fallback:'keep'},
   {key:'directors', table:'staff_accounts',      order:null, fallback:[], select:'login,name', eq:{col:'role',val:'director'}},
+  {key:'parent_reports', table:'parent_reports', order:{col:'created_at',asc:false}, fallback:[]},
 ];
 
 async function loadAll(){
@@ -2083,6 +2120,7 @@ async function loadAll(){
   updateBadges();
   populateJournalGroups();
   populateAnalysisGroups();
+  populateParentReportsGroups();
   populateStudentGroupFilter();
   populateStudentCourseFilter();
 }
@@ -5427,6 +5465,231 @@ function closeAnalysisDetail(){
 }
 
 // ================================================================
+// PARENT REPORTS (Ата-анаға жіберу) — тек директор
+// journal_entries деректерінен 2 апталық қорытынды құрап, WhatsApp
+// арқылы ата-анаға жіберуді әрі жіберілу тарихын бақылайды.
+// ================================================================
+let prActiveTab = 'current';
+let prOpenGroups = new Set(); // ашық тұрған топ аккордеондары
+
+function populateParentReportsGroups(){
+  const s1=document.getElementById('prGroup');
+  const s2=document.getElementById('prHistGroup');
+  if(!s1||!s2)return;
+  const opts = DATA.groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  const v1=s1.value, v2=s2.value;
+  s1.innerHTML='<option value="">— Барлық топтар —</option>'+opts;
+  s2.innerHTML='<option value="">— Таңдаңыз —</option>'+opts;
+  if(v1) s1.value=v1;
+  if(v2) s2.value=v2;
+  // Ай/жыл селектін бір рет толтырамыз
+  const yEl=document.getElementById('prHistYear');
+  if(yEl && !yEl.options.length){
+    const curY=new Date().getFullYear();
+    yEl.innerHTML=[curY,curY-1,curY-2].map(y=>`<option value="${y}">${y} жыл</option>`).join('');
+  }
+  // Әдепкі кезең — соңғы 14 күн
+  const sEl=document.getElementById('prStart'), eEl=document.getElementById('prEnd');
+  if(sEl && !sEl.value){
+    const today=new Date();
+    const from=new Date(today); from.setDate(today.getDate()-13);
+    sEl.value=toLocalISODate(from);
+    eEl.value=toLocalISODate(today);
+  }
+}
+
+function switchParentReportsTab(tab){
+  prActiveTab=tab;
+  document.getElementById('prTab-current').style.display = tab==='current'?'':'none';
+  document.getElementById('prTab-history').style.display = tab==='history'?'':'none';
+  document.getElementById('prTabBtn-current').classList.toggle('active', tab==='current');
+  document.getElementById('prTabBtn-history').classList.toggle('active', tab==='history');
+  if(tab==='current') renderParentReportsCurrent();
+  else renderParentReportsHistory();
+}
+
+function renderParentReports(){
+  populateParentReportsGroups();
+  switchParentReportsTab(prActiveTab);
+}
+
+// Осы кезеңге сол оқушыға сақталған жіберу жазбасын табады (болса)
+function findParentReportRecord(sId, start, end){
+  return DATA.parent_reports.find(r=>r.student_id===sId && r.period_start===start && r.period_end===end) || null;
+}
+
+function parentReportMessage(s, group, st, start, end){
+  const lines=[
+    `Сәлеметсіз бе! ${s.name} ${s.surname||''} оқушысының ${start} — ${end} аралығындағы есебі:`,
+    `— Қатысу: ${st.attAvg!=null?st.attAvg+'%':'мәлімет жоқ'}`,
+    `— Үй жұмысы: ${st.hwAvg!=null?st.hwAvg+'/10':'мәлімет жоқ'}`,
+    `— Белсенділік: ${st.actAvg!=null?st.actAvg+'/5':'мәлімет жоқ'}`,
+    `— Мок тест: ${st.mockCount?st.mockDisplay:'тапсырылмады'}`,
+  ];
+  return lines.join('\n');
+}
+
+function renderParentReportsCurrent(){
+  const wrap=document.getElementById('prGroupsWrap');
+  const summary=document.getElementById('prSummaryCard');
+  if(!wrap)return;
+  const gFilter=document.getElementById('prGroup')?.value;
+  const start=document.getElementById('prStart')?.value;
+  const end=document.getElementById('prEnd')?.value;
+  if(!start||!end){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Кезеңді таңдаңыз</p></div>'; summary.innerHTML=''; return; }
+
+  const groups = (gFilter ? DATA.groups.filter(g=>g.id===gFilter) : DATA.groups)
+    .filter(g=>DATA.student_groups.some(sg=>sg.group_id===g.id));
+
+  if(!groups.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👥</div><p>Топтар жоқ</p></div>'; summary.innerHTML=''; return; }
+
+  let totalStudents=0, totalSent=0;
+
+  const groupsHtml = groups.map(g=>{
+    const memberIds = DATA.student_groups.filter(sg=>sg.group_id===g.id).map(sg=>sg.student_id);
+    const students = DATA.students.filter(s=>memberIds.includes(s.id));
+    if(!students.length) return '';
+    totalStudents += students.length;
+    let sentInGroup=0;
+
+    const studentsHtml = students.map(s=>{
+      const st = studentStatsForRange(s.id, start, end, g.id);
+      const rec = findParentReportRecord(s.id, start, end);
+      const isSent = !!rec;
+      if(isSent) sentInGroup++;
+      const noteVal = rec?.note || '';
+      const msg = parentReportMessage(s, g, st, start, end);
+      const waHref = s.parent_phone ? (waLink(s.parent_phone) + '?text=' + encodeURIComponent(msg + (noteVal?('\n\n'+noteVal):''))) : '';
+      return `
+      <div class="card" style="margin-bottom:10px" id="prCard-${s.id}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
+          <div>
+            <div class="font-bold">${s.name} ${s.surname||''}</div>
+            <div class="text-sm text-muted">${s.parent_name?('👨‍👩‍👧 '+s.parent_name+' · '):''}${s.parent_phone||'телефон жоқ'}</div>
+          </div>
+          <span class="badge ${isSent?'badge-green':'badge-yellow'}">${isSent?'✅ Жіберілді':'⏳ Күтуде'}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+          <div style="background:var(--surface2);border-radius:8px;padding:8px 10px"><div class="text-sm text-muted">Қатысу</div><div class="font-bold">${st.attAvg!=null?st.attAvg+'%':'—'}</div></div>
+          <div style="background:var(--surface2);border-radius:8px;padding:8px 10px"><div class="text-sm text-muted">ҮЖ орта</div><div class="font-bold">${st.hwAvg!=null?st.hwAvg+'/10':'—'}</div></div>
+          <div style="background:var(--surface2);border-radius:8px;padding:8px 10px"><div class="text-sm text-muted">Белсенділік</div><div class="font-bold">${st.actAvg!=null?st.actAvg+'/5':'—'}</div></div>
+          <div style="background:var(--surface2);border-radius:8px;padding:8px 10px"><div class="text-sm text-muted">Мок тест</div><div class="font-bold">${st.mockCount?st.mockDisplay:'—'}</div></div>
+        </div>
+        <textarea id="prNote-${s.id}" placeholder="Қосымша комментарий (міндетті емес)..." style="width:100%;min-height:56px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:13px;resize:vertical" ${isSent?'disabled':''}>${noteVal}</textarea>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+          ${isSent
+            ? `<button class="btn btn-ghost btn-sm" onclick="unmarkParentReportSent('${s.id}','${start}','${end}')">↩ Қайтару</button><span class="text-sm text-muted" style="align-self:center">${rec.sent_at?new Date(rec.sent_at).toLocaleString('kk-KZ'):''}</span>`
+            : `${waHref?`<a class="btn btn-green btn-sm" href="${waHref}" target="_blank" rel="noopener" onclick="markParentReportSent('${s.id}','${g.id}','${start}','${end}')">💬 WhatsApp-қа жіберу</a>`:`<span class="text-sm text-muted">Ата-ана телефоны көрсетілмеген</span>`}`
+          }
+        </div>
+      </div>`;
+    }).join('');
+
+    totalSent += sentInGroup;
+    const allSent = sentInGroup===students.length;
+    const groupOpen = prOpenGroups.has(g.id);
+
+    return `
+    <div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;cursor:pointer" onclick="toggleParentReportGroup('${g.id}')">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span>${groupOpen?'▾':'▸'}</span>
+          <span class="font-bold">${g.name}</span>
+          <span class="text-sm text-muted">${students.length} оқушы</span>
+        </div>
+        <span class="badge ${allSent?'badge-green':'badge-yellow'}">${allSent?'Барлығы жіберілді':(students.length-sentInGroup)+' күтуде'}</span>
+      </div>
+      <div style="padding: ${groupOpen?'0 20px 16px':'0'};display:${groupOpen?'':'none'}">${studentsHtml}</div>
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = groupsHtml || '<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div>';
+
+  const pct = totalStudents ? Math.round(totalSent/totalStudents*100) : 0;
+  summary.innerHTML = `
+    <div style="flex:1;height:8px;background:var(--surface2);border-radius:6px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:var(--green)"></div>
+    </div>
+    <span class="text-sm" style="white-space:nowrap">${totalSent} / ${totalStudents} жіберілді</span>`;
+}
+
+function toggleParentReportGroup(gId){
+  if(prOpenGroups.has(gId)) prOpenGroups.delete(gId);
+  else prOpenGroups.add(gId);
+  renderParentReportsCurrent();
+}
+
+async function markParentReportSent(sId, gId, start, end){
+  const note = document.getElementById('prNote-'+sId)?.value || null;
+  const row = {
+    student_id: sId, group_id: gId, period_start: start, period_end: end,
+    note, sent_at: new Date().toISOString(), sent_by: currentUser?.login || null
+  };
+  const {error} = await sb.from('parent_reports').insert(row);
+  if(error){ console.error('parent_reports insert error:', error); toast('❌ Сақталмады: '+(error.message||''), 'error'); return; }
+  await loadAll();
+  renderParentReportsCurrent();
+  toast('✅ Жіберілді деп белгіленді!');
+}
+
+async function unmarkParentReportSent(sId, start, end){
+  if(!confirm('Жіберілді белгісін алып тастайсыз ба?'))return;
+  const rec = findParentReportRecord(sId, start, end);
+  if(!rec)return;
+  const {error} = await sb.from('parent_reports').delete().eq('id', rec.id);
+  if(error){ toast('❌ Өшірілмеді: '+(error.message||''), 'error'); return; }
+  await loadAll();
+  renderParentReportsCurrent();
+  toast('↩ Белгі алынды');
+}
+
+// --- Жылдық тарих табы ---
+// Әр айды 1–15 және 16–соңы деп екі кезеңге бөліп, жыл бойы 24 период шығарады.
+function biweeklyPeriodsForYear(year){
+  const periods=[];
+  const monthNamesShort=['қаң','ақп','нау','сәу','мам','мау','шіл','там','қыр','қаз','қар','жел'];
+  for(let m=0;m<12;m++){
+    const lastDay=new Date(year, m+1, 0).getDate();
+    const mm=String(m+1).padStart(2,'0');
+    periods.push({start:`${year}-${mm}-01`, end:`${year}-${mm}-15`, label:`1–15 ${monthNamesShort[m]}`});
+    periods.push({start:`${year}-${mm}-16`, end:`${year}-${mm}-${String(lastDay).padStart(2,'0')}`, label:`16–${lastDay} ${monthNamesShort[m]}`});
+  }
+  return periods;
+}
+
+function renderParentReportsHistory(){
+  const wrap=document.getElementById('prHistWrap');
+  if(!wrap)return;
+  const gId=document.getElementById('prHistGroup')?.value;
+  const year=Number(document.getElementById('prHistYear')?.value)||new Date().getFullYear();
+  if(!gId){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📨</div><p>Топ таңдаңыз</p></div>'; return; }
+
+  const memberIds = DATA.student_groups.filter(sg=>sg.group_id===gId).map(sg=>sg.student_id);
+  const students = DATA.students.filter(s=>memberIds.includes(s.id));
+  if(!students.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл топта оқушылар жоқ</p></div>'; return; }
+
+  const periods = biweeklyPeriodsForYear(year);
+  const todayStr = localDateStr(new Date());
+
+  const headerCells = periods.map(p=>`<th style="white-space:nowrap">${p.label}</th>`).join('');
+  const rows = students.map(s=>{
+    const cells = periods.map(p=>{
+      const rec = findParentReportRecord(s.id, p.start, p.end);
+      const periodEnded = p.end < todayStr;
+      let icon, title;
+      if(rec){ icon='✅'; title=rec.sent_at?new Date(rec.sent_at).toLocaleDateString('kk-KZ'):''; }
+      else if(!periodEnded){ icon='·'; title='Әлі келмеген кезең'; }
+      else { icon='❌'; title='Жіберілмей қалды'; }
+      return `<td style="text-align:center" title="${title}">${icon}${rec&&rec.sent_at?`<div class="text-sm text-muted">${new Date(rec.sent_at).toLocaleDateString('kk-KZ')}</div>`:''}</td>`;
+    }).join('');
+    return `<tr><td class="font-bold" style="white-space:nowrap">${s.name} ${s.surname||''}</td>${cells}</tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Оқушы</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="text-sm text-muted" style="margin-top:10px">✅ жіберілді · ❌ жіберілмей қалды · · әлі келмеген кезең</div>`;
+}
+
+// ================================================================
 // ATTENDANCE (legacy — kept for backward compatibility, no longer
 // linked from the nav; replaced by the JOURNAL grid above)
 // ================================================================
@@ -5750,6 +6013,20 @@ insert into lead_disqual_reasons(name) values
   ('нет бабок'),('далбаеб'),('Дубль'),('Магистратура'),('Родители отказались'),
   ('не явка на консу')
 on conflict (name) do nothing;
+
+-- Ата-анаға жіберілген 2 апталық есептердің тарихы (тек директор жібереді).
+create table if not exists parent_reports(
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null,
+  group_id uuid,
+  period_start date not null,
+  period_end date not null,
+  note text,
+  sent_at timestamptz,
+  sent_by text,
+  created_at timestamptz default now(),
+  unique(student_id, period_start, period_end)
+);
 
 -- 2. Alter existing tables (add missing columns):
 alter table teachers add column if not exists hourly_rate numeric;
