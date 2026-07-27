@@ -856,8 +856,8 @@ details[open] summary::before{content:'▾ '}
           <div class="card">
             <div class="journal-toolbar">
               <div class="form-group" style="margin:0"><label>Топ</label><select id="prGroup" onchange="renderParentReportsCurrent()"><option value="">— Барлық топтар —</option></select></div>
-              <div class="form-group" style="margin:0"><label>Кезең басы</label><input type="date" id="prStart" onchange="renderParentReportsCurrent()" /></div>
-              <div class="form-group" style="margin:0"><label>Кезең соңы</label><input type="date" id="prEnd" onchange="renderParentReportsCurrent()" /></div>
+              <div class="form-group" style="margin:0"><label>Ай</label><input type="month" id="prMonth" onchange="renderParentReportsCurrent()" /></div>
+              <div class="form-group" style="margin:0"><label>Кезең</label><select id="prHalf" onchange="renderParentReportsCurrent()"><option value="1">1–15</option><option value="2">16–соңы</option></select></div>
             </div>
           </div>
           <div class="card" id="prSummaryCard" style="display:flex;align-items:center;gap:12px"></div>
@@ -5488,14 +5488,27 @@ function populateParentReportsGroups(){
     const curY=new Date().getFullYear();
     yEl.innerHTML=[curY,curY-1,curY-2].map(y=>`<option value="${y}">${y} жыл</option>`).join('');
   }
-  // Әдепкі кезең — соңғы 14 күн
-  const sEl=document.getElementById('prStart'), eEl=document.getElementById('prEnd');
-  if(sEl && !sEl.value){
+  // Әдепкі кезең — ағымдағы ай, күнге қарай 1-ші/2-ші жарым
+  const mEl=document.getElementById('prMonth'), hEl=document.getElementById('prHalf');
+  if(mEl && !mEl.value){
     const today=new Date();
-    const from=new Date(today); from.setDate(today.getDate()-13);
-    sEl.value=toLocalISODate(from);
-    eEl.value=toLocalISODate(today);
+    mEl.value = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+    hEl.value = today.getDate()<=15 ? '1' : '2';
   }
+}
+
+// 'YYYY-MM' ай және '1'/'2' жарым бойынша дәл {start,end} қайтарады —
+// "Жылдық тарих" кестесіндегі periods-пен бірдей шекара, сондықтан екі
+// таб та әрдайым бір период деп таниды.
+function periodFromMonthHalf(monthStr, half){
+  if(!monthStr) return null;
+  const [y,m]=monthStr.split('-').map(Number);
+  const mm=String(m).padStart(2,'0');
+  if(half==='2'){
+    const lastDay=new Date(y,m,0).getDate();
+    return {start:`${y}-${mm}-16`, end:`${y}-${mm}-${String(lastDay).padStart(2,'0')}`};
+  }
+  return {start:`${y}-${mm}-01`, end:`${y}-${mm}-15`};
 }
 
 function switchParentReportsTab(tab){
@@ -5543,9 +5556,11 @@ function renderParentReportsCurrent(){
   const summary=document.getElementById('prSummaryCard');
   if(!wrap)return;
   const gFilter=document.getElementById('prGroup')?.value;
-  const start=document.getElementById('prStart')?.value;
-  const end=document.getElementById('prEnd')?.value;
-  if(!start||!end){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Кезеңді таңдаңыз</p></div>'; summary.innerHTML=''; return; }
+  const monthStr=document.getElementById('prMonth')?.value;
+  const half=document.getElementById('prHalf')?.value||'1';
+  const period=periodFromMonthHalf(monthStr, half);
+  if(!period){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📅</div><p>Айды таңдаңыз</p></div>'; summary.innerHTML=''; return; }
+  const {start,end}=period;
 
   const groups = (gFilter ? DATA.groups.filter(g=>g.id===gFilter) : DATA.groups)
     .filter(g=>DATA.student_groups.some(sg=>sg.group_id===g.id));
