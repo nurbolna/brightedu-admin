@@ -5479,7 +5479,7 @@ function populateParentReportsGroups(){
   const opts = DATA.groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
   const v1=s1.value, v2=s2.value;
   s1.innerHTML='<option value="">— Барлық топтар —</option>'+opts;
-  s2.innerHTML='<option value="">— Таңдаңыз —</option>'+opts;
+  s2.innerHTML='<option value="">— Барлық топтар —</option>'+opts;
   if(v1) s1.value=v1;
   if(v2) s2.value=v2;
   // Ай/жыл селектін бір рет толтырамыз
@@ -5706,26 +5706,38 @@ function biweeklyPeriodsForYear(year, fromDateStr=null){
 function renderParentReportsHistory(){
   const wrap=document.getElementById('prHistWrap');
   if(!wrap)return;
-  const gId=document.getElementById('prHistGroup')?.value;
+  const gId=document.getElementById('prHistGroup')?.value; // '' = барлық топтар
   const year=Number(document.getElementById('prHistYear')?.value)||new Date().getFullYear();
-  if(!gId){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📨</div><p>Топ таңдаңыз</p></div>'; return; }
 
-  const memberIds = DATA.student_groups.filter(sg=>sg.group_id===gId).map(sg=>sg.student_id);
-  const students = DATA.students.filter(s=>memberIds.includes(s.id));
-  if(!students.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл топта оқушылар жоқ</p></div>'; return; }
+  const groups = (gId ? DATA.groups.filter(g=>g.id===gId) : DATA.groups)
+    .filter(g=>DATA.student_groups.some(sg=>sg.group_id===g.id));
+  if(!groups.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div>'; return; }
 
-  const gStart = groupStartDate(gId); // мыс. "2026-07-03"
+  // Топ таңдалмаса — барлық топтың оқушыларын бір тізімге жинаймыз,
+  // топ атын да сақтап қоямыз (әр оқушының қасында көрсету үшін).
+  let rows = [];
+  groups.forEach(g=>{
+    const memberIds = DATA.student_groups.filter(sg=>sg.group_id===g.id).map(sg=>sg.student_id);
+    DATA.students.filter(s=>memberIds.includes(s.id)).forEach(s=>rows.push({student:s, group:g}));
+  });
+  rows.sort((a,b)=> a.group.name.localeCompare(b.group.name) ||
+    (a.student.name+' '+(a.student.surname||'')).localeCompare(b.student.name+' '+(b.student.surname||'')));
+
+  // Кестенің басталу нүктесі — таңдалған топ(тар)дың ішіндегі ең бірінші қосылу күні.
+  const starts = groups.map(g=>groupStartDate(g.id)).filter(Boolean);
+  const gStart = starts.length ? starts.sort()[0] : null;
   const gStartYear = gStart ? Number(gStart.slice(0,4)) : year;
   if(gStart && year < gStartYear){
-    wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📨</div><p>Бұл жылы бұл топ әлі болмаған</p></div>';
+    wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📨</div><p>Бұл жылы топ(тар) әлі болмаған</p></div>';
     return;
   }
   const periods = biweeklyPeriodsForYear(year, year===gStartYear ? gStart : null);
   const todayStr = localDateStr(new Date());
 
+  const groupColHeader = gId ? '' : '<th style="white-space:nowrap">Топ</th>';
   const headerCells = periods.map(p=>`<th style="white-space:nowrap">${p.label}</th>`).join('');
-  const rows = students.map(s=>{
-    const sgRec = DATA.student_groups.find(sg=>sg.student_id===s.id && sg.group_id===gId);
+  const bodyRows = rows.map(({student:s, group:g})=>{
+    const sgRec = DATA.student_groups.find(sg=>sg.student_id===s.id && sg.group_id===g.id);
     const sJoin = sgRec?.created_at ? localDateStr(new Date(sgRec.created_at)) : null;
 
     let sentCount=0, dueCount=0;
@@ -5745,10 +5757,11 @@ function renderParentReportsHistory(){
       else { icon='❌'; title='Ешбір әрекет жасалмаған'; }
       return `<td style="text-align:center" title="${title}">${icon}${rec&&rec.sent_at?`<div class="text-sm text-muted">${new Date(rec.sent_at).toLocaleDateString('kk-KZ')}</div>`:''}</td>`;
     }).join('');
-    return `<tr><td class="font-bold" style="white-space:nowrap">${s.name} ${s.surname||''}</td><td style="text-align:center;white-space:nowrap">${sentCount}/${dueCount}</td>${cells}</tr>`;
+    const groupCell = gId ? '' : `<td class="text-sm text-muted" style="white-space:nowrap">${g.name}</td>`;
+    return `<tr><td class="font-bold" style="white-space:nowrap">${s.name} ${s.surname||''}</td>${groupCell}<td style="text-align:center;white-space:nowrap">${sentCount}/${dueCount}</td>${cells}</tr>`;
   }).join('');
 
-  wrap.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Оқушы</th><th>Жіберілді</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>
+  wrap.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Оқушы</th>${groupColHeader}<th>Жіберілді</th>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>
   <div class="text-sm text-muted" style="margin-top:10px">✅ жіберілді · ⚠️ жіберілмеді · 🚫 керек емес · ❌ ешбір әрекет жасалмаған · · әлі келмеген кезең · — оқушы әлі қосылмаған</div>`;
 }
 
