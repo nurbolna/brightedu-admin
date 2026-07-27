@@ -3435,18 +3435,20 @@ function renderSalaryGroups(tId){
         const ds=dsRaw.replace(' 🎉','');
         const rec=DATA.salary_logs.find(sl=>sl.lesson_id===l.id&&sl.date===ds&&sl.teacher_id===tId&&sl.note!=='payout');
         const journalFilled=isLessonFullyJournaled(g.id,ds);
-        dayEntries.push({ds,isHoliday,l,earned,taught:!!rec,journalFilled});
+        dayEntries.push({ds,isHoliday,l,earned,taught:!!rec,paid:!!(rec&&rec.payout_id),journalFilled});
       });
     });
     dayEntries.sort((a,b)=>a.ds.localeCompare(b.ds));
     const readOnly = currentUser?.role==='teacher';
     dayEntries.forEach(e=>{
+      const lockCb = readOnly||e.paid; // төленген сабақтың "Өтті" белгісін director де қайта өшіре алмайды
       html+=`<div class="sal-day">
           <div class="sal-day-info"><b>${e.ds}</b>${e.isHoliday?' 🎉':''} — ${DAYS[Number(e.l.day)]} ${e.l.start_time}–${e.l.end_time} ${e.journalFilled?'<span class="badge badge-blue" style="margin-left:6px;font-size:10px" title="Топтың барлық оқушысы белгіленген">📔 журнал толық</span>':''}</div>
           <div style="display:flex;align-items:center;gap:10px">
             <div class="sal-day-amount" style="${e.taught?'':'color:var(--text3)'}">${e.taught?'+'+fmt(e.earned)+'₸':'—'}</div>
-            <label style="display:flex;align-items:center;gap:5px;font-size:12px;${readOnly?'':'cursor:pointer'};white-space:nowrap${readOnly?';opacity:0.75':''}">
-              <input type="checkbox" data-lid="${e.l.id}" data-date="${e.ds}" data-earned="${e.earned}" data-tid="${tId}" ${e.taught?'checked':''} ${readOnly?'disabled':''} onchange="toggleSalaryDay(this)" />
+            ${e.taught?`<span class="badge ${e.paid?'badge-green':'badge-yellow'}" style="font-size:10px" title="${e.paid?'Бұл сабаққа жалақы төленген':'Бұл сабақ орындалды, бірақ жалақысы әлі берілмеген'}">${e.paid?'✅ Төленді':'⏳ Төленбеді'}</span>`:''}
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;${lockCb?'':'cursor:pointer'};white-space:nowrap${lockCb?';opacity:0.75':''}">
+              <input type="checkbox" data-lid="${e.l.id}" data-date="${e.ds}" data-earned="${e.earned}" data-tid="${tId}" ${e.taught?'checked':''} ${lockCb?'disabled':''} onchange="toggleSalaryDay(this)" />
               Өтті
             </label>
           </div>
@@ -3471,12 +3473,34 @@ function renderSalaryHistory(tId){
     const timeStr=dt?dt.toLocaleTimeString('kk-KZ',{hour:'2-digit',minute:'2-digit'}):'—';
     const isAdjust=l.note?.startsWith('adjustment');
     const amt=Number(l.amount||0);
+    // Тек нақты "payout" жазбалары үшін — осы төлеммен байланысқан (payout_id
+    // сол payout-тың id-іне тең) сабақ/түзету жолдарын табамыз. Ескі,
+    // migration-ға дейінгі payout-тарда бұл тізім бос болады — "белгісіз
+    // құрам" деп көрсетіледі.
+    let detailsHtml='';
+    if(!isAdjust){
+      const covered=DATA.salary_logs.filter(sl=>sl.payout_id===l.id)
+        .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      if(covered.length){
+        const chips=covered.map(c=>{
+          const lesson=DATA.lessons.find(le=>le.id===c.lesson_id);
+          const label=lesson?c.date:'Түзету';
+          return `<span class="badge" style="background:var(--surface2);border:1px solid var(--border);font-size:11px">${label} — ${fmt(Number(c.amount||0))}₸</span>`;
+        }).join(' ');
+        detailsHtml=`<details style="margin-top:6px">
+          <summary style="cursor:pointer;font-size:12px;color:var(--accent)">📋 Қай сабақтарға төленді (${covered.length})</summary>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${chips}</div>
+        </details>`;
+      } else {
+        detailsHtml='<div class="text-muted" style="font-size:11px;margin-top:4px">Құрамы белгісіз (миграцияға дейінгі төлем)</div>';
+      }
+    }
     return `<tr>
       <td>${dateStr}</td>
       <td>${timeStr}</td>
       <td>${isAdjust?'<span class="badge badge-yellow">Түзету</span>':'<span class="badge badge-green">Төлем</span>'}</td>
       <td class="font-bold" style="color:${amt<0?'var(--red)':'var(--green)'}">${amt>0?'+':''}${fmt(amt)}₸</td>
-      <td class="text-muted text-sm">${isAdjust?(l.note.replace('adjustment: ','').replace('adjustment','')||'—'):''}</td>
+      <td class="text-muted text-sm">${isAdjust?(l.note.replace('adjustment: ','').replace('adjustment','')||'—'):detailsHtml}</td>
       <td>${canPayout?`<button class="btn btn-red btn-sm" onclick="voidSalaryHistoryEntry('${l.id}','${tId}')" title="Бұл жазбаны күшінен жойып, балансты қалпына келтіру">🗑️</button>`:''}</td>
     </tr>`;
   }).join('');
@@ -3592,6 +3616,17 @@ async function confirmPayout(){
   const payDate=localDateStr(now2);
   const {data:slRow, error:slErr}=await sb.from('salary_logs').insert({teacher_id:t.id,lesson_id:null,date:payDate,amount:-bal,note:'payout'}).select().single();
   if(slErr){ alert('❌ Сақталмады! Қате: '+slErr.message); return; }
+  // Осы төлемге қандай нақты сабақтар (және түзетулер) кіргенін сақтау үшін —
+  // әлі "жабылмаған" (payout_id жоқ) барлық earning/adjustment жолдарын
+  // жаңа payout жазбасына байланыстырамыз. Осының арқасында тарихта әр
+  // төлемнің құрамындағы нақты сабақтарды кейін көрсете аламыз.
+  const unpaidIds=DATA.salary_logs
+    .filter(sl=>sl.teacher_id===t.id && sl.note!=='payout' && !sl.payout_id)
+    .map(sl=>sl.id);
+  if(unpaidIds.length){
+    const {error:linkErr}=await sb.from('salary_logs').update({payout_id:slRow.id}).in('id',unpaidIds);
+    if(linkErr){ alert('⚠️ Жалақы берілді, бірақ сабақтарды төлеммен байланыстыру қатесі: '+linkErr.message); }
+  }
   const {error:expErr}=await sb.from('expenses').insert({
     amount:bal, category:'Жалақы', date:payDate, status:'paid',
     notes:`${t.name} ${t.surname||''} — жалақы төлемі`,
