@@ -5644,8 +5644,21 @@ async function unmarkParentReportSent(sId, start, end){
 }
 
 // --- Жылдық тарих табы ---
-// Әр айды 1–15 және 16–соңы деп екі кезеңге бөліп, жыл бойы 24 период шығарады.
-function biweeklyPeriodsForYear(year){
+// Топтың кестедегі "бастау нүктесі" — сол топтағы ең бірінші қосылған
+// оқушының student_groups.created_at мәні. Топ құрылмаған/бос кезеңдер
+// кестеде мүлдем көрсетілмейді.
+function groupStartDate(gId){
+  const dates = DATA.student_groups
+    .filter(sg=>sg.group_id===gId)
+    .map(sg=> sg.created_at ? localDateStr(new Date(sg.created_at)) : null)
+    .filter(Boolean);
+  if(!dates.length) return null;
+  return dates.sort()[0];
+}
+
+// Әр айды 1–15 және 16–соңы деп екі кезеңге бөліп периодтар шығарады.
+// fromDateStr берілсе, сол датадан бұрын толық аяқталған кезеңдер алынып тасталады.
+function biweeklyPeriodsForYear(year, fromDateStr=null){
   const periods=[];
   const monthNamesShort=['қаң','ақп','нау','сәу','мам','мау','шіл','там','қыр','қаз','қар','жел'];
   for(let m=0;m<12;m++){
@@ -5654,7 +5667,7 @@ function biweeklyPeriodsForYear(year){
     periods.push({start:`${year}-${mm}-01`, end:`${year}-${mm}-15`, label:`1–15 ${monthNamesShort[m]}`});
     periods.push({start:`${year}-${mm}-16`, end:`${year}-${mm}-${String(lastDay).padStart(2,'0')}`, label:`16–${lastDay} ${monthNamesShort[m]}`});
   }
-  return periods;
+  return fromDateStr ? periods.filter(p=>p.end>=fromDateStr) : periods;
 }
 
 function renderParentReportsHistory(){
@@ -5668,25 +5681,39 @@ function renderParentReportsHistory(){
   const students = DATA.students.filter(s=>memberIds.includes(s.id));
   if(!students.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл топта оқушылар жоқ</p></div>'; return; }
 
-  const periods = biweeklyPeriodsForYear(year);
+  const gStart = groupStartDate(gId); // мыс. "2026-07-03"
+  const gStartYear = gStart ? Number(gStart.slice(0,4)) : year;
+  if(gStart && year < gStartYear){
+    wrap.innerHTML='<div class="empty-state"><div class="empty-icon">📨</div><p>Бұл жылы бұл топ әлі болмаған</p></div>';
+    return;
+  }
+  const periods = biweeklyPeriodsForYear(year, year===gStartYear ? gStart : null);
   const todayStr = localDateStr(new Date());
 
   const headerCells = periods.map(p=>`<th style="white-space:nowrap">${p.label}</th>`).join('');
   const rows = students.map(s=>{
+    const sgRec = DATA.student_groups.find(sg=>sg.student_id===s.id && sg.group_id===gId);
+    const sJoin = sgRec?.created_at ? localDateStr(new Date(sgRec.created_at)) : null;
+
+    let sentCount=0, dueCount=0;
     const cells = periods.map(p=>{
+      if(sJoin && p.end < sJoin){
+        return `<td style="text-align:center;color:var(--text2)" title="Оқушы әлі қосылмаған">—</td>`;
+      }
       const rec = findParentReportRecord(s.id, p.start, p.end);
       const periodEnded = p.end < todayStr;
+      if(periodEnded) dueCount++;
       let icon, title;
-      if(rec){ icon='✅'; title=rec.sent_at?new Date(rec.sent_at).toLocaleDateString('kk-KZ'):''; }
+      if(rec){ icon='✅'; title=rec.sent_at?new Date(rec.sent_at).toLocaleDateString('kk-KZ'):''; sentCount++; }
       else if(!periodEnded){ icon='·'; title='Әлі келмеген кезең'; }
       else { icon='❌'; title='Жіберілмей қалды'; }
       return `<td style="text-align:center" title="${title}">${icon}${rec&&rec.sent_at?`<div class="text-sm text-muted">${new Date(rec.sent_at).toLocaleDateString('kk-KZ')}</div>`:''}</td>`;
     }).join('');
-    return `<tr><td class="font-bold" style="white-space:nowrap">${s.name} ${s.surname||''}</td>${cells}</tr>`;
+    return `<tr><td class="font-bold" style="white-space:nowrap">${s.name} ${s.surname||''}</td><td style="text-align:center;white-space:nowrap">${sentCount}/${dueCount}</td>${cells}</tr>`;
   }).join('');
 
-  wrap.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Оқушы</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>
-  <div class="text-sm text-muted" style="margin-top:10px">✅ жіберілді · ❌ жіберілмей қалды · · әлі келмеген кезең</div>`;
+  wrap.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Оқушы</th><th>Жіберілді</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="text-sm text-muted" style="margin-top:10px">✅ жіберілді · ❌ жіберілмей қалды · · әлі келмеген кезең · — оқушы әлі қосылмаған</div>`;
 }
 
 // ================================================================
