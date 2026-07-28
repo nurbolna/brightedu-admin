@@ -5562,6 +5562,29 @@ function renderParentReports(){
 }
 
 // Осы кезеңге сол оқушыға сақталған жіберу жазбасын табады (болса)
+// Ата-ана порталына тұрақты сілтеме — бір рет жасалады, кейін сол оқушыға
+// әрдайым бірдей қысқа код қайтарылады (brightedu.kz/p/<code>).
+async function getOrCreateParentLink(studentId){
+  const {data:existing} = await sb.from('parent_links').select('short_code').eq('student_id',studentId).maybeSingle();
+  if(existing) return existing.short_code;
+  const code = Array.from({length:8},()=>'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random()*56)]).join('');
+  const {error} = await sb.from('parent_links').insert({student_id:studentId, short_code:code});
+  if(error){ console.error('parent_links insert error:', error); return null; }
+  return code;
+}
+
+async function copyParentLink(studentId){
+  const code = await getOrCreateParentLink(studentId);
+  if(!code){ toast('❌ Сілтеме жасалмады','error'); return; }
+  const url = 'https://brightedu.kz/p/'+code; // домениңіз белгілі болған соң осы жерді ауыстырыңыз
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('🔗 Сілтеме көшірілді!','success');
+  }catch(e){
+    prompt('Сілтемені көшіріңіз:', url);
+  }
+}
+
 function findParentReportRecord(sId, start, end){
   return DATA.parent_reports.find(r=>r.student_id===sId && r.period_start===start && r.period_end===end) || null;
 }
@@ -5640,7 +5663,10 @@ function renderParentReportsCurrent(){
         </div>
         <textarea id="prNote-${s.id}" placeholder="Қосымша комментарий немесе себеп (міндетті емес)..." style="width:100%;min-height:56px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:13px;resize:vertical">${noteVal}</textarea>
         <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-top:10px">
-          <div>${waHref?`<a class="btn btn-ghost btn-sm" href="${waHref}" target="_blank" rel="noopener">💬 WhatsApp ашу</a>`:`<span class="text-sm text-muted">Ата-ана телефоны көрсетілмеген</span>`}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${waHref?`<a class="btn btn-ghost btn-sm" href="${waHref}" target="_blank" rel="noopener">💬 WhatsApp ашу</a>`:`<span class="text-sm text-muted">Ата-ана телефоны көрсетілмеген</span>`}
+            <button class="btn btn-ghost btn-sm" onclick="copyParentLink('${s.id}')">🔗 Сілтеме көшіру</button>
+          </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             ${btn('sent','✅ Жіберілді','btn-green')}
             ${btn('failed','⚠️ Жіберілмеді','btn-red')}
