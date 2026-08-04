@@ -700,6 +700,7 @@ details[open] summary::before{content:'▾ '}
                 <option value="active">✅ Уақытында</option>
                 <option value="pending">⏳ Мерзімі жақындады</option>
                 <option value="overdue">❌ Мерзімі өткен</option>
+                <option value="none">— Әлі төлем жоқ</option>
               </select>
             </div>
             <div class="table-wrap"><table><thead><tr>
@@ -1164,7 +1165,8 @@ details[open] summary::before{content:'▾ '}
       <div class="form-group"><label>Туған күні</label><input type="date" id="studentBirth" /></div>
     </div>
     <div class="form-group"><label>Группалар (бірнешеуін таңдауға болады)</label><div id="studentGroupsChecks" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface2);display:flex;flex-direction:column;gap:8px"></div></div>
-    <div class="form-group"><label>Келесі төлем күні</label><input type="date" id="studentNextPayDate" /></div>
+    <div class="form-group"><label>Келесі төлем күні (🎯 НУЕТ / пакеттік)</label><input type="date" id="studentNextPayDate" /></div>
+    <div class="form-group"><label>Келесі төлем күні (🌍 IELTS / ай сайынғы)</label><input type="date" id="studentNextPayDateMonthly" /></div>
     <div class="form-group"><label>Келісім сомасы — жалпы төлеуі керек (₸)</label><input type="number" id="studentContractAmount" placeholder="мыс. 590000" /></div>
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">👨‍👩‍👧 Ата-ана</div>
@@ -2386,10 +2388,15 @@ function parseLocalDate(ds){
   const[y,m,d]=ds.split('-').map(Number);
   return new Date(y,m-1,d); // local timezone
 }
-function getPayStatus(student){
+// ЕСКЕРТУ: бұл екі функция ЕНДІ дата жолын (string) күтеді, оқушы объектісін емес —
+// себебі next_pay_date енді 3 нұсқада болады: жалпы (s.next_pay_date, ескі
+// орынды сақтау үшін — package/monthly ішіндегі ертерек мерзім), НУЕТ-ке арнайы
+// (s.next_pay_date_package) және IELTS-ке арнайы (s.next_pay_date_monthly).
+// Шақырған жерде қай мерзімді тексеру керек екенін өзің таңдап бересің.
+function getPayStatus(dateStr){
   const today=new Date(); today.setHours(0,0,0,0);
-  if(!student.next_pay_date) return 'none';
-  const due=parseLocalDate(student.next_pay_date);
+  if(!dateStr) return 'none';
+  const due=parseLocalDate(dateStr);
   const diff=Math.floor((due-today)/(1000*60*60*24));
   if(diff<0) return 'overdue';
   if(diff<=7) return 'pending';
@@ -2400,8 +2407,8 @@ function daysUntil(ds){
   const d=parseLocalDate(ds);
   return Math.floor((d-t)/(1000*60*60*24));
 }
-function payStatusBadge(student){
-  const st=getPayStatus(student); const d=student.next_pay_date;
+function payStatusBadge(dateStr){
+  const st=getPayStatus(dateStr); const d=dateStr;
   if(st==='overdue'){
     const ago=Math.abs(daysUntil(d));
     return `<span class="badge badge-red">❌ ${ago} күн өтті — ${d}</span>`;
@@ -2429,8 +2436,8 @@ function calcProgress(studentId){
 // BADGES
 // ================================================================
 function updateBadges(){
-  const overdue=DATA.students.filter(s=>getPayStatus(s)==='overdue').length;
-  const pending=DATA.students.filter(s=>getPayStatus(s)==='pending').length;
+  const overdue=DATA.students.filter(s=>getPayStatus(s.next_pay_date)==='overdue').length;
+  const pending=DATA.students.filter(s=>getPayStatus(s.next_pay_date)==='pending').length;
   const total=overdue+pending;
   const bd=document.getElementById('badgeDash');
   const bp=document.getElementById('badgePay');
@@ -2882,8 +2889,8 @@ function renderDashboard(){
     return;
   }
 
-  const overdue=DATA.students.filter(s=>getPayStatus(s)==='overdue');
-  const pending=DATA.students.filter(s=>getPayStatus(s)==='pending');
+  const overdue=DATA.students.filter(s=>getPayStatus(s.next_pay_date)==='overdue');
+  const pending=DATA.students.filter(s=>getPayStatus(s.next_pay_date)==='pending');
   document.getElementById('statStudents').textContent=DATA.students.length;
   document.getElementById('statTeachers').textContent=DATA.teachers.length;
   document.getElementById('statGroups').textContent=DATA.groups.length;
@@ -2904,7 +2911,7 @@ function renderDashboard(){
       qpEl.innerHTML=needPay.map(s=>{
         const sGroups=getStudentGroups(s.id);
         const gNames=sGroups.map(g=>g.name).join(', ');
-        const st=getPayStatus(s);
+        const st=getPayStatus(s.next_pay_date);
         const dl=s.next_pay_date?daysUntil(s.next_pay_date):null;
         const dInfo=dl!==null?(dl<0?`${Math.abs(dl)} күн өтті`:`${dl} күн қалды`):'';
         return`<div class="quick-pay-item ${st}" onclick="openQuickPay('${s.id}')">
@@ -3110,6 +3117,34 @@ function openQuickPay(sId){
   openModal('quickPayModal');
 }
 
+// Жаңа төлем қосылғаннан кейін next_pay_date_package / next_pay_date_monthly /
+// (жалпы, ескі орынды сақтайтын) next_pay_date өрістерінің жаңа мәндерін есептейді.
+// - Курс "ай сайынғы" (monthly) болса — тек next_pay_date_monthly жылжиды.
+// - Курс "пакеттік" (package, немесе courseId белгіленбесе — дефолт) болса —
+//   тек next_pay_date_package жылжиды (немесе, толық жабылса, NULL болады).
+// - Жалпы (general) next_pay_date — екеуінің ертерегі (null болмағаны), себебі
+//   Оқушылар/Дашборд/CRM беттері әлі де осы бір өрісті оқиды (артық өзгеріссіз).
+function computeNextPayDateFields(sId, courseId, amount, payDateStr){
+  const s=DATA.students.find(x=>x.id===sId);
+  const course=DATA.courses.find(c=>c.id===courseId);
+  const monthly=isMonthlyCourse(course);
+  const payDate=payDateStr?parseLocalDate(payDateStr):new Date();
+  let pkgField=s?.next_pay_date_package??null;
+  let monField=s?.next_pay_date_monthly??null;
+  const advance=(oldVal)=>{
+    const base=oldVal?parseLocalDate(oldVal):payDate;
+    const nd=new Date(base.getFullYear(),base.getMonth()+1,base.getDate());
+    return `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`;
+  };
+  if(monthly){
+    monField=advance(monField);
+  } else {
+    pkgField=willPackageBeFullyPaid(sId,courseId,amount)?null:advance(pkgField);
+  }
+  const candidates=[pkgField,monField].filter(Boolean);
+  const general=candidates.length?candidates.reduce((a,b)=>a<b?a:b):null; // 'YYYY-MM-DD' жолдары лексикографиялық салыстыруға жарамды
+  return {next_pay_date_package:pkgField, next_pay_date_monthly:monField, next_pay_date:general};
+}
 async function confirmQuickPay(){
   if(!quickPayStudent) return;
   const amount=Number(document.getElementById('qpAmount').value);
@@ -3120,8 +3155,14 @@ async function confirmQuickPay(){
   if(!amount) return alert('Сомасын енгізіңіз');
   if(amount<=0) return alert('Сома 0-ден үлкен болуы керек');
   const now=new Date();
-  // Timezone-safe: next_pay_date негізінде ай анықтаймыз
-  const dueDate=quickPayStudent.next_pay_date?parseLocalDate(quickPayStudent.next_pay_date):now;
+  // ЕСКЕРТУ: Quick Pay-де pay_date әрқашан "бүгін" (localDateStr(now)) болғандықтан,
+  // fallback ретінде "now" қолдану бірінші төлем үшін де дұрыс — "now" мен "pay_date"
+  // бұл жерде әрдайым бірдей (толық "+Төлем қосу" модалынан айырмашылығы осында,
+  // онда pay_date қолмен, кез келген күнге таңдалады).
+  // Timezone-safe: next_pay_date_package/_monthly (курс түріне қарай) негізінде ай анықтаймыз
+  const course=DATA.courses.find(c=>c.id===courseId);
+  const relevantDate=isMonthlyCourse(course)?quickPayStudent.next_pay_date_monthly:quickPayStudent.next_pay_date_package;
+  const dueDate=relevantDate?parseLocalDate(relevantDate):now;
   const payMonth=dueDate.getMonth()+1; const payYear=dueDate.getFullYear();
   // 13) Дубликат тексеру
   const dupQ=DATA.payments.find(p=>p.student_id===quickPayStudent.id&&Number(p.amount)===Number(amount)&&p.month==payMonth&&p.year==payYear);
@@ -3131,10 +3172,8 @@ async function confirmQuickPay(){
     pay_date:localDateStr(now), pay_type:type, cash_account:cashAccount, note
   });
   if(qpErr){ alert('❌ Сақталмады! Қате: '+qpErr.message); return; }
-  // Келесі мерзімді 1 айға алға жылжыту
-  const nd=new Date(dueDate.getFullYear(), dueDate.getMonth()+1, dueDate.getDate());
-  const ndStr=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`;
-  await sb.from('students').update({next_pay_date:ndStr}).eq('id',quickPayStudent.id);
+  const ndFields=computeNextPayDateFields(quickPayStudent.id, courseId, amount, localDateStr(now));
+  await sb.from('students').update(ndFields).eq('id',quickPayStudent.id);
   closeModal('quickPayModal');
   await loadAll();
   renderStudents(); renderPayments(); renderFinance(); renderFinancePayments();
@@ -3771,7 +3810,8 @@ function openStudentModal(s=null){
   document.getElementById('parentName').value=s?.parent_name||'';
   document.getElementById('parentPhone').value=s?.parent_phone||'';
   document.getElementById('studentNote').value=s?.note||'';
-  document.getElementById('studentNextPayDate').value=s?.next_pay_date||'';
+  document.getElementById('studentNextPayDate').value=s?.next_pay_date_package||'';
+  document.getElementById('studentNextPayDateMonthly').value=s?.next_pay_date_monthly||'';
   document.getElementById('studentContractAmount').value=(s?.contract_amount??'')===null?'':(s?.contract_amount??'');
   document.getElementById('studentLeadSource').value=s?.lead_source||'';
   document.getElementById('studentSalesManager').value=s?.sales_manager||'';
@@ -3789,7 +3829,10 @@ async function saveStudent(){
   const name=document.getElementById('studentName').value.trim(); if(!name)return alert('Атын енгізіңіз');
   const selectedGroupIds=[...document.querySelectorAll('.studentGroupChk:checked')].map(c=>c.value);
   const contractAmtRaw=document.getElementById('studentContractAmount').value;
-  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:document.getElementById('studentNextPayDate').value||null,lead_source:document.getElementById('studentLeadSource').value||null,sales_manager:document.getElementById('studentSalesManager').value||null,marketing_note:document.getElementById('studentMarketingNote').value||null,contract_amount:contractAmtRaw!==''?Number(contractAmtRaw):null};
+  const nextPkg=document.getElementById('studentNextPayDate').value||null;
+  const nextMon=document.getElementById('studentNextPayDateMonthly').value||null;
+  const nextGeneral=[nextPkg,nextMon].filter(Boolean).length?[nextPkg,nextMon].filter(Boolean).reduce((a,b)=>a<b?a:b):null;
+  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:nextGeneral,next_pay_date_package:nextPkg,next_pay_date_monthly:nextMon,lead_source:document.getElementById('studentLeadSource').value||null,sales_manager:document.getElementById('studentSalesManager').value||null,marketing_note:document.getElementById('studentMarketingNote').value||null,contract_amount:contractAmtRaw!==''?Number(contractAmtRaw):null};
   let id=document.getElementById('studentId').value;
   if(id){
     await sb.from('students').update(row).eq('id',id);
@@ -3835,7 +3878,7 @@ function renderStudents(){
     if(!match)return false;
     if(gFilter&&!studentInGroup(s.id,gFilter))return false;
     if(cFilter&&!getStudentGroups(s.id).some(g=>g.course_id===cFilter))return false;
-    if(statusFilter&&getPayStatus(s)!==statusFilter)return false;
+    if(statusFilter&&getPayStatus(s.next_pay_date)!==statusFilter)return false;
     // Teacher: only show students who have at least one group with this teacher
     if(role==='teacher'&&currentUser.teacherId){
       const myGroups=getStudentGroups(s.id);
@@ -3891,7 +3934,7 @@ function renderStudents(){
         <div class="progress-bar" style="width:70px;display:inline-block;margin-right:6px"><div class="progress-fill" style="width:${prog}%;background:${prog>=80?'var(--green)':prog>=60?'var(--yellow)':'var(--red)'}"></div></div>
         <span class="text-sm">${prog}%</span>
       </td>
-      ${showFinance?`<td>${payStatusBadge(s)}</td>`:''}
+      ${showFinance?`<td>${payStatusBadge(s.next_pay_date)}</td>`:''}
       <td><div class="text-sm">${s.parent_name||'—'}</div><div class="text-sm text-muted">${s.parent_phone||''}</div></td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">
         ${showFinance?`<button class="btn btn-green btn-sm" onclick="openQuickPay('${s.id}')">💳</button>`:''}
@@ -3971,7 +4014,7 @@ function showStudentDetail(id){
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Группалар</div><div class="font-bold">${gNames}</div></div>
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Мұғалімдер</div><div class="font-bold">${tNames}</div></div>
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Курстар</div><div class="font-bold">${cNames}</div></div>
-      ${role!=='admin'?`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келесі төлем</div><div class="font-bold">${s.next_pay_date||'—'}</div>${payStatusBadge(s)}</div>`:'<div></div>'}
+      ${role!=='admin'?`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келесі төлем</div><div class="font-bold">${s.next_pay_date||'—'}</div>${payStatusBadge(s.next_pay_date)}</div>`:'<div></div>'}
       ${role==='director'?(()=>{
         const totalPaid=DATA.payments.filter(p=>p.student_id===s.id).reduce((sum,p)=>sum+Number(p.amount||0),0);
         const hasContract=s.contract_amount!=null && s.contract_amount!=='';
@@ -4189,13 +4232,14 @@ async function savePayment(){
     note:document.getElementById('paymentNote').value
   });
   if(payErr){ alert('❌ Сақталмады! Қате: '+payErr.message); return; }
-  // next_pay_date автоматты жылжыту
+  // next_pay_date_package / next_pay_date_monthly анықтау (computeNextPayDateFields
+  // ішінде): пакеттік курс толық жабылса — NULL, әйтпесе +1 ай (backdated бірінші
+  // төлемде chosenPayDate anchor ретінде қолданылады, "бүгінгі күн" емес).
   const s2=DATA.students.find(s=>s.id===sId);
   if(s2){
-    const base=s2.next_pay_date?parseLocalDate(s2.next_pay_date):now;
-    const nd=new Date(base.getFullYear(),base.getMonth()+1,base.getDate());
-    const ndStr=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`;
-    await sb.from('students').update({next_pay_date:ndStr}).eq('id',sId);
+    const chosenPayDate=document.getElementById('paymentDate').value;
+    const ndFields=computeNextPayDateFields(sId, courseId, Number(amt), chosenPayDate);
+    await sb.from('students').update(ndFields).eq('id',sId);
   }
   closeModal('paymentModal'); await loadAll();
   renderPayments(); renderFinance(); renderFinancePayments(); renderStudents();
@@ -4364,11 +4408,29 @@ function renderPayments(){
 // ================================================================
 function isPackageCourse(course){ return (course?.payment_type||'package')!=='monthly'; }
 function isMonthlyCourse(course){ return course?.payment_type==='monthly'; }
+// Оқушының пакеттік (мыс. НУЕТ) курс(тар)ы бойынша ҚАЗІРГІ (DATA.payments-тегі,
+// жаңа төлем енгізілгенге дейінгі) жалпы төленген сомасы.
+function getPackagePaidTotal(sId){
+  const packageCourseIds=new Set(DATA.courses.filter(isPackageCourse).map(c=>c.id));
+  return DATA.payments.filter(p=>p.student_id===sId && (packageCourseIds.has(p.course_id) || !p.course_id))
+    .reduce((sum,p)=>sum+Number(p.amount||0),0);
+}
+// Жаңа төлем қосылғаннан КЕЙІН оқушының пакеттік келісім сомасы толық
+// жабыла ма — соны алдын ала (DB-ге сұрамай) есептейді. loadAll() шақырылмай
+// тұрып, "жаңа төлем" сомасын қолмен қосамыз (DATA.payments әлі жаңармаған).
+function willPackageBeFullyPaid(sId, newCourseId, newAmount){
+  const s=DATA.students.find(x=>x.id===sId); if(!s) return false;
+  if(s.contract_amount==null || s.contract_amount==='') return false; // сома белгіленбесе — тексере алмаймыз
+  const newCourse=DATA.courses.find(c=>c.id===newCourseId);
+  const newCounts = !newCourseId || isPackageCourse(newCourse); // course_id жоқ болса — бұрынғы дефолт бойынша package есептеледі
+  const totalPaid=getPackagePaidTotal(sId) + (newCounts?Number(newAmount||0):0);
+  return totalPaid>=Number(s.contract_amount);
+}
 function studentContractStatus(s, totalPaid){
   if(s.contract_amount==null || s.contract_amount==='') return 'none';
   const debt=Number(s.contract_amount)-totalPaid;
   if(debt<=0) return 'full';
-  if(getPayStatus(s)==='overdue') return 'overdue';
+  if(getPayStatus(s.next_pay_date_package)==='overdue') return 'overdue';
   return 'partial';
 }
 function spStatusBadge(status){
@@ -4406,7 +4468,7 @@ function renderNuetTab(){
   }
   const monthSel=document.getElementById('spFilterMonthSel-nuet');
   if(monthSel && monthSel.options.length<=1){
-    const combos=[...new Set(DATA.students.filter(s=>s.next_pay_date&&getStudentGroups(s.id).some(g=>packageGroupIds.has(g.id))).map(s=>{const d=parseLocalDate(s.next_pay_date);return `${d.getMonth()+1}_${d.getFullYear()}`;}))]
+    const combos=[...new Set(DATA.students.filter(s=>s.next_pay_date_package&&getStudentGroups(s.id).some(g=>packageGroupIds.has(g.id))).map(s=>{const d=parseLocalDate(s.next_pay_date_package);return `${d.getMonth()+1}_${d.getFullYear()}`;}))]
       .sort((a,b)=>{ const[am,ay]=a.split('_').map(Number); const[bm,by]=b.split('_').map(Number); return by-ay || bm-am; });
     monthSel.innerHTML='<option value="">📅 Барлық ай (келесі төлем)</option>'+combos.map(cb=>{ const[m,y]=cb.split('_'); return `<option value="${cb}">${MONTHS[m]} ${y}</option>`; }).join('');
   }
@@ -4431,8 +4493,8 @@ function renderNuetTab(){
     if(spFilterCourse && !r.sGroups.some(g=>g.course_id===spFilterCourse)) return false;
     if(spFilterGroup && !studentInGroup(r.s.id,spFilterGroup)) return false;
     if(spFilterStatus && r.status!==spFilterStatus) return false;
-    if(spFilterMonth && r.s.next_pay_date){
-      const d=parseLocalDate(r.s.next_pay_date);
+    if(spFilterMonth && r.s.next_pay_date_package){
+      const d=parseLocalDate(r.s.next_pay_date_package);
       if(`${d.getMonth()+1}_${d.getFullYear()}`!==spFilterMonth) return false;
     } else if(spFilterMonth){ return false; }
     return true;
@@ -4469,7 +4531,7 @@ function renderNuetTab(){
       <td class="font-bold" style="color:var(--green)">${fmt(totalPaid)}₸</td>
       <td class="text-sm text-muted" title="Комиссия/салық шегерілген">${fmt(Math.round(totalNet))}₸</td>
       <td>${debtCell}</td>
-      <td class="text-sm">${s.next_pay_date||'—'}</td>
+      <td class="text-sm">${s.next_pay_date_package||'—'}</td>
       <td>${spStatusBadge(r.status)}</td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">
         <button class="btn btn-green btn-sm" onclick="openQuickPay('${s.id}')" title="Жылдам төлем">⚡</button>
@@ -4511,7 +4573,7 @@ function renderIeltsTab(){
       .sort((a,b)=>new Date(b.pay_date)-new Date(a.pay_date));
     const totalPaid=pmts.reduce((sum,p)=>sum+Number(p.amount||0),0);
     const paidThisMonth=pmts.some(p=>{ const d=parseLocalDate(p.pay_date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
-    const status=getPayStatus(s); // 'active' | 'pending' | 'overdue' | null
+    const status=pmts.length?getPayStatus(s.next_pay_date_monthly):'none'; // 'active'|'pending'|'overdue'|'none'
     const monthlyFee=sGroups.reduce((sum,g)=>sum+Number(g.fee||0),0);
     return {s,sGroups,pmts,totalPaid,paidThisMonth,status,monthlyFee};
   });
@@ -4553,7 +4615,7 @@ function renderIeltsTab(){
       <td><span class="font-bold" style="cursor:pointer;color:var(--accent)" onclick="showStudentDetail('${s.id}')">${s.name} ${s.surname||''}</span></td>
       <td>${gBadges}</td>
       <td class="font-bold">${fmt(totalPaid)}₸</td>
-      <td>${payStatusBadge(s)}</td>
+      <td>${pmts.length?payStatusBadge(s.next_pay_date_monthly):'<span class="badge" style="background:var(--surface2);color:var(--text2)">— Әлі төлем жоқ</span>'}</td>
       <td><button class="btn btn-ghost btn-sm" onclick="toggleSpIeltsRow('${s.id}')" title="${isOpen?'Жасыру':'Төлем тарихын ашу'}">${isOpen?'▲':'▼'}</button></td>
       <td><button class="btn btn-green btn-sm" onclick="openQuickPay('${s.id}')" title="Жылдам төлем">⚡</button></td>
     </tr>`;
@@ -6528,7 +6590,9 @@ create table if not exists parent_reports(
 alter table teachers add column if not exists hourly_rate numeric;
 alter table teachers add column if not exists email text;
 alter table teachers add column if not exists balance numeric default 0;
-alter table students add column if not exists next_pay_date date;
+alter table students add column if not exists next_pay_date date; -- ЖАЛПЫ мерзім (package/monthly ішіндегі ертерегі) — Оқушылар/Дашборд/CRM беттері осыны оқиды
+alter table students add column if not exists next_pay_date_package date; -- 🎯 НУЕТ (пакеттік) курс циклі — "Оқушы бойынша > NUET" вкладкасы осыны қолданады
+alter table students add column if not exists next_pay_date_monthly date; -- 🌍 IELTS (ай сайынғы) курс циклі — "Оқушы бойынша > IELTS" вкладкасы осыны қолданады
 alter table students add column if not exists progress_percent int default 0;
 alter table journal_entries add column if not exists activity int;
 alter table journal_entries add column if not exists homework int;
