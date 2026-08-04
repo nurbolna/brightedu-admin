@@ -653,32 +653,65 @@ details[open] summary::before{content:'▾ '}
         </div>
 
         <div id="payTabContent2" style="display:none">
-          <div id="spStatsCards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px"></div>
-          <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-            <input type="text" id="spSearchInput" placeholder="🔍 Оқушы іздеу..." oninput="spFilter=this.value;renderStudentPayments()" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
-            <select id="spFilterCourseSel" onchange="spFilterCourse=this.value;spFilterGroup='';renderStudentPayments()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">📚 Барлық курс</option></select>
-            <select id="spFilterGroupSel" onchange="spFilterGroup=this.value;renderStudentPayments()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">👥 Барлық топ</option></select>
-            <select id="spFilterStatusSel" onchange="spFilterStatus=this.value;renderStudentPayments()" style="flex:1;min-width:170px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
-              <option value="">💳 Барлық статус</option>
-              <option value="full">✅ Толық төленген</option>
-              <option value="partial">⚠️ Ішінара төленген</option>
-              <option value="overdue">❌ Мерзімі өткен</option>
-              <option value="none">— Сома белгіленбеген</option>
-            </select>
-            <select id="spFilterMonthSel" onchange="spFilterMonth=this.value;renderStudentPayments()" style="flex:1;min-width:170px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">📅 Барлық ай (келесі төлем)</option></select>
+          <div class="crm-view-toggle" style="margin-bottom:16px;width:fit-content">
+            <button id="spSubTabBtn-nuet" class="active" onclick="switchSpSubTab('nuet')">🎯 NUET</button>
+            <button id="spSubTabBtn-ielts" onclick="switchSpSubTab('ielts')">🌍 IELTS</button>
           </div>
-          <div class="table-wrap"><table><thead><tr>
-            <th>#</th>
-            <th>Оқушы</th>
-            <th>Курс / Топ</th>
-            <th>Келісім сомасы</th>
-            <th>Төленген</th>
-            <th>Нақты түскен</th>
-            <th>Қалған борыш</th>
-            <th>Келесі төлем</th>
-            <th>Статус</th>
-            <th>Әрекет</th>
-          </tr></thead><tbody id="spTable"></tbody></table></div>
+
+          <!-- 🎯 NUET (пакеттік курстар) -->
+          <div id="spSubTabContent-nuet">
+            <div id="spStatsCards-nuet" style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px"></div>
+            <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+              <input type="text" id="spSearchInput-nuet" placeholder="🔍 Оқушы іздеу..." oninput="spFilter=this.value;renderNuetTab()" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+              <select id="spFilterCourseSel-nuet" onchange="spFilterCourse=this.value;spFilterGroup='';renderNuetTab()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">📚 Барлық курс</option></select>
+              <select id="spFilterGroupSel-nuet" onchange="spFilterGroup=this.value;renderNuetTab()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">👥 Барлық топ</option></select>
+              <select id="spFilterStatusSel-nuet" onchange="spFilterStatus=this.value;renderNuetTab()" style="flex:1;min-width:170px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+                <option value="">💳 Барлық статус</option>
+                <option value="full">✅ Толық төленген</option>
+                <option value="partial">⚠️ Ішінара төленген</option>
+                <option value="overdue">❌ Мерзімі өткен</option>
+                <option value="none">— Сома белгіленбеген</option>
+              </select>
+              <select id="spFilterMonthSel-nuet" onchange="spFilterMonth=this.value;renderNuetTab()" style="flex:1;min-width:170px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">📅 Барлық ай (келесі төлем)</option></select>
+            </div>
+            <div class="table-wrap"><table><thead><tr>
+              <th>#</th>
+              <th>Оқушы</th>
+              <th>Курс / Топ</th>
+              <th>Келісім сомасы</th>
+              <th>Төленген</th>
+              <th>Нақты түскен</th>
+              <th>Қалған борыш</th>
+              <th>Келесі төлем</th>
+              <th>Статус</th>
+              <th>Әрекет</th>
+            </tr></thead><tbody id="spTable-nuet"></tbody></table></div>
+          </div>
+
+          <!-- 🌍 IELTS (ай сайынғы курстар) -->
+          <div id="spSubTabContent-ielts" style="display:none">
+            <div id="spStatsCards-ielts" style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px"></div>
+            <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+              <input type="text" id="spSearchInput-ielts" placeholder="🔍 Оқушы іздеу..." oninput="spFilterIelts=this.value;renderIeltsTab()" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+              <select id="spFilterCourseSel-ielts" onchange="spFilterCourseIelts=this.value;spFilterGroupIelts='';renderIeltsTab()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">📚 Барлық курс</option></select>
+              <select id="spFilterGroupSel-ielts" onchange="spFilterGroupIelts=this.value;renderIeltsTab()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">👥 Барлық топ</option></select>
+              <select id="spFilterStatusSel-ielts" onchange="spFilterStatusIelts=this.value;renderIeltsTab()" style="flex:1;min-width:170px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+                <option value="">💳 Барлық статус</option>
+                <option value="active">✅ Уақытында</option>
+                <option value="pending">⏳ Мерзімі жақындады</option>
+                <option value="overdue">❌ Мерзімі өткен</option>
+              </select>
+            </div>
+            <div class="table-wrap"><table><thead><tr>
+              <th>#</th>
+              <th>Оқушы</th>
+              <th>Топ</th>
+              <th>Жалпы төленген</th>
+              <th>Статус</th>
+              <th></th>
+              <th>Әрекет</th>
+            </tr></thead><tbody id="spTable-ielts"></tbody></table></div>
+          </div>
         </div>
       </div>
 
@@ -1048,6 +1081,12 @@ details[open] summary::before{content:'▾ '}
     <div class="form-group"><label>Сипаттама</label><textarea id="courseDesc" rows="2"></textarea></div>
     <div class="form-group"><label>Түсі</label>
       <select id="courseColor"><option value="blue">🔵 Көк</option><option value="purple">🟣 Күлгін</option><option value="green">🟢 Жасыл</option><option value="yellow">🟡 Сары</option><option value="red">🔴 Қызыл</option></select>
+    </div>
+    <div class="form-group"><label>Төлем түрі</label>
+      <select id="coursePaymentType">
+        <option value="package">📦 Пакеттік (белгілі жалпы сома, мыс. НУЕТ)</option>
+        <option value="monthly">🔄 Ай сайынғы (соңы белгісіз, мыс. IELTS)</option>
+      </select>
     </div>
     <div style="font-size:13px;font-weight:700;margin-bottom:10px">Деңгейлер</div>
     <div id="levelsList"></div>
@@ -1551,11 +1590,18 @@ const PAY_PAGE_SIZE = 30;
 let _payExportList = []; // renderPayments() әр шақырылғанда сүзілген (беттеуге дейінгі) тізіммен жаңарады
 // "Оқушы бойынша төлемдер" (spTab) күйі
 let payActiveTab = 'history'; // 'history' | 'bystudent'
+let spActiveSubTab = 'nuet'; // 'nuet' | 'ielts'
 let spFilter = '';
 let spFilterCourse = '';
 let spFilterGroup = '';
 let spFilterStatus = '';
 let spFilterMonth = '';
+// IELTS (ай сайынғы) кіші-табының бөлек фильтр күйі
+let spFilterIelts = '';
+let spFilterCourseIelts = '';
+let spFilterGroupIelts = '';
+let spFilterStatusIelts = '';
+let spIeltsExpanded = new Set(); // ашық тұрған оқушы жолдарының id-лары (accordion)
 
 // Шығыстар бетіндегі фильтр/сұрыптау/беттеу күйі
 let expFilter = '';
@@ -2046,7 +2092,7 @@ function showPage(name, el){
   const renders={
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
-    payments:()=>{renderPayments();renderStudentPayments();}, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
+    payments:()=>{renderPayments();switchSpSubTab(spActiveSubTab);}, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
     reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM,
     'parent-reports':renderParentReports
   };
@@ -2200,6 +2246,10 @@ function getStudentGroupIds(sId){
 function getStudentGroups(sId){
   const ids=new Set(getStudentGroupIds(sId));
   return DATA.groups.filter(g=>ids.has(g.id));
+}
+// Оқушы қатысатын топтардың курстарын қайтарады (қайталанбай, бірегей курс тізімі)
+function getStudentCourses(sId){
+  return [...new Map(getStudentGroups(sId).map(g=>DATA.courses.find(c=>c.id===g.course_id)).filter(Boolean).map(c=>[c.id,c])).values()];
 }
 function studentInGroup(sId,gId){
   return DATA.student_groups.some(sg=>sg.student_id===sId&&sg.group_id===gId);
@@ -3028,12 +3078,20 @@ function openQuickPay(sId){
   quickPayStudent=DATA.students.find(s=>s.id===sId); if(!quickPayStudent) return;
   const sGroups=getStudentGroups(quickPayStudent.id);
   const gNames=sGroups.map(g=>g.name).join(', ');
+  // Оқушы бірнеше курста оқыса (мыс. НУЕТ + IELTS), төлемнің қай курсқа
+  // жататынын нақты таңдату керек — әйтпесе course_id бос қалып, "Оқушы
+  // бойынша" вкладкасында қай тізімге (НУЕТ/IELTS) түсетіні белгісіз болады.
+  const qpCourses=getStudentCourses(quickPayStudent.id);
+  const courseFieldHtml = qpCourses.length>1
+    ? `<div class="form-group"><label>Курс</label><select id="qpCourse">${qpCourses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div>`
+    : `<input type="hidden" id="qpCourse" value="${qpCourses[0]?.id||''}" />`;
   document.getElementById('quickPayModalContent').innerHTML=`
     <div class="wallet-card" style="margin-bottom:16px">
       <div class="wallet-label">Оқушы</div>
       <div style="font-size:18px;font-weight:700;margin:6px 0">${quickPayStudent.name} ${quickPayStudent.surname||''}</div>
       <div class="wallet-label">${gNames||'—'} | Мерзім: ${quickPayStudent.next_pay_date||'—'}</div>
     </div>
+    ${courseFieldHtml}
     <div class="form-group"><label>Төлем сомасы (₸)</label><input type="number" id="qpAmount" placeholder="Сомасын енгізіңіз" /></div>
     <div class="form-group"><label>Касса</label>
       <select id="qpCashAccount"><option value="Kaspi Pay">💳 Kaspi Pay</option></select>
@@ -3058,6 +3116,7 @@ async function confirmQuickPay(){
   const type=document.getElementById('qpType').value;
   const cashAccount=document.getElementById('qpCashAccount').value;
   const note=document.getElementById('qpNote').value;
+  const courseId=document.getElementById('qpCourse')?.value||null;
   if(!amount) return alert('Сомасын енгізіңіз');
   if(amount<=0) return alert('Сома 0-ден үлкен болуы керек');
   const now=new Date();
@@ -3068,7 +3127,7 @@ async function confirmQuickPay(){
   const dupQ=DATA.payments.find(p=>p.student_id===quickPayStudent.id&&Number(p.amount)===Number(amount)&&p.month==payMonth&&p.year==payYear);
   if(dupQ && !confirm(`⚠️ Бұл оқушыға осы айға дәл осындай сома (${fmt(amount)}₸) бұрын енгізілген. Сонда да сақтайсыз ба?`)) return;
   const {error:qpErr} = await sb.from('payments').insert({
-    student_id:quickPayStudent.id, amount, month:payMonth, year:payYear,
+    student_id:quickPayStudent.id, course_id:courseId, amount, month:payMonth, year:payYear,
     pay_date:localDateStr(now), pay_type:type, cash_account:cashAccount, note
   });
   if(qpErr){ alert('❌ Сақталмады! Қате: '+qpErr.message); return; }
@@ -3090,6 +3149,7 @@ function openCourseModal(c=null){
   document.getElementById('courseName').value=c?.name||'';
   document.getElementById('courseDesc').value=c?.description||'';
   document.getElementById('courseColor').value=c?.color||'blue';
+  document.getElementById('coursePaymentType').value=c?.payment_type||'package';
   document.getElementById('levelsList').innerHTML='';
   (c?.levels||[]).forEach(l=>addLevel(l));
   openModal('courseModal');
@@ -3102,7 +3162,7 @@ function addLevel(val=''){
 async function saveCourse(){
   const name=document.getElementById('courseName').value.trim(); if(!name) return alert('Атауын енгізіңіз');
   const levels=[...document.querySelectorAll('.lv-input')].map(i=>i.value.trim()).filter(Boolean);
-  const row={name,description:document.getElementById('courseDesc').value,color:document.getElementById('courseColor').value,levels};
+  const row={name,description:document.getElementById('courseDesc').value,color:document.getElementById('courseColor').value,payment_type:document.getElementById('coursePaymentType').value,levels};
   const id=document.getElementById('courseId').value;
   if(id) await sb.from('courses').update(row).eq('id',id); else await sb.from('courses').insert(row);
   closeModal('courseModal'); await loadAll(); renderCourses(); toast('✅ Сақталды!');
@@ -4092,7 +4152,7 @@ function fillPaymentAmount(){
   const sId=document.getElementById('paymentStudent').value;
   const s=DATA.students.find(s=>s.id===sId);
   // Оқушы қатысатын топтардың курстарын Курс тізіміне толтырамыз (бір оқушы бірнеше курста болуы мүмкін)
-  const courses=[...new Map(getStudentGroups(sId).map(g=>DATA.courses.find(c=>c.id===g.course_id)).filter(Boolean).map(c=>[c.id,c])).values()];
+  const courses=getStudentCourses(sId);
   sel('paymentCourse',courses.map(c=>({id:c.id,name:c.name})));
   if(courses.length===1) document.getElementById('paymentCourse').value=courses[0].id;
   if(!s)return;
@@ -4294,12 +4354,15 @@ function renderPayments(){
 
 // ================================================================
 // "ОҚУШЫ БОЙЫНША ТӨЛЕМДЕР" (Төлемдер бетінің 2-ші вкладкасы)
-// Әр оқушының келісім сомасын (students.contract_amount) нақты
-// төленген жалпы сомамен (SUM(payments.amount)) салыстырып, борышты
-// көрсетеді. Рассрочка да "amount" толық сомамен жазылатындықтан,
-// бөлек логика қажет емес — комиссия/салық тек "Нақты түскен" деген
-// қосымша (ақпараттық) бағанда көрсетіледі, борыш есебіне әсер етпейді.
+// Курстың payment_type өрісіне қарай екі бөлек кіші-вкладка:
+//  🎯 NUET  (package)  — белгілі "келісім сомасы" бар, борыш есептеледі
+//  🌍 IELTS (monthly)  — соңы белгісіз, тек ай сайынғы мерзім тексеріледі
+// payments.course_id арқылы әр төлемнің қай санатқа (package/monthly)
+// жататынын анықтаймыз — сондықтан бір оқушының НУЕТ пен IELTS төлемдері
+// ешқашан араласпайды (Арманның мәселесі осылай шешілді).
 // ================================================================
+function isPackageCourse(course){ return (course?.payment_type||'package')!=='monthly'; }
+function isMonthlyCourse(course){ return course?.payment_type==='monthly'; }
 function studentContractStatus(s, totalPaid){
   if(s.contract_amount==null || s.contract_amount==='') return 'none';
   const debt=Number(s.contract_amount)-totalPaid;
@@ -4316,32 +4379,43 @@ function spStatusBadge(status){
   };
   return map[status]||map.none;
 }
-function renderStudentPayments(){
-  const tbody=document.getElementById('spTable'); if(!tbody) return; // бет әлі көрсетілмеген болуы мүмкін
+function spStatCard(label,value,color){
+  return `<div class="card" style="margin:0;padding:10px 12px"><div class="text-muted" style="font-size:11px">${label}</div><div class="font-bold" style="font-size:17px;margin-top:2px;${color?'color:'+color:''}">${value}</div></div>`;
+}
 
-  // Фильтр dropdown-тарын толтыру (бір рет — курс/ай; топ курске тәуелді, әр шақыруда жаңарады)
-  const courseSel=document.getElementById('spFilterCourseSel');
+// ---- 🎯 NUET (пакеттік курстар) ----
+function renderNuetTab(){
+  const tbody=document.getElementById('spTable-nuet'); if(!tbody) return; // бет әлі көрсетілмеген болуы мүмкін
+
+  const packageCourses=DATA.courses.filter(isPackageCourse);
+  const packageCourseIds=new Set(packageCourses.map(c=>c.id));
+  const packageGroupIds=new Set(DATA.groups.filter(g=>packageCourseIds.has(g.course_id)).map(g=>g.id));
+
+  // Фильтр dropdown-тарын толтыру
+  const courseSel=document.getElementById('spFilterCourseSel-nuet');
   if(courseSel && courseSel.options.length<=1){
-    courseSel.innerHTML='<option value="">📚 Барлық курс</option>'+DATA.courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    courseSel.innerHTML='<option value="">📚 Барлық курс</option>'+packageCourses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   }
-  const groupSel=document.getElementById('spFilterGroupSel');
+  const groupSel=document.getElementById('spFilterGroupSel-nuet');
   if(groupSel){
-    const groupsForCourse=spFilterCourse?DATA.groups.filter(g=>g.course_id===spFilterCourse):DATA.groups;
+    const groupsForCourse=packageCourses.length?DATA.groups.filter(g=>packageGroupIds.has(g.id)&&(!spFilterCourse||g.course_id===spFilterCourse)):[];
     groupSel.innerHTML='<option value="">👥 Барлық топ</option>'+groupsForCourse.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
     if(spFilterGroup && groupsForCourse.some(g=>g.id===spFilterGroup)) groupSel.value=spFilterGroup;
     else spFilterGroup='';
   }
-  const monthSel=document.getElementById('spFilterMonthSel');
+  const monthSel=document.getElementById('spFilterMonthSel-nuet');
   if(monthSel && monthSel.options.length<=1){
-    const combos=[...new Set(DATA.students.filter(s=>s.next_pay_date).map(s=>{const d=parseLocalDate(s.next_pay_date);return `${d.getMonth()+1}_${d.getFullYear()}`;}))]
+    const combos=[...new Set(DATA.students.filter(s=>s.next_pay_date&&getStudentGroups(s.id).some(g=>packageGroupIds.has(g.id))).map(s=>{const d=parseLocalDate(s.next_pay_date);return `${d.getMonth()+1}_${d.getFullYear()}`;}))]
       .sort((a,b)=>{ const[am,ay]=a.split('_').map(Number); const[bm,by]=b.split('_').map(Number); return by-ay || bm-am; });
     monthSel.innerHTML='<option value="">📅 Барлық ай (келесі төлем)</option>'+combos.map(cb=>{ const[m,y]=cb.split('_'); return `<option value="${cb}">${MONTHS[m]} ${y}</option>`; }).join('');
   }
 
-  // Әр оқушыға: төленген жалпы сома, нақты түскен сома, борыш, статус
-  const rows=DATA.students.map(s=>{
-    const sGroups=getStudentGroups(s.id);
-    const pmts=DATA.payments.filter(p=>p.student_id===s.id);
+  // Тек пакеттік топта оқитын оқушылар; әр оқушының тек package курстарына
+  // тиесілі төлемдері ғана қосылады (course_id белгіленбеген ескі төлемдер
+  // де осында түседі — бұрынғы әдепкі мінез-құлықпен үйлесімді болу үшін)
+  const rows=DATA.students.filter(s=>getStudentGroups(s.id).some(g=>packageGroupIds.has(g.id))).map(s=>{
+    const sGroups=getStudentGroups(s.id).filter(g=>packageGroupIds.has(g.id));
+    const pmts=DATA.payments.filter(p=>p.student_id===s.id && (packageCourseIds.has(p.course_id) || !p.course_id));
     const totalPaid=pmts.reduce((sum,p)=>sum+Number(p.amount||0),0);
     const totalNet=pmts.reduce((sum,p)=>sum+calcPaymentBreakdown(p.amount,p.pay_type).net,0);
     const hasContract=s.contract_amount!=null && s.contract_amount!=='';
@@ -4350,7 +4424,6 @@ function renderStudentPayments(){
     return {s,sGroups,totalPaid,totalNet,hasContract,debt,status};
   });
 
-  // Фильтрлер
   let list=rows.filter(r=>{
     const q=spFilter.toLowerCase();
     if(q && !((r.s.name+' '+(r.s.surname||'')).toLowerCase().includes(q))) return false;
@@ -4363,26 +4436,24 @@ function renderStudentPayments(){
     } else if(spFilterMonth){ return false; }
     return true;
   });
-
-  // Атауы бойынша сұрыптау
   list.sort((a,b)=>(a.s.name+' '+(a.s.surname||'')).localeCompare(b.s.name+' '+(b.s.surname||'')));
 
-  // Статистика карточкалары
-  const statsEl=document.getElementById('spStatsCards');
+  const statsEl=document.getElementById('spStatsCards-nuet');
   if(statsEl){
     const total=list.length;
     const fullCnt=list.filter(r=>r.status==='full').length;
     const debtCnt=list.filter(r=>r.status==='partial'||r.status==='overdue').length;
-    const overdueCnt=list.filter(r=>r.status==='overdue').length;
-    const totalDebt=list.reduce((sum,r)=>sum+(r.debt>0?r.debt:0),0);
     const pct=n=>total?Math.round(n/total*100):0;
-    const card=(label,value,color)=>`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">${label}</div><div class="font-bold" style="font-size:19px;${color?'color:'+color:''}">${value}</div></div>`;
+    const totalSold=list.reduce((sum,r)=>sum+(r.hasContract?Number(r.s.contract_amount):0),0);
+    const totalPaidAll=list.reduce((sum,r)=>sum+r.totalPaid,0);
+    const totalOwed=list.reduce((sum,r)=>sum+(r.debt>0?r.debt:0),0);
     statsEl.innerHTML=
-      card('Барлық оқушы',total)+
-      card('✅ Толық төлегендер',`${fullCnt} (${pct(fullCnt)}%)`,'var(--green)')+
-      card('⚠️ Борышы барлар',`${debtCnt} (${pct(debtCnt)}%)`,'var(--yellow)')+
-      card('❌ Мерзімі өткен',overdueCnt,'var(--red)')+
-      card('💰 Жалпы борыш',fmt(Math.round(totalDebt))+'₸','var(--red)');
+      spStatCard('Барлық оқушы',total)+
+      spStatCard('Толық төлеген',`${fullCnt} (${pct(fullCnt)}%)`,'var(--green)')+
+      spStatCard('Борышы бар',`${debtCnt} (${pct(debtCnt)}%)`,'var(--yellow)')+
+      spStatCard('Сатылған сома',fmt(Math.round(totalSold))+'₸')+
+      spStatCard('Төленген (жалпы)',fmt(Math.round(totalPaidAll))+'₸','var(--green)')+
+      spStatCard('Төленуі керек',fmt(Math.round(totalOwed))+'₸','var(--red)');
   }
 
   tbody.innerHTML=list.map((r,i)=>{
@@ -4405,6 +4476,100 @@ function renderStudentPayments(){
       </div></td>
     </tr>`;
   }).join('')||'<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл фильтрге сай оқушы табылмады</p></div></td></tr>';
+}
+
+// ---- 🌍 IELTS (ай сайынғы курстар) ----
+function toggleSpIeltsRow(sId){
+  if(spIeltsExpanded.has(sId)) spIeltsExpanded.delete(sId); else spIeltsExpanded.add(sId);
+  renderIeltsTab();
+}
+function renderIeltsTab(){
+  const tbody=document.getElementById('spTable-ielts'); if(!tbody) return;
+
+  const monthlyCourses=DATA.courses.filter(isMonthlyCourse);
+  const monthlyCourseIds=new Set(monthlyCourses.map(c=>c.id));
+  const monthlyGroupIds=new Set(DATA.groups.filter(g=>monthlyCourseIds.has(g.course_id)).map(g=>g.id));
+
+  const courseSel=document.getElementById('spFilterCourseSel-ielts');
+  if(courseSel && courseSel.options.length<=1){
+    courseSel.innerHTML='<option value="">📚 Барлық курс</option>'+monthlyCourses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  }
+  const groupSel=document.getElementById('spFilterGroupSel-ielts');
+  if(groupSel){
+    const groupsForCourse=monthlyCourses.length?DATA.groups.filter(g=>monthlyGroupIds.has(g.id)&&(!spFilterCourseIelts||g.course_id===spFilterCourseIelts)):[];
+    groupSel.innerHTML='<option value="">👥 Барлық топ</option>'+groupsForCourse.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+    if(spFilterGroupIelts && groupsForCourse.some(g=>g.id===spFilterGroupIelts)) groupSel.value=spFilterGroupIelts;
+    else spFilterGroupIelts='';
+  }
+
+  const now=new Date();
+  const rows=DATA.students.filter(s=>getStudentGroups(s.id).some(g=>monthlyGroupIds.has(g.id))).map(s=>{
+    const sGroups=getStudentGroups(s.id).filter(g=>monthlyGroupIds.has(g.id));
+    // Тек monthly курстарға тиесілі төлемдер (course_id белгіленбегендер НУЕТ жағында есептеледі)
+    const pmts=DATA.payments.filter(p=>p.student_id===s.id && monthlyCourseIds.has(p.course_id))
+      .sort((a,b)=>new Date(b.pay_date)-new Date(a.pay_date));
+    const totalPaid=pmts.reduce((sum,p)=>sum+Number(p.amount||0),0);
+    const paidThisMonth=pmts.some(p=>{ const d=parseLocalDate(p.pay_date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
+    const status=getPayStatus(s); // 'active' | 'pending' | 'overdue' | null
+    const monthlyFee=sGroups.reduce((sum,g)=>sum+Number(g.fee||0),0);
+    return {s,sGroups,pmts,totalPaid,paidThisMonth,status,monthlyFee};
+  });
+
+  let list=rows.filter(r=>{
+    const q=spFilterIelts.toLowerCase();
+    if(q && !((r.s.name+' '+(r.s.surname||'')).toLowerCase().includes(q))) return false;
+    if(spFilterCourseIelts && !r.sGroups.some(g=>g.course_id===spFilterCourseIelts)) return false;
+    if(spFilterGroupIelts && !studentInGroup(r.s.id,spFilterGroupIelts)) return false;
+    if(spFilterStatusIelts && r.status!==spFilterStatusIelts) return false;
+    return true;
+  });
+  list.sort((a,b)=>(a.s.name+' '+(a.s.surname||'')).localeCompare(b.s.name+' '+(b.s.surname||'')));
+
+  const statsEl=document.getElementById('spStatsCards-ielts');
+  if(statsEl){
+    const total=list.length;
+    const paidCnt=list.filter(r=>r.paidThisMonth).length;
+    const overdueCnt=list.filter(r=>r.status==='overdue').length;
+    const pct=n=>total?Math.round(n/total*100):0;
+    const monthlyPlan=list.reduce((sum,r)=>sum+r.monthlyFee,0);
+    const receivedThisMonth=list.reduce((sum,r)=>sum+r.pmts.filter(p=>{const d=parseLocalDate(p.pay_date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).reduce((s2,p)=>s2+Number(p.amount||0),0),0);
+    const stillExpected=Math.max(0,monthlyPlan-receivedThisMonth);
+    statsEl.innerHTML=
+      spStatCard('Барлық оқушы',total)+
+      spStatCard('Осы ай төлеген',`${paidCnt} (${pct(paidCnt)}%)`,'var(--green)')+
+      spStatCard('Мерзімі өткен',`${overdueCnt} (${pct(overdueCnt)}%)`,'var(--red)')+
+      spStatCard('Ай сайынғы жоспар',fmt(Math.round(monthlyPlan))+'₸')+
+      spStatCard('Осы айда түскен',fmt(Math.round(receivedThisMonth))+'₸','var(--green)')+
+      spStatCard('Әлі күтілуде',fmt(Math.round(stillExpected))+'₸','var(--red)');
+  }
+
+  tbody.innerHTML=list.map((r,i)=>{
+    const {s,sGroups,pmts,totalPaid}=r;
+    const gBadges=sGroups.length?sGroups.map(g=>`<span class="badge badge-blue">${g.name}</span>`).join(' '):'<span class="text-muted text-sm">—</span>';
+    const isOpen=spIeltsExpanded.has(s.id);
+    let html=`<tr>
+      <td>${i+1}</td>
+      <td><span class="font-bold" style="cursor:pointer;color:var(--accent)" onclick="showStudentDetail('${s.id}')">${s.name} ${s.surname||''}</span></td>
+      <td>${gBadges}</td>
+      <td class="font-bold">${fmt(totalPaid)}₸</td>
+      <td>${payStatusBadge(s)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="toggleSpIeltsRow('${s.id}')" title="${isOpen?'Жасыру':'Төлем тарихын ашу'}">${isOpen?'▲':'▼'}</button></td>
+      <td><button class="btn btn-green btn-sm" onclick="openQuickPay('${s.id}')" title="Жылдам төлем">⚡</button></td>
+    </tr>`;
+    if(isOpen){
+      const histRows=pmts.length?pmts.map(p=>{
+        const typeL={normal:'Қалыпты',installment_12:'Рассрочка 0-0-12',installment_24:'Рассрочка 0-0-24'};
+        return `<tr><td class="text-sm">${p.pay_date}</td><td class="text-sm font-bold">${fmt(p.amount)}₸</td><td class="text-sm text-muted">${typeL[p.pay_type]||p.pay_type}</td><td class="text-sm text-muted">${p.note||'—'}</td></tr>`;
+      }).join(''):'<tr><td colspan="4" class="text-sm text-muted">Төлем тарихы жоқ</td></tr>';
+      html+=`<tr><td></td><td colspan="6" style="padding:0 0 10px 40px">
+        <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-width:520px">
+          <table style="width:100%"><thead><tr><th class="text-sm">Күні</th><th class="text-sm">Сомасы</th><th class="text-sm">Түрі</th><th class="text-sm">Ескертпе</th></tr></thead>
+          <tbody>${histRows}</tbody></table>
+        </div>
+      </td></tr>`;
+    }
+    return html;
+  }).join('')||'<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл фильтрге сай оқушы табылмады</p></div></td></tr>';
 }
 
 // Сүзілген (беттеуге дейінгі) тізімді CSV файл ретінде жүктеп алу
@@ -5009,7 +5174,18 @@ function switchPayTab(tab){
   document.getElementById('payAddBtn').style.display=isHist?'':'none';
   document.getElementById('payTabBtn1').classList.toggle('active',isHist);
   document.getElementById('payTabBtn2').classList.toggle('active',!isHist);
-  if(!isHist) renderStudentPayments();
+  if(!isHist) switchSpSubTab(spActiveSubTab);
+}
+
+// ---- "Оқушы бойынша" ішіндегі кіші-таб қосқышы (🎯 NUET / 🌍 IELTS) ----
+function switchSpSubTab(tab){
+  spActiveSubTab=tab;
+  const isNuet=tab==='nuet';
+  document.getElementById('spSubTabContent-nuet').style.display=isNuet?'':'none';
+  document.getElementById('spSubTabContent-ielts').style.display=isNuet?'none':'';
+  document.getElementById('spSubTabBtn-nuet').classList.toggle('active',isNuet);
+  document.getElementById('spSubTabBtn-ielts').classList.toggle('active',!isNuet);
+  if(isNuet) renderNuetTab(); else renderIeltsTab();
 }
 
 // ---- Шығыстар бетіндегі таб қосқышы (Шығыстар / Мұғалім жалақылары) ----
@@ -6275,6 +6451,7 @@ SUPABASE SQL — Run in SQL Editor:
 
 -- 1. Existing tables (if not already created):
 create table if not exists courses(id uuid primary key default gen_random_uuid(),name text,description text,color text,levels jsonb,created_at timestamptz default now());
+alter table courses add column if not exists payment_type text default 'package'; -- 'package' (пакеттік, мыс. НУЕТ) | 'monthly' (ай сайынғы, мыс. IELTS) — "Оқушы бойынша төлемдер" бетіндегі вкладканы анықтайды
 create table if not exists teachers(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,subject text,hourly_rate numeric,email text,balance numeric default 0,note text,created_at timestamptz default now());
 create table if not exists groups(id uuid primary key default gen_random_uuid(),name text,course_id uuid,level text,teacher_id uuid,room text,fee numeric,max_students int,created_at timestamptz default now());
 create table if not exists students(id uuid primary key default gen_random_uuid(),name text,surname text,phone text,birth_date date,group_id uuid,parent_name text,parent_phone text,note text,next_pay_date date,progress_percent int default 0,lead_source text,sales_manager text,marketing_note text,created_at timestamptz default now());
