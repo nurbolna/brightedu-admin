@@ -601,8 +601,14 @@ details[open] summary::before{content:'▾ '}
       <div class="page dir-only" id="page-payments">
         <div class="page-header">
           <div><div class="page-title">Төлемдер</div><div class="page-subtitle">Оқушы төлемдері тарихы</div></div>
-          <button class="btn btn-blue" onclick="openPaymentModal()">+ Төлем қосу</button>
+          <button class="btn btn-blue" id="payAddBtn" onclick="openPaymentModal()">+ Төлем қосу</button>
         </div>
+        <div class="crm-view-toggle" style="margin-bottom:16px;width:fit-content">
+          <button id="payTabBtn1" class="active" onclick="switchPayTab('history')">💳 Тарих</button>
+          <button id="payTabBtn2" onclick="switchPayTab('bystudent')">👩‍🎓 Оқушы бойынша</button>
+        </div>
+
+        <div id="payTabContent1">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
           <div class="card">
             <div class="card-title">📚 Курс бойынша кіріс</div>
@@ -644,6 +650,36 @@ details[open] summary::before{content:'▾ '}
           <th>Әрекет</th>
         </tr></thead><tbody id="paymentsTable"></tbody></table></div>
         <div id="paymentsPagination" style="display:flex;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap"></div>
+        </div>
+
+        <div id="payTabContent2" style="display:none">
+          <div id="spStatsCards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px"></div>
+          <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+            <input type="text" id="spSearchInput" placeholder="🔍 Оқушы іздеу..." oninput="spFilter=this.value;renderStudentPayments()" style="flex:2;min-width:200px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;" />
+            <select id="spFilterCourseSel" onchange="spFilterCourse=this.value;spFilterGroup='';renderStudentPayments()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">📚 Барлық курс</option></select>
+            <select id="spFilterGroupSel" onchange="spFilterGroup=this.value;renderStudentPayments()" style="flex:1;min-width:150px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">👥 Барлық топ</option></select>
+            <select id="spFilterStatusSel" onchange="spFilterStatus=this.value;renderStudentPayments()" style="flex:1;min-width:170px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;">
+              <option value="">💳 Барлық статус</option>
+              <option value="full">✅ Толық төленген</option>
+              <option value="partial">⚠️ Ішінара төленген</option>
+              <option value="overdue">❌ Мерзімі өткен</option>
+              <option value="none">— Сома белгіленбеген</option>
+            </select>
+            <select id="spFilterMonthSel" onchange="spFilterMonth=this.value;renderStudentPayments()" style="flex:1;min-width:170px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Manrope',sans-serif;font-size:14px;outline:none;"><option value="">📅 Барлық ай (келесі төлем)</option></select>
+          </div>
+          <div class="table-wrap"><table><thead><tr>
+            <th>#</th>
+            <th>Оқушы</th>
+            <th>Курс / Топ</th>
+            <th>Келісім сомасы</th>
+            <th>Төленген</th>
+            <th>Нақты түскен</th>
+            <th>Қалған борыш</th>
+            <th>Келесі төлем</th>
+            <th>Статус</th>
+            <th>Әрекет</th>
+          </tr></thead><tbody id="spTable"></tbody></table></div>
+        </div>
       </div>
 
       <!-- ========== EXPENSES (dedicated page) ========== -->
@@ -1090,6 +1126,7 @@ details[open] summary::before{content:'▾ '}
     </div>
     <div class="form-group"><label>Группалар (бірнешеуін таңдауға болады)</label><div id="studentGroupsChecks" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface2);display:flex;flex-direction:column;gap:8px"></div></div>
     <div class="form-group"><label>Келесі төлем күні</label><input type="date" id="studentNextPayDate" /></div>
+    <div class="form-group"><label>Келісім сомасы — жалпы төлеуі керек (₸)</label><input type="number" id="studentContractAmount" placeholder="мыс. 590000" /></div>
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">👨‍👩‍👧 Ата-ана</div>
       <div class="form-row">
@@ -1512,6 +1549,13 @@ let paySortDir = 'desc';
 let payPage = 1;
 const PAY_PAGE_SIZE = 30;
 let _payExportList = []; // renderPayments() әр шақырылғанда сүзілген (беттеуге дейінгі) тізіммен жаңарады
+// "Оқушы бойынша төлемдер" (spTab) күйі
+let payActiveTab = 'history'; // 'history' | 'bystudent'
+let spFilter = '';
+let spFilterCourse = '';
+let spFilterGroup = '';
+let spFilterStatus = '';
+let spFilterMonth = '';
 
 // Шығыстар бетіндегі фильтр/сұрыптау/беттеу күйі
 let expFilter = '';
@@ -2002,7 +2046,7 @@ function showPage(name, el){
   const renders={
     study:renderStudy,
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
-    payments:renderPayments, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
+    payments:()=>{renderPayments();renderStudentPayments();}, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
     reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM,
     'parent-reports':renderParentReports
   };
@@ -3667,6 +3711,7 @@ function openStudentModal(s=null){
   document.getElementById('parentPhone').value=s?.parent_phone||'';
   document.getElementById('studentNote').value=s?.note||'';
   document.getElementById('studentNextPayDate').value=s?.next_pay_date||'';
+  document.getElementById('studentContractAmount').value=(s?.contract_amount??'')===null?'':(s?.contract_amount??'');
   document.getElementById('studentLeadSource').value=s?.lead_source||'';
   document.getElementById('studentSalesManager').value=s?.sales_manager||'';
   document.getElementById('studentMarketingNote').value=s?.marketing_note||'';
@@ -3682,7 +3727,8 @@ function openStudentModal(s=null){
 async function saveStudent(){
   const name=document.getElementById('studentName').value.trim(); if(!name)return alert('Атын енгізіңіз');
   const selectedGroupIds=[...document.querySelectorAll('.studentGroupChk:checked')].map(c=>c.value);
-  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:document.getElementById('studentNextPayDate').value||null,lead_source:document.getElementById('studentLeadSource').value||null,sales_manager:document.getElementById('studentSalesManager').value||null,marketing_note:document.getElementById('studentMarketingNote').value||null};
+  const contractAmtRaw=document.getElementById('studentContractAmount').value;
+  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:document.getElementById('studentNextPayDate').value||null,lead_source:document.getElementById('studentLeadSource').value||null,sales_manager:document.getElementById('studentSalesManager').value||null,marketing_note:document.getElementById('studentMarketingNote').value||null,contract_amount:contractAmtRaw!==''?Number(contractAmtRaw):null};
   let id=document.getElementById('studentId').value;
   if(id){
     await sb.from('students').update(row).eq('id',id);
@@ -3865,6 +3911,13 @@ function showStudentDetail(id){
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Мұғалімдер</div><div class="font-bold">${tNames}</div></div>
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Курстар</div><div class="font-bold">${cNames}</div></div>
       ${role!=='admin'?`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келесі төлем</div><div class="font-bold">${s.next_pay_date||'—'}</div>${payStatusBadge(s)}</div>`:'<div></div>'}
+      ${role==='director'?(()=>{
+        const totalPaid=DATA.payments.filter(p=>p.student_id===s.id).reduce((sum,p)=>sum+Number(p.amount||0),0);
+        const hasContract=s.contract_amount!=null && s.contract_amount!=='';
+        const debt=hasContract?Number(s.contract_amount)-totalPaid:null;
+        return `<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келісім сомасы</div><div class="font-bold">${hasContract?fmt(s.contract_amount)+'₸':'Белгіленбеген'}</div></div>
+        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Қалған борыш</div><div class="font-bold" style="color:${!hasContract?'var(--text2)':(debt>0?'var(--red)':'var(--green)')}">${!hasContract?'—':fmt(Math.round(debt))+'₸'}</div></div>`;
+      })():''}
     </div>
     <div style="margin-bottom:12px">
       <div class="text-muted text-sm" style="margin-bottom:4px">📊 Жалпы үлгерім</div>
@@ -4237,6 +4290,121 @@ function renderPayments(){
       pagEl.innerHTML=html;
     }
   }
+}
+
+// ================================================================
+// "ОҚУШЫ БОЙЫНША ТӨЛЕМДЕР" (Төлемдер бетінің 2-ші вкладкасы)
+// Әр оқушының келісім сомасын (students.contract_amount) нақты
+// төленген жалпы сомамен (SUM(payments.amount)) салыстырып, борышты
+// көрсетеді. Рассрочка да "amount" толық сомамен жазылатындықтан,
+// бөлек логика қажет емес — комиссия/салық тек "Нақты түскен" деген
+// қосымша (ақпараттық) бағанда көрсетіледі, борыш есебіне әсер етпейді.
+// ================================================================
+function studentContractStatus(s, totalPaid){
+  if(s.contract_amount==null || s.contract_amount==='') return 'none';
+  const debt=Number(s.contract_amount)-totalPaid;
+  if(debt<=0) return 'full';
+  if(getPayStatus(s)==='overdue') return 'overdue';
+  return 'partial';
+}
+function spStatusBadge(status){
+  const map={
+    full:'<span class="badge badge-green">✅ Толық төленген</span>',
+    partial:'<span class="badge badge-yellow">⚠️ Ішінара төленген</span>',
+    overdue:'<span class="badge badge-red">❌ Мерзімі өткен</span>',
+    none:'<span class="badge" style="background:var(--surface2);color:var(--text2)">— Сома белгіленбеген</span>'
+  };
+  return map[status]||map.none;
+}
+function renderStudentPayments(){
+  const tbody=document.getElementById('spTable'); if(!tbody) return; // бет әлі көрсетілмеген болуы мүмкін
+
+  // Фильтр dropdown-тарын толтыру (бір рет — курс/ай; топ курске тәуелді, әр шақыруда жаңарады)
+  const courseSel=document.getElementById('spFilterCourseSel');
+  if(courseSel && courseSel.options.length<=1){
+    courseSel.innerHTML='<option value="">📚 Барлық курс</option>'+DATA.courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  }
+  const groupSel=document.getElementById('spFilterGroupSel');
+  if(groupSel){
+    const groupsForCourse=spFilterCourse?DATA.groups.filter(g=>g.course_id===spFilterCourse):DATA.groups;
+    groupSel.innerHTML='<option value="">👥 Барлық топ</option>'+groupsForCourse.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+    if(spFilterGroup && groupsForCourse.some(g=>g.id===spFilterGroup)) groupSel.value=spFilterGroup;
+    else spFilterGroup='';
+  }
+  const monthSel=document.getElementById('spFilterMonthSel');
+  if(monthSel && monthSel.options.length<=1){
+    const combos=[...new Set(DATA.students.filter(s=>s.next_pay_date).map(s=>{const d=parseLocalDate(s.next_pay_date);return `${d.getMonth()+1}_${d.getFullYear()}`;}))]
+      .sort((a,b)=>{ const[am,ay]=a.split('_').map(Number); const[bm,by]=b.split('_').map(Number); return by-ay || bm-am; });
+    monthSel.innerHTML='<option value="">📅 Барлық ай (келесі төлем)</option>'+combos.map(cb=>{ const[m,y]=cb.split('_'); return `<option value="${cb}">${MONTHS[m]} ${y}</option>`; }).join('');
+  }
+
+  // Әр оқушыға: төленген жалпы сома, нақты түскен сома, борыш, статус
+  const rows=DATA.students.map(s=>{
+    const sGroups=getStudentGroups(s.id);
+    const pmts=DATA.payments.filter(p=>p.student_id===s.id);
+    const totalPaid=pmts.reduce((sum,p)=>sum+Number(p.amount||0),0);
+    const totalNet=pmts.reduce((sum,p)=>sum+calcPaymentBreakdown(p.amount,p.pay_type).net,0);
+    const hasContract=s.contract_amount!=null && s.contract_amount!=='';
+    const debt=hasContract?Number(s.contract_amount)-totalPaid:null;
+    const status=studentContractStatus(s,totalPaid);
+    return {s,sGroups,totalPaid,totalNet,hasContract,debt,status};
+  });
+
+  // Фильтрлер
+  let list=rows.filter(r=>{
+    const q=spFilter.toLowerCase();
+    if(q && !((r.s.name+' '+(r.s.surname||'')).toLowerCase().includes(q))) return false;
+    if(spFilterCourse && !r.sGroups.some(g=>g.course_id===spFilterCourse)) return false;
+    if(spFilterGroup && !studentInGroup(r.s.id,spFilterGroup)) return false;
+    if(spFilterStatus && r.status!==spFilterStatus) return false;
+    if(spFilterMonth && r.s.next_pay_date){
+      const d=parseLocalDate(r.s.next_pay_date);
+      if(`${d.getMonth()+1}_${d.getFullYear()}`!==spFilterMonth) return false;
+    } else if(spFilterMonth){ return false; }
+    return true;
+  });
+
+  // Атауы бойынша сұрыптау
+  list.sort((a,b)=>(a.s.name+' '+(a.s.surname||'')).localeCompare(b.s.name+' '+(b.s.surname||'')));
+
+  // Статистика карточкалары
+  const statsEl=document.getElementById('spStatsCards');
+  if(statsEl){
+    const total=list.length;
+    const fullCnt=list.filter(r=>r.status==='full').length;
+    const debtCnt=list.filter(r=>r.status==='partial'||r.status==='overdue').length;
+    const overdueCnt=list.filter(r=>r.status==='overdue').length;
+    const totalDebt=list.reduce((sum,r)=>sum+(r.debt>0?r.debt:0),0);
+    const pct=n=>total?Math.round(n/total*100):0;
+    const card=(label,value,color)=>`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">${label}</div><div class="font-bold" style="font-size:19px;${color?'color:'+color:''}">${value}</div></div>`;
+    statsEl.innerHTML=
+      card('Барлық оқушы',total)+
+      card('✅ Толық төлегендер',`${fullCnt} (${pct(fullCnt)}%)`,'var(--green)')+
+      card('⚠️ Борышы барлар',`${debtCnt} (${pct(debtCnt)}%)`,'var(--yellow)')+
+      card('❌ Мерзімі өткен',overdueCnt,'var(--red)')+
+      card('💰 Жалпы борыш',fmt(Math.round(totalDebt))+'₸','var(--red)');
+  }
+
+  tbody.innerHTML=list.map((r,i)=>{
+    const {s,sGroups,totalPaid,totalNet,hasContract,debt}=r;
+    const gBadges=sGroups.length?sGroups.map(g=>`<span class="badge badge-blue">${g.name}</span>`).join(' '):'<span class="text-muted text-sm">—</span>';
+    const debtCell=!hasContract?'<span class="text-muted">—</span>':(debt>0?`<span class="font-bold" style="color:var(--red)">${fmt(Math.round(debt))}₸</span>`:`<span class="font-bold" style="color:var(--green)">0₸</span>`);
+    return`<tr>
+      <td>${i+1}</td>
+      <td><span class="font-bold" style="cursor:pointer;color:var(--accent)" onclick="showStudentDetail('${s.id}')">${s.name} ${s.surname||''}</span></td>
+      <td>${gBadges}</td>
+      <td>${hasContract?fmt(s.contract_amount)+'₸':'<span class="text-muted text-sm">Белгіленбеген</span>'}</td>
+      <td class="font-bold" style="color:var(--green)">${fmt(totalPaid)}₸</td>
+      <td class="text-sm text-muted" title="Комиссия/салық шегерілген">${fmt(Math.round(totalNet))}₸</td>
+      <td>${debtCell}</td>
+      <td class="text-sm">${s.next_pay_date||'—'}</td>
+      <td>${spStatusBadge(r.status)}</td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap">
+        <button class="btn btn-green btn-sm" onclick="openQuickPay('${s.id}')" title="Жылдам төлем">⚡</button>
+        <button class="btn btn-ghost btn-sm" onclick='openStudentModal(${JSON.stringify(s).replace(/'/g,"&#39;")})' title="Келісім сомасын өзгерту">✏️</button>
+      </div></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Бұл фильтрге сай оқушы табылмады</p></div></td></tr>';
 }
 
 // Сүзілген (беттеуге дейінгі) тізімді CSV файл ретінде жүктеп алу
@@ -4830,6 +4998,18 @@ function exportExpensesCSV(){
   a.href=url; a.download=`shygystar_${localDateStr(new Date())}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ---- Төлемдер бетіндегі таб қосқышы (Тарих / Оқушы бойынша) ----
+function switchPayTab(tab){
+  const isHist=tab==='history';
+  payActiveTab=tab;
+  document.getElementById('payTabContent1').style.display=isHist?'':'none';
+  document.getElementById('payTabContent2').style.display=isHist?'none':'';
+  document.getElementById('payAddBtn').style.display=isHist?'':'none';
+  document.getElementById('payTabBtn1').classList.toggle('active',isHist);
+  document.getElementById('payTabBtn2').classList.toggle('active',!isHist);
+  if(!isHist) renderStudentPayments();
 }
 
 // ---- Шығыстар бетіндегі таб қосқышы (Шығыстар / Мұғалім жалақылары) ----
@@ -6179,6 +6359,7 @@ alter table journal_entries add column if not exists mock_total numeric;
 alter table students add column if not exists lead_source text;   -- дереккөз: Таргет FB / Tiktok / Сарафанка / Амбассадор / Телеграм канал
 alter table students add column if not exists sales_manager text; -- сатқан менеджер аты (мыс. "Нұрбол")
 alter table students add column if not exists marketing_note text; -- CRM ескертпесі (мыс. алдын ала төлем/рассрочка жағдайы)
+alter table students add column if not exists contract_amount numeric; -- Келісім сомасы: оқушы жалпы қанша төлеуі керек ("Оқушы бойынша төлемдер" бетінде борышты есептеу үшін)
 -- Ескі parent_reports кестесінде (status бағанынсыз құрылған болса) осыны бір рет орындаңыз:
 do $$
 begin
