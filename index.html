@@ -3164,7 +3164,8 @@ async function saveCourse(){
   const levels=[...document.querySelectorAll('.lv-input')].map(i=>i.value.trim()).filter(Boolean);
   const row={name,description:document.getElementById('courseDesc').value,color:document.getElementById('courseColor').value,payment_type:document.getElementById('coursePaymentType').value,levels};
   const id=document.getElementById('courseId').value;
-  if(id) await sb.from('courses').update(row).eq('id',id); else await sb.from('courses').insert(row);
+  const {error:courseErr} = id ? await sb.from('courses').update(row).eq('id',id) : await sb.from('courses').insert(row);
+  if(courseErr){ alert('❌ Сақталмады! Қате: '+courseErr.message+'\n\nЕгер қате "payment_type" бағанына қатысты болса, Supabase-те мына SQL-ды орындау керек:\nalter table courses add column if not exists payment_type text default \'package\';'); return; }
   closeModal('courseModal'); await loadAll(); renderCourses(); toast('✅ Сақталды!');
 }
 async function deleteCourse(id){ if(!confirm('Өшіресіз бе?'))return; await sb.from('courses').delete().eq('id',id); await loadAll(); renderCourses(); }
