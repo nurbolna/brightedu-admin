@@ -2,7 +2,7 @@
 <html lang="kk" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bright Education Басқару Жүйесі</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -325,6 +325,26 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   .finance-summary{grid-template-columns:1fr;}
   .form-row{grid-template-columns:1fr;}
   .page-header{flex-direction:column;}
+  /* Карточка/диаграмма қатарларын телефонда бір бағанға жинау — мәтін мен
+     сандар қиылыспай, әрқайсысы толық ені бойынша оқылатын болады */
+  .grid-2{grid-template-columns:1fr;}
+  .grid-3{grid-template-columns:1fr;}
+  .grid-4{grid-template-columns:repeat(2,1fr);}
+  /* Юнит-экономика: жоспарланған шығын жолы — бекітілген px бағандар
+     тар экранда сыймай, бүкіл беттің көлденең айналуына әкелетін еді */
+  .ue-row-grid{grid-template-columns:1fr;gap:6px;}
+  /* Сабақ кестесі: бағандарды сығудың орнына табиғи енімен көрсетіп,
+     картаның өз ішінде (.card{overflow-x:auto}) жанап скролл жасату */
+  .schedule-table{table-layout:auto;}
+  .schedule-table th,.schedule-table td{min-width:92px;}
+  .schedule-table th.time-col,.schedule-table td.time-cell{min-width:52px;width:52px;}
+  .crm-view-toggle{max-width:100%;overflow-x:auto;}
+}
+@media(max-width:480px){
+  /* Ең кіші телефондарда (iPhone SE т.б.) 4-баған диаграмма топтарын да
+     бір бағанға жинау — сандар мен белгілер сығылмайды */
+  .grid-4{grid-template-columns:1fr 1fr;}
+  .stats-grid{grid-template-columns:1fr;}
 }
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -332,6 +352,18 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .hidden{display:none!important;}
 .font-bold{font-weight:700;} .text-sm{font-size:13px;} .text-muted{color:var(--text2);}
 .mt-2{margin-top:8px;} .mt-3{margin-top:12px;}
+
+/* ===================== RESPONSIVE GRID UTILITIES ===================== */
+/* Бұрын беттерде grid-template-columns тікелей inline style арқылы жазылатын —
+   media query оларға әсер ете алмайтын. Енді осы класстар арқылы жазылады,
+   сондықтан төмендегі @media ережелері бәріне бірдей қолданылады. */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);}
+.gap-8{gap:8px;} .gap-10{gap:10px;} .gap-14{gap:14px;} .gap-16{gap:16px;}
+.mb-10{margin-bottom:10px;} .mb-16{margin-bottom:16px;} .mt-16{margin-top:16px;}
+.text-center{text-align:center;}
+.ue-row-grid{display:grid;grid-template-columns:160px 150px 1fr 36px;gap:8px;align-items:center;}
 @media print{.sidebar,.mobile-header{display:none!important;}.main{margin-left:0;}}
 summary{list-style:none}
 summary::-webkit-details-marker{display:none}
@@ -472,7 +504,7 @@ details[open] summary::before{content:'▾ '}
           <div class="stat-card purple"><div class="stat-icon">👨‍🏫</div><div class="stat-value" id="statTeachers">—</div><div class="stat-label">Мұғалімдер</div></div>
           <div class="stat-card blue"><div class="stat-icon">👥</div><div class="stat-value" id="statGroups">—</div><div class="stat-label">Группалар</div></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="grid-2 gap-16 mb-16">
           <div class="card dir-only">
             <div class="card-title">⚡ Жылдам төлем</div>
             <div id="quickPayList"><div class="loading"><div class="spinner"></div></div></div>
@@ -482,7 +514,7 @@ details[open] summary::before{content:'▾ '}
             <div id="dashToday"><div class="loading"><div class="spinner"></div></div></div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+        <div class="grid-2 gap-16 mt-16">
           <div class="card dir-only">
             <div class="card-title">⚠️ Ескертулер</div>
             <div id="dashAlerts"><div class="loading"><div class="spinner"></div></div></div>
@@ -547,7 +579,7 @@ details[open] summary::before{content:'▾ '}
           <button class="btn btn-blue dir-admin" onclick="openStudentModal()">+ Оқушы қосу</button>
         </div>
         <div class="dir-only">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="grid-3 gap-16 mb-16">
           <div class="card">
             <div class="card-title">📚 Курс бойынша бөлінісі</div>
             <div style="position:relative;height:190px"><canvas id="stuCourseChartCanvas" role="img" aria-label="Оқушылардың курс бойынша бөлінісі"></canvas></div>
@@ -617,7 +649,7 @@ details[open] summary::before{content:'▾ '}
         </div>
 
         <div id="payTabContent1">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="grid-2 gap-16 mb-16">
           <div class="card">
             <div class="card-title">📚 Курс бойынша кіріс</div>
             <div style="position:relative;height:190px"><canvas id="payCourseChartCanvas" role="img" aria-label="Курс бойынша кіріс сомасы"></canvas></div>
@@ -736,7 +768,7 @@ details[open] summary::before{content:'▾ '}
         </div>
 
         <div id="expTabContent1">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="grid-2 gap-16 mb-16">
             <div class="card">
               <div class="card-title">🧾 Категория бойынша бөліну</div>
               <div style="position:relative;height:190px"><canvas id="expCatChartCanvas" role="img" aria-label="Шығыстардың категория бойынша бөлінісі"></canvas></div>
@@ -803,7 +835,7 @@ details[open] summary::before{content:'▾ '}
           <div class="fin-card netreal"><div class="fin-value" id="finNetReal">0₸</div><div class="fin-label">Нақты таза пайда</div></div>
         </div>
         <div class="text-muted text-sm" style="margin:-12px 0 16px">💡 Салық — есептелген сома ғана (әлі төленбеген). Нақты төлеген кезде (жылына 2 рет) «Шығыс қосу → Салық» арқылы жазыңыз.</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+        <div class="grid-3 gap-16">
           <div class="card">
             <div class="card-title">📊 Шығыстар диаграммасы</div>
             <div style="position:relative;height:240px"><canvas id="expenseChartCanvas" role="img" aria-label="Осы айдағы шығыстардың категория бойынша үлесі"></canvas></div>
@@ -854,7 +886,7 @@ details[open] summary::before{content:'▾ '}
 
         <div class="card">
           <div class="card-title">🎯 CAC — клиентті тарту құны</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="grid-2 gap-14">
             <div class="fin-card commission"><div class="fin-value" id="ueCacPaid">0₸</div><div class="fin-label">Paid CAC (тек Таргет FB/Tiktok)</div></div>
             <div class="fin-card tax"><div class="fin-value" id="ueCacBlended">0₸</div><div class="fin-label">Blended CAC (барлық жаңа оқушы)</div></div>
           </div>
@@ -864,7 +896,7 @@ details[open] summary::before{content:'▾ '}
         <div class="card">
           <div class="card-title">⚖️ ТБУ — Точка безубыточности</div>
           <div class="text-sm text-muted" style="margin-bottom:10px">Жоспарланған айлық шығынды санат бойынша толтырыңыз — қосындысы автоматты есептеледі және есеп содан алынады</div>
-          <div style="display:grid;grid-template-columns:160px 150px 1fr 36px;gap:8px;margin-bottom:6px" class="text-sm text-muted">
+          <div class="ue-row-grid text-sm text-muted" style="margin-bottom:6px">
             <div>Категория</div><div>Сома (₸)</div><div>Ескертпе</div><div></div>
           </div>
           <div id="uePlannedItemsWrap"></div>
@@ -957,7 +989,7 @@ details[open] summary::before{content:'▾ '}
       <!-- ========== REPORTS ========== -->
       <div class="page dir-only" id="page-reports">
         <div class="page-header"><div><div class="page-title">Рейтинг</div><div class="page-subtitle">Статистика және аналитика</div></div></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="grid-2 gap-16">
           <div class="card"><div class="card-title">🏆 Үздік оқушылар (ТОП-10)</div><div id="topStudents"></div></div>
           <div class="card"><div class="card-title">⚠️ Назар аудару керек оқушылар</div><div id="riskyStudents"></div></div>
         </div>
@@ -4095,7 +4127,7 @@ function showStudentDetail(id){
   document.getElementById('sdTitle').textContent=s.name+' '+(s.surname||'');
   document.getElementById('sdContent').innerHTML=`
     ${s.phone?`<div style="margin-bottom:12px">${waLink(s.phone)?`<a href="${waLink(s.phone)}" target="_blank" rel="noopener" style="color:var(--green);font-weight:600;text-decoration:none">📱 ${s.phone}</a>`:`<span>📱 ${s.phone}</span>`}</div>`:''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+    <div class="grid-2 gap-10 mb-16">
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Группалар</div><div class="font-bold">${gNames}</div></div>
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Мұғалімдер</div><div class="font-bold">${tNames}</div></div>
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Курстар</div><div class="font-bold">${cNames}</div></div>
@@ -4128,7 +4160,7 @@ function showStudentDetail(id){
               <span class="accordion-arrow text-muted">▾</span>
             </div>
             <div class="accordion-body" style="display:none;padding:12px">
-              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+              <div class="grid-4 gap-8 text-center">
                 <div><div class="font-bold" style="font-size:17px">${st.attAvg!=null?st.attAvg+'%':'—'}</div><div class="text-muted text-sm">Қатысу</div></div>
                 <div><div class="font-bold" style="font-size:17px">${st.actAvg!=null?st.actAvg+'/5':'—'}</div><div class="text-muted text-sm">Белсенділік</div></div>
                 <div><div class="font-bold" style="font-size:17px">${st.hwAvg!=null?st.hwAvg+'/10':'—'}</div><div class="text-muted text-sm">Үй жұмысы</div></div>
@@ -5535,8 +5567,8 @@ const UE_CAT_ICON={'Аренда':'🏢','Маркетинг':'📣','Хозто
 function addUePlannedRow(item=null){
   const wrap=document.getElementById('uePlannedItemsWrap'); if(!wrap) return;
   const row=document.createElement('div');
-  row.className='ue-planned-row';
-  row.style.cssText='display:grid;grid-template-columns:160px 150px 1fr 36px;gap:8px;margin-bottom:8px;align-items:center';
+  row.className='ue-planned-row ue-row-grid';
+  row.style.cssText='margin-bottom:8px';
   row.innerHTML=`
     <select class="ue-cat">${UE_EXPENSE_CATEGORIES.map(c=>`<option value="${c}">${UE_CAT_ICON[c]} ${c}</option>`).join('')}</select>
     <input type="number" class="ue-amt" placeholder="Сома (₸)" oninput="renderUePlannedTotal()" />
@@ -6253,7 +6285,7 @@ function renderParentReportsCurrent(){
           </div>
           <span class="badge ${meta.badge}">${meta.icon} ${meta.label}</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+        <div class="grid-4 gap-8 mb-10">
           <div style="background:var(--surface2);border-radius:8px;padding:8px 10px"><div class="text-sm text-muted">Қатысу</div><div class="font-bold">${st.attAvg!=null?st.attAvg+'%':'—'}</div></div>
           <div style="background:var(--surface2);border-radius:8px;padding:8px 10px"><div class="text-sm text-muted">ҮЖ орта</div><div class="font-bold">${st.hwAvg!=null?st.hwAvg+'/10':'—'}</div></div>
           <div style="background:var(--surface2);border-radius:8px;padding:8px 10px"><div class="text-sm text-muted">Белсенділік</div><div class="font-bold">${st.actAvg!=null?st.actAvg+'/5':'—'}</div></div>
