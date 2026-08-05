@@ -1261,12 +1261,16 @@ details[open] summary::before{content:'▾ '}
         <select id="paymentCashAccount"><option value="Kaspi Pay">💳 Kaspi Pay</option></select>
       </div>
       <div class="form-group"><label>Төлем түрі</label>
-        <select id="paymentType">
+        <select id="paymentType" onchange="toggleCommissionField('paymentType','paymentCommissionWrap')">
           <option value="normal">✅ Қалыпты төлем</option>
           <option value="installment_12">📆 Каспи рассрочка 0-0-12</option>
           <option value="installment_24">📆 Каспи рассрочка 0-0-24</option>
         </select>
       </div>
+    </div>
+    <div class="form-group" id="paymentCommissionWrap" style="display:none">
+      <label>💳 Kaspi комиссиясы (нақты, ₸) — үзіндіден қараңыз *</label>
+      <input type="number" id="paymentActualCommission" placeholder="мыс. 46585.60" step="0.01" />
     </div>
     <div class="form-group"><label>Ескертпе</label><input type="text" id="paymentNote" /></div>
     <div class="modal-footer">
@@ -2355,21 +2359,35 @@ function renderBarTrendChart(canvasId, labels, data, colorHex, fmtFn){
 // KASPI КОМИССИЯСЫ + УПРОЩЕНКА (3%) ЕСЕБІ
 // ================================================================
 // Базалық комиссиялар (ҚҚС-сыз). ҚҚС 16% үстеледі: іс жүзіндегі комиссия = база × 1.16
+// ЕСКЕРТУ: бұл формула ТЕК "normal" (Kaspi Pay) төлемдер үшін қолданылады.
+// Рассрочка (installment_12/24) үшін Kaspi комиссиясы науқандарға байланысты
+// өзгеріп тұратындықтан, нақты сома ӘР ТӨЛЕМДЕ ҚОЛМЕН (payment.actual_commission)
+// енгізіледі — формула тек ЕСКІ (actual_commission жоқ) жазбаларда, болжам
+// ретінде қолданылады.
 const KASPI_VAT=1.16;
 const KASPI_BASE_COMMISSION={ normal:0.0095, installment_12:0.135, installment_24:0.14 };
 const TAX_RATE=0.03; // упрощенка — толық сомадан есептеледі
-function calcPaymentBreakdown(amount, payType){
+function calcPaymentBreakdown(amount, payType, actualCommission){
   const amt=Number(amount||0);
   if(!(payType in KASPI_BASE_COMMISSION)){
     // Белгісіз/бос pay_type — үнсіз 0% комиссия қоймай, консольге ескерту
     // қалдырамыз, әйтпесе есеп байқаусызда төмен шығып кетуі мүмкін.
     console.warn(`⚠️ Белгісіз pay_type: "${payType}" — комиссия 0% деп есептелді. Тексеріңіз!`);
   }
-  const baseRate=KASPI_BASE_COMMISSION[payType]??0;
-  const commission=amt*baseRate*KASPI_VAT;
+  const isInstallment = (payType==='installment_12' || payType==='installment_24');
+  const hasActual = isInstallment && actualCommission!=null && actualCommission!=='' && !isNaN(Number(actualCommission));
+  let commission, isEstimated;
+  if(hasActual){
+    commission=Number(actualCommission);
+    isEstimated=false;
+  } else {
+    const baseRate=KASPI_BASE_COMMISSION[payType]??0;
+    commission=amt*baseRate*KASPI_VAT;
+    isEstimated=isInstallment; // тек рассрочка үшін "болжам" деп белгіленеді (normal — әрқашан дәл формула)
+  }
   const tax=amt*TAX_RATE;
   const net=amt-commission-tax;
-  return {commission,tax,net};
+  return {commission,tax,net,isEstimated};
 }
 
 function fmt(n){ return Number(n||0).toLocaleString('kk-KZ'); }
@@ -3112,11 +3130,15 @@ function openQuickPay(sId){
       <select id="qpCashAccount"><option value="Kaspi Pay">💳 Kaspi Pay</option></select>
     </div>
     <div class="form-group"><label>Төлем түрі</label>
-      <select id="qpType">
+      <select id="qpType" onchange="toggleCommissionField('qpType','qpCommissionWrap')">
         <option value="normal">✅ Қалыпты төлем</option>
         <option value="installment_12">📆 Каспи рассрочка 0-0-12</option>
         <option value="installment_24">📆 Каспи рассрочка 0-0-24</option>
       </select>
+    </div>
+    <div class="form-group" id="qpCommissionWrap" style="display:none">
+      <label>💳 Kaspi комиссиясы (нақты, ₸) — үзіндіден қараңыз *</label>
+      <input type="number" id="qpActualCommission" placeholder="мыс. 46585.60" step="0.01" />
     </div>
     <div class="form-group"><label>Ескертпе</label><input type="text" id="qpNote" /></div>
     <div style="background:var(--surface2);border-radius:10px;padding:12px;font-size:13px;color:var(--text2)">
@@ -3153,6 +3175,39 @@ function computeNextPayDateFields(sId, courseId, amount, payDateStr){
   const general=candidates.length?candidates.reduce((a,b)=>a<b?a:b):null; // 'YYYY-MM-DD' жолдары лексикографиялық салыстыруға жарамды
   return {next_pay_date_package:pkgField, next_pay_date_monthly:monField, next_pay_date:general};
 }
+// ТҮЗЕТУ #1: Төлем өшірілгенде next_pay_date_* өрістерін НӨЛДЕН қайта құрайды.
+// deletePayment() ішінен шақырылады — оқушының (excludePaymentId-ден басқа)
+// ҚАЛҒАН барлық төлемдерін хронологиялық ретпен қайта "ойнатып", pkgField/
+// monField-ты computeNextPayDateFields-тегі ЕДӘУІР ЛОГИКАМЕН қайта есептейді
+// (тек "-1 ай" жасамайды, себебі ортасынан бір төлем өшірілуі мүмкін —
+// сондықтан толық қайта құру ғана дұрыс нәтиже береді).
+function computeNextPayDateFieldsFromScratch(sId, excludePaymentId){
+  const s=DATA.students.find(x=>x.id===sId); if(!s) return null;
+  const advance=(oldVal, payDateStr)=>{
+    const base=oldVal?parseLocalDate(oldVal):parseLocalDate(payDateStr);
+    const nd=new Date(base.getFullYear(),base.getMonth()+1,base.getDate());
+    return `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`;
+  };
+  const remaining=DATA.payments
+    .filter(p=>p.student_id===sId && p.id!==excludePaymentId)
+    .slice()
+    .sort((a,b)=>(a.pay_date||'').localeCompare(b.pay_date||'')); // ескіден жаңаға қарай
+  let pkgField=null, monField=null, pkgPaidSoFar=0;
+  const hasContract = s.contract_amount!=null && s.contract_amount!=='';
+  remaining.forEach(p=>{
+    const course=DATA.courses.find(c=>c.id===p.course_id);
+    if(isMonthlyCourse(course)){
+      monField=advance(monField, p.pay_date);
+    } else {
+      pkgPaidSoFar+=Number(p.amount||0);
+      const fullyPaid = hasContract && pkgPaidSoFar>=Number(s.contract_amount);
+      pkgField = fullyPaid ? null : advance(pkgField, p.pay_date);
+    }
+  });
+  const candidates=[pkgField,monField].filter(Boolean);
+  const general=candidates.length?candidates.reduce((a,b)=>a<b?a:b):null;
+  return {next_pay_date_package:pkgField, next_pay_date_monthly:monField, next_pay_date:general};
+}
 async function confirmQuickPay(){
   if(!quickPayStudent) return;
   const amount=Number(document.getElementById('qpAmount').value);
@@ -3162,6 +3217,16 @@ async function confirmQuickPay(){
   const courseId=document.getElementById('qpCourse')?.value||null;
   if(!amount) return alert('Сомасын енгізіңіз');
   if(amount<=0) return alert('Сома 0-ден үлкен болуы керек');
+  // Рассрочка болса — нақты Kaspi комиссиясы міндетті (толық "+Төлем қосу"
+  // модалындағыдай себеп: Kaspi % науқандарға байланысты өзгеріп тұрады).
+  const isInstallment=(type==='installment_12'||type==='installment_24');
+  const qpCommEl=document.getElementById('qpActualCommission');
+  const actualCommissionInput=qpCommEl?qpCommEl.value:'';
+  if(isInstallment){
+    if(actualCommissionInput===''||actualCommissionInput===null) return alert('Рассрочка үшін Kaspi үзіндісіндегі НАҚТЫ комиссия сомасын енгізіңіз (міндетті өріс)');
+    if(Number(actualCommissionInput)<0) return alert('Комиссия сомасы теріс болмауы керек');
+  }
+  const actualCommission=isInstallment?Number(actualCommissionInput):null;
   const now=new Date();
   // ЕСКЕРТУ: Quick Pay-де pay_date әрқашан "бүгін" (localDateStr(now)) болғандықтан,
   // fallback ретінде "now" қолдану бірінші төлем үшін де дұрыс — "now" мен "pay_date"
@@ -3177,9 +3242,9 @@ async function confirmQuickPay(){
   if(dupQ && !confirm(`⚠️ Бұл оқушыға осы айға дәл осындай сома (${fmt(amount)}₸) бұрын енгізілген. Сонда да сақтайсыз ба?`)) return;
   const {error:qpErr} = await sb.from('payments').insert({
     student_id:quickPayStudent.id, course_id:courseId, amount, month:payMonth, year:payYear,
-    pay_date:localDateStr(now), pay_type:type, cash_account:cashAccount, note
+    pay_date:localDateStr(now), pay_type:type, actual_commission:actualCommission, cash_account:cashAccount, note
   });
-  if(qpErr){ alert('❌ Сақталмады! Қате: '+qpErr.message); return; }
+  if(qpErr){ alert('❌ Сақталмады! Қате: '+qpErr.message+'\n\nЕгер қате "actual_commission" бағанына қатысты болса, Supabase-те мына SQL-ды орындау керек:\nalter table payments add column if not exists actual_commission numeric;'); return; }
   const ndFields=computeNextPayDateFields(quickPayStudent.id, courseId, amount, localDateStr(now));
   await sb.from('students').update(ndFields).eq('id',quickPayStudent.id);
   closeModal('quickPayModal');
@@ -3784,7 +3849,19 @@ async function confirmPayout(){
     notes:`${t.name} ${t.surname||''} — жалақы төлемі`,
     source_salary_log_id: slRow?.id||null
   });
-  if(expErr){ alert('⚠️ Жалақы берілді, бірақ Шығыстарға автоматты жазылмады. Қате: '+expErr.message); }
+  // ТҮЗЕТУ #3: Шығыс (expenses) жазуы сәтсіз болса — толық rollback жасаймыз:
+  // жаңа payout жазбасын және оған байланыстырылған payout_id-ды артқа қайтарамыз,
+  // мұғалімнің balance-ін НӨЛДЕМЕЙМІЗ. Бұрын: қате болса тек alert шығып, баланс
+  // 0-ге түсіп қала беретін — нәтижесінде нақты төленген жалақы Қаржы есебінде
+  // "шығыс" ретінде мүлдем көрінбей қалатын. Енді: не екеуі де сәтті жазылады,
+  // не ешнәрсе өзгермейді — жартылай/сәйкессіз күй қалмайды.
+  if(expErr){
+    if(unpaidIds.length) await sb.from('salary_logs').update({payout_id:null}).in('id',unpaidIds);
+    await sb.from('salary_logs').delete().eq('id',slRow.id);
+    alert('❌ Шығыс жазылмады, сондықтан төлем БОЛДЫРЫЛМАДЫ (баланс өзгертілмеді). Қате: '+expErr.message+'\nҚайталап көріңіз.');
+    await loadAll(); renderTeachers();
+    return;
+  }
   await sb.from('teachers').update({balance:0}).eq('id',t.id);
   closeModal('salaryModal');
   await loadAll(); renderTeachers();
@@ -4241,7 +4318,21 @@ function openPaymentModal(){
   document.getElementById('paymentYear').value=now.getFullYear();
   document.getElementById('paymentAmount').value='';
   document.getElementById('paymentNote').value='';
+  document.getElementById('paymentType').value='normal';
+  document.getElementById('paymentActualCommission').value='';
+  document.getElementById('paymentCommissionWrap').style.display='none';
   openModal('paymentModal');
+}
+// Төлем түрі "рассрочка" болғанда ғана нақты Kaspi комиссиясы өрісін көрсетеді
+// (Kaspi Pay 0.95% формуламен есептеле береді, оған бұл өріс керек емес).
+function toggleCommissionField(typeSelId, wrapId){
+  const typeEl=document.getElementById(typeSelId); const wrap=document.getElementById(wrapId);
+  if(!typeEl||!wrap) return;
+  const isInstallment = (typeEl.value==='installment_12' || typeEl.value==='installment_24');
+  wrap.style.display = isInstallment ? '' : 'none';
+  if(!isInstallment){
+    const input=wrap.querySelector('input'); if(input) input.value='';
+  }
 }
 function fillPaymentAmount(){
   const sId=document.getElementById('paymentStudent').value;
@@ -4269,6 +4360,16 @@ async function savePayment(){
   if(Number(amt)<=0) return alert('Сома 0-ден үлкен болуы керек');
   const payType=document.getElementById('paymentType').value;
   if(!(payType in KASPI_BASE_COMMISSION)) return alert('Төлем түрі дұрыс емес — қайта таңдаңыз');
+  // Рассрочка болса — нақты Kaspi комиссиясы МІНДЕТТІ (болжамды формула
+  // қолданылмайды, себебі Kaspi рассрочка % науқандарға байланысты өзгеріп
+  // тұрады — тек банк үзіндісіндегі нақты санды қолмен енгізу дұрыс болады).
+  const isInstallment = (payType==='installment_12' || payType==='installment_24');
+  const actualCommissionInput=document.getElementById('paymentActualCommission').value;
+  if(isInstallment){
+    if(actualCommissionInput===''||actualCommissionInput===null) return alert('Рассрочка үшін Kaspi үзіндісіндегі НАҚТЫ комиссия сомасын енгізіңіз (міндетті өріс)');
+    if(Number(actualCommissionInput)<0) return alert('Комиссия сомасы теріс болмауы керек');
+  }
+  const actualCommission = isInstallment ? Number(actualCommissionInput) : null;
   const now=new Date();
   const payM=Number(document.getElementById('paymentMonth').value);
   const payY=Number(document.getElementById('paymentYear').value);
@@ -4279,10 +4380,11 @@ async function savePayment(){
     student_id:sId, course_id:courseId, amount:Number(amt), month:payM, year:payY,
     pay_date:document.getElementById('paymentDate').value,
     pay_type:payType,
+    actual_commission:actualCommission,
     cash_account:document.getElementById('paymentCashAccount').value,
     note:document.getElementById('paymentNote').value
   });
-  if(payErr){ alert('❌ Сақталмады! Қате: '+payErr.message); return; }
+  if(payErr){ alert('❌ Сақталмады! Қате: '+payErr.message+'\n\nЕгер қате "actual_commission" бағанына қатысты болса, Supabase-те мына SQL-ды орындау керек:\nalter table payments add column if not exists actual_commission numeric;'); return; }
   // next_pay_date_package / next_pay_date_monthly анықтау (computeNextPayDateFields
   // ішінде): пакеттік курс толық жабылса — NULL, әйтпесе +1 ай (backdated бірінші
   // төлемде chosenPayDate anchor ретінде қолданылады, "бүгінгі күн" емес).
@@ -4298,8 +4400,20 @@ async function savePayment(){
 }
 async function deletePayment(id){
   if(!confirm('Өшіресіз бе?'))return;
+  const payment=DATA.payments.find(p=>p.id===id);
+  const sId=payment?.student_id||null;
   const {error:delErr} = await sb.from('payments').delete().eq('id',id);
   if(delErr){ alert('❌ Өшірілмеді! Қате: '+delErr.message); return; }
+  // ТҮЗЕТУ #1: төлем өшірілген соң оқушының "келесі төлем күні" өрістерін
+  // қалған төлемдер бойынша нөлден қайта есептейміз (әйтпесе жүйе оқушыны
+  // әлі де "төленген" деп есептей береді де, мерзімі өткен төлем жіберіліп алынады).
+  if(sId){
+    const ndFields=computeNextPayDateFieldsFromScratch(sId, id);
+    if(ndFields){
+      const {error:ndErr}=await sb.from('students').update(ndFields).eq('id',sId);
+      if(ndErr){ alert('⚠️ Төлем өшірілді, бірақ "келесі төлем күнін" қайта есептеу қатесі: '+ndErr.message+'\nОқушыны қолмен тексеріңіз.'); }
+    }
+  }
   await loadAll();
   renderPayments(); renderFinance(); renderFinancePayments(); renderStudents();
 }
@@ -4339,7 +4453,7 @@ function renderPayments(){
   if(statsEl){
     const cnt=list.length;
     const totalAmt=list.reduce((s,p)=>s+Number(p.amount||0),0);
-    const totalNet=list.reduce((s,p)=>s+calcPaymentBreakdown(p.amount,p.pay_type).net,0);
+    const totalNet=list.reduce((s,p)=>s+calcPaymentBreakdown(p.amount,p.pay_type,p.actual_commission).net,0);
     const avgAmt=cnt?totalAmt/cnt:0;
     statsEl.textContent = cnt
       ? `Табылды: ${cnt} төлем · Жалпы сома: ${fmt(totalAmt)}₸ · Орташа чек: ${fmt(Math.round(avgAmt))}₸ · Нақты түсім (комиссия/салықсыз): ${fmt(Math.round(totalNet))}₸`
@@ -4417,6 +4531,7 @@ function renderPayments(){
     const payD=p.pay_date?parseLocalDate(p.pay_date):null;
     const nextD=payD?new Date(payD.getFullYear(),payD.getMonth()+1,payD.getDate()):null;
     const nextStr=nextD?`${nextD.getFullYear()}-${String(nextD.getMonth()+1).padStart(2,'0')}-${String(nextD.getDate()).padStart(2,'0')}`:'—';
+    const pb=calcPaymentBreakdown(p.amount,p.pay_type,p.actual_commission);
     return`<tr>
       <td>${pageStart+i+1}</td>
       <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
@@ -4427,7 +4542,7 @@ function renderPayments(){
       <td class="text-muted text-sm">${nextStr}</td>
       <td>${p.cash_account||'—'}</td>
       <td>${typeL[p.pay_type]||'—'}</td>
-      <td class="text-sm" title="Комиссия: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).commission)}₸ | Салық: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).tax)}₸">${fmt(calcPaymentBreakdown(p.amount,p.pay_type).net)}₸</td>
+      <td class="text-sm" title="Комиссия: ${fmt(pb.commission)}₸ | Салық: ${fmt(pb.tax)}₸${pb.isEstimated?' (комиссия — БОЛЖАМ, нақты Kaspi үзіндісінен расталмаған)':''}">${pb.isEstimated?'~':''}${fmt(pb.net)}₸</td>
       <td class="text-muted text-sm">${p.note||''}</td>
       <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}')">🗑️</button></td>
     </tr>`;
@@ -4531,7 +4646,7 @@ function renderNuetTab(){
     const sGroups=getStudentGroups(s.id).filter(g=>packageGroupIds.has(g.id));
     const pmts=DATA.payments.filter(p=>p.student_id===s.id && (packageCourseIds.has(p.course_id) || !p.course_id));
     const totalPaid=pmts.reduce((sum,p)=>sum+Number(p.amount||0),0);
-    const totalNet=pmts.reduce((sum,p)=>sum+calcPaymentBreakdown(p.amount,p.pay_type).net,0);
+    const totalNet=pmts.reduce((sum,p)=>sum+calcPaymentBreakdown(p.amount,p.pay_type,p.actual_commission).net,0);
     const hasContract=s.contract_amount!=null && s.contract_amount!=='';
     const debt=hasContract?Number(s.contract_amount)-totalPaid:null;
     const status=studentContractStatus(s,totalPaid);
@@ -4701,7 +4816,7 @@ function exportPaymentsCSV(){
       p.pay_date||'',
       p.cash_account||'',
       typeL[p.pay_type]||p.pay_type||'',
-      Math.round(calcPaymentBreakdown(p.amount,p.pay_type).net),
+      Math.round(calcPaymentBreakdown(p.amount,p.pay_type,p.actual_commission).net),
       (p.note||'').replace(/[\r\n]+/g,' ')
     ]);
   });
@@ -5349,16 +5464,23 @@ function renderFinance(){
   // Kaspi комиссиясы + есептелген салық (әр төлемнің pay_type-іне сай)
   let totalCommission=0, totalTax=0;
   pms.forEach(p=>{
-    const{commission,tax}=calcPaymentBreakdown(p.amount,p.pay_type);
+    const{commission,tax}=calcPaymentBreakdown(p.amount,p.pay_type,p.actual_commission);
     totalCommission+=commission; totalTax+=tax;
   });
 
   // Expenses for this month (жалақы төлемдері де осы кестеде — automат жазылады)
   const monthExp=DATA.expenses.filter(e=>e.date?.startsWith(`${y}-${mPad}`));
-  const totalExpense=monthExp.reduce((s,e)=>s+Number(e.amount||0),0);
+  // ТҮЗЕТУ #2: "Жалпы шығыс"/"Таза пайда" тек НАҚТЫ ТӨЛЕНГЕН (status='paid' немесе
+  // статус белгіленбеген — ескі жазбалар) шығындардан есептеледі. "Жоспарланған"
+  // (planned) статусты шығын әлі кассадан кетпегендіктен, оны нақты шығынмен
+  // араластыруға болмайды — бөлек көрсетіледі.
+  const monthExpPaid=monthExp.filter(e=>(e.status||'paid')==='paid');
+  const monthExpPlanned=monthExp.filter(e=>e.status==='planned');
+  const totalExpense=monthExpPaid.reduce((s,e)=>s+Number(e.amount||0),0);
+  const totalExpensePlanned=monthExpPlanned.reduce((s,e)=>s+Number(e.amount||0),0);
 
   document.getElementById('finIncome').textContent=fmt(income)+'₸';
-  document.getElementById('finExpense').textContent=fmt(totalExpense)+'₸';
+  document.getElementById('finExpense').textContent=fmt(totalExpense)+'₸'+(totalExpensePlanned>0?` (+${fmt(totalExpensePlanned)}₸ жоспарда)`:'');
   document.getElementById('finProfit').textContent=fmt(income-totalExpense)+'₸';
   document.getElementById('finCommission').textContent=fmt(totalCommission)+'₸';
   document.getElementById('finTax').textContent=fmt(totalTax)+'₸';
@@ -5384,17 +5506,22 @@ function renderFinance(){
   renderPieChart('courseChartCanvas','courseChartLegend',courseTotals,
     Object.keys(courseTotals).length?null:'Оқушылар жоқ');
 
-  // Expense chart — pie
+  // Expense chart — pie (тек ТӨЛЕНГЕН шығындар бойынша — жоғарыдағы "Жалпы
+  // шығыс" карточкасымен сәйкес келуі үшін; жоспарланғандар кіргізілмейді)
   const catTotals={};
-  monthExp.forEach(e=>{ catTotals[e.category]=(catTotals[e.category]||0)+Number(e.amount||0); });
+  monthExpPaid.forEach(e=>{ catTotals[e.category]=(catTotals[e.category]||0)+Number(e.amount||0); });
   renderPieChart('expenseChartCanvas','expenseChartLegend',catTotals,
     Object.keys(catTotals).length?null:'Шығыстар жоқ', v=>fmt(v)+'₸');
 
   // Expenses table — жалақы төлемдері енді осы `expenses` кестесінің өзінде
   // (категория "Жалақы") сақталады, сондықтан бөлек merge қажет емес.
+  // Кестеде барлық статус көрсетіледі (жоспарланғандар да көрінуі керек),
+  // бірақ "жоспарланған"/"кешіктірілген" жазбалар ⏳/❌ белгісімен ерекшеленеді
+  // — жоғарыдағы жиынтық сомаға олар кірмейтінін түсінікті ету үшін.
+  const expStatusMark={planned:'⏳ ',overdue:'❌ '};
   document.getElementById('expensesTable').innerHTML=[...monthExp].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(e=>`
-    <tr><td>${e.date}</td><td><span class="badge" style="background:${EXPENSE_COLORS[e.category]||'var(--surface2)'}20;color:${EXPENSE_COLORS[e.category]||'var(--text2)'}">${e.category}</span></td>
-    <td style="color:var(--red);font-weight:700">${fmt(e.amount)}₸</td><td class="text-muted text-sm">${e.notes||''}</td>
+    <tr${e.status&&e.status!=='paid'?' style="opacity:.7"':''}><td>${e.date}</td><td><span class="badge" style="background:${EXPENSE_COLORS[e.category]||'var(--surface2)'}20;color:${EXPENSE_COLORS[e.category]||'var(--text2)'}">${e.category}</span></td>
+    <td style="color:var(--red);font-weight:700">${expStatusMark[e.status]||''}${fmt(e.amount)}₸</td><td class="text-muted text-sm">${e.notes||''}</td>
     <td><button class="btn btn-red btn-sm" onclick="deleteExpense('${e.id}')">🗑️</button></td></tr>`).join('')||'<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🧾</div><p>Шығыстар жоқ</p></div></td></tr>';
 }
 
@@ -5486,7 +5613,7 @@ function renderUnitEconomics(){
 
   // --- Орташа таза маржа (1 сатудан, комиссия мен салықтан кейін) ---
   const pms=DATA.payments.filter(p=>p.month==m&&p.year==y);
-  const avgMargin=pms.length?pms.reduce((s,p)=>s+calcPaymentBreakdown(p.amount,p.pay_type).net,0)/pms.length:0;
+  const avgMargin=pms.length?pms.reduce((s,p)=>s+calcPaymentBreakdown(p.amount,p.pay_type,p.actual_commission).net,0)/pms.length:0;
 
   // --- ТБУ ---
   const bepSales=avgMargin>0?Math.ceil(totalExpense/avgMargin):0;
@@ -5551,6 +5678,7 @@ function renderFinancePayments(){
   tbody.innerHTML=pays.map((p,i)=>{
     const s=DATA.students.find(s=>s.id===p.student_id);
     const gNames=s?getStudentGroups(s.id).map(g=>g.name).join(', '):'';
+    const pb=calcPaymentBreakdown(p.amount,p.pay_type,p.actual_commission);
     return`<tr>
       <td>${i+1}</td>
       <td class="font-bold">${s?s.name+' '+(s.surname||''):'—'}</td>
@@ -5560,7 +5688,7 @@ function renderFinancePayments(){
       <td>${p.pay_date||'—'}</td>
       <td>${p.cash_account||'—'}</td>
       <td>${typeL[p.pay_type]||'—'}</td>
-      <td class="text-sm" title="Комиссия: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).commission)}₸ | Салық: ${fmt(calcPaymentBreakdown(p.amount,p.pay_type).tax)}₸">${fmt(calcPaymentBreakdown(p.amount,p.pay_type).net)}₸</td>
+      <td class="text-sm" title="Комиссия: ${fmt(pb.commission)}₸ | Салық: ${fmt(pb.tax)}₸${pb.isEstimated?' (комиссия — БОЛЖАМ, нақты Kaspi үзіндісінен расталмаған)':''}">${pb.isEstimated?'~':''}${fmt(pb.net)}₸</td>
       <td class="text-muted text-sm">${p.note||''}</td>
       <td><button class="btn btn-red btn-sm" onclick="deletePayment('${p.id}')">🗑️</button></td>
     </tr>`;
