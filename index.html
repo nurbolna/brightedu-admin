@@ -282,6 +282,13 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .schedule-table td.time-cell{background:var(--surface2);text-align:center;font-size:11px;color:var(--text2);vertical-align:middle;font-weight:600;}
 .lesson-block{border-radius:6px;padding:5px 7px;font-size:11px;margin-bottom:2px;cursor:pointer;transition:opacity .2s;display:block;}
 .lesson-block:hover{opacity:.75;}
+.sched-acc-item{border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;}
+.sched-acc-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;cursor:pointer;background:var(--surface);transition:background .2s;flex-wrap:wrap;}
+.sched-acc-header:hover{background:var(--surface2);}
+.sched-acc-arrow{display:inline-block;transition:transform .2s;font-size:11px;color:var(--text2);}
+.sched-acc-arrow.open{transform:rotate(90deg);}
+.sched-acc-body{border-top:1px solid var(--border);}
+.sched-acc-body table{width:100%;border-collapse:collapse;}
 
 /* ===================== GRADES ===================== */
 .grade-score-input{width:50px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;text-align:center;outline:none;}
@@ -527,6 +534,7 @@ details[open] summary::before{content:'▾ '}
         </div>
 
         <div class="study-panel" id="study-schedule" style="display:none">
+          <div class="card" id="scheduleLegend" style="display:flex;flex-wrap:wrap;gap:10px;padding:12px 16px"></div>
           <div class="card" style="overflow-x:auto;padding:12px"><table class="schedule-table" id="scheduleGrid"></table></div>
           <div class="card dir-admin"><div class="card-title">📋 Сабақтар тізімі</div><div id="lessonsList"></div></div>
         </div>
@@ -4096,9 +4104,25 @@ function goToJournal(groupId){
 
 function renderSchedule(){
   const grid=document.getElementById('scheduleGrid');
-  const times=['08','09','10','11','12','13','14','15','16','17','18','19','20'];
-  const colors=['#4f8ef7','#a78bfa','#34d399','#fbbf24','#f87171'];
+  const times=['08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+  const courseColors={blue:'#4f8ef7',purple:'#a78bfa',green:'#34d399',yellow:'#fbbf24',red:'#f87171'};
+  const defaultColor='#8b90b0';
+  const colorForGroup=g=>{
+    const c=g?DATA.courses.find(c=>c.id===g.course_id):null;
+    return (c&&courseColors[c.color])||defaultColor;
+  };
   const today=localDateStr(new Date());
+
+  // Легенда — қай түс қай курсқа сәйкес келетінін көрсету
+  const legendEl=document.getElementById('scheduleLegend');
+  if(legendEl){
+    legendEl.innerHTML=DATA.courses.length?DATA.courses.map(c=>{
+      const col=courseColors[c.color]||defaultColor;
+      return`<div style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text2)">
+        <span style="width:11px;height:11px;border-radius:3px;background:${col};display:inline-block"></span>${c.name}
+      </div>`;
+    }).join(''):'';
+  }
 
   // Мұғалім: тек өз топтарының сабақтары
   let myLessons=DATA.lessons;
@@ -4127,7 +4151,7 @@ function renderSchedule(){
       const isHoliday=DATA.holidays?.some(hd=>today>=hd.start_date&&today<=hd.end_date);
       html+=`<td>${ls.map((l,idx)=>{
         const g=DATA.groups.find(g=>g.id===l.group_id);
-        const col=colors[idx%5];
+        const col=colorForGroup(g);
         return`<div class="lesson-block"
           style="background:${col}22;border:1.5px solid ${col}66;color:${col}"
           onclick="goToJournal('${l.group_id}')">
@@ -4158,24 +4182,51 @@ function renderSchedule(){
     if(da!==db) return da-db;
     return (a.start_time||'').localeCompare(b.start_time||'');
   });
-  el.innerHTML=`<div class="table-wrap"><table>
-    <thead><tr><th>Күн</th><th>Группа</th><th>Мұғалім</th><th>Уақыт</th><th>Бөлме</th><th>Әрекет</th></tr></thead>
-    <tbody>${sorted.map(l=>{
-      const g=DATA.groups.find(g=>g.id===l.group_id);
-      const t=DATA.teachers.find(t=>t.id===l.teacher_id);
-      return`<tr>
-        <td>${DAYS[Number(l.day)]}</td>
-        <td class="font-bold">${g?g.name:'—'}</td>
-        <td>${t?t.name+' '+(t.surname||''):'—'}</td>
-        <td>${l.start_time}–${l.end_time}</td>
-        <td>${l.room||'—'}</td>
-        <td><div style="display:flex;gap:6px">
-          <button class="btn btn-ghost btn-sm" onclick="goToJournal('${l.group_id}')">📋 Журнал</button>
-          ${role==='director'||role==='admin'?`<button class="btn btn-red btn-sm" onclick="deleteLesson('${l.id}')">🗑️</button>`:''}
-        </div></td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table></div>`;
+
+  // Топ (группа) бойынша топтастыру
+  const byGroup=new Map();
+  sorted.forEach(l=>{
+    const key=l.group_id||'—';
+    if(!byGroup.has(key)) byGroup.set(key,[]);
+    byGroup.get(key).push(l);
+  });
+  const groupEntries=[...byGroup.entries()].sort((a,b)=>{
+    const ga=DATA.groups.find(g=>g.id===a[0]);
+    const gb=DATA.groups.find(g=>g.id===b[0]);
+    return (ga?ga.name:'').localeCompare(gb?gb.name:'');
+  });
+
+  el.innerHTML=groupEntries.map(([gid,lessons])=>{
+    const g=DATA.groups.find(g=>g.id===gid);
+    const t=DATA.teachers.find(t=>t.id===g?.teacher_id);
+    const col=colorForGroup(g);
+    return`<div class="sched-acc-item">
+      <div class="sched-acc-header" style="border-left:4px solid ${col}" onclick="const b=this.nextElementSibling;const open=b.style.display!=='none';b.style.display=open?'none':'block';this.querySelector('.sched-acc-arrow').classList.toggle('open',!open)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="sched-acc-arrow">▶</span>
+          <span class="font-bold">${g?g.name:'—'}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;color:var(--text2);font-size:13px">
+          <span>${t?t.name+' '+(t.surname||''):'—'}</span>
+          <span>${lessons.length} сабақ</span>
+        </div>
+      </div>
+      <div class="sched-acc-body" style="display:none">
+        <table>
+          <thead><tr><th>Күн</th><th>Уақыт</th><th>Бөлме</th><th>Әрекет</th></tr></thead>
+          <tbody>${lessons.map(l=>`<tr>
+            <td>${DAYS[Number(l.day)]}</td>
+            <td>${l.start_time}–${l.end_time}</td>
+            <td>${l.room||'—'}</td>
+            <td><div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();goToJournal('${l.group_id}')">📋 Журнал</button>
+              ${role==='director'||role==='admin'?`<button class="btn btn-red btn-sm" onclick="event.stopPropagation();deleteLesson('${l.id}')">🗑️</button>`:''}
+            </div></td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ================================================================
