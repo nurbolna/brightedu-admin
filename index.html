@@ -4312,6 +4312,25 @@ function isLessonFullyJournaled(groupId, date){
   return memberIds.every(sId=>DATA.journal_entries.some(je=>je.student_id===sId&&je.group_id===groupId&&je.lesson_date===date&&je.attendance));
 }
 
+// Сабақ "нақты өтті" (=мұғалімге ақы есептелуі тиіс) деп саналуы үшін:
+// - журнал толық толтырылған болуы керек (isLessonFullyJournaled);
+// - ЖӘНЕ топта тек 1 ғана оқушы болса — сол оқушы "келді"/"кешікті" болуы
+//   керек (тек "келмеді" деп белгіленсе — сабақ өтілмеді деп есептеледі,
+//   мұғалімге ақы қосылмайды);
+// - топта бірнеше оқушы болса — кемінде 1 оқушы "келді"/"кешікті" болса
+//   жеткілікті (бір оқушы келмесе де, сабақ өтілді деп есептеледі).
+function isLessonHeld(groupId, date){
+  if(!isLessonFullyJournaled(groupId, date)) return false;
+  const memberIds=DATA.student_groups
+    .filter(sg=>sg.group_id===groupId && (!sg.created_at || sg.created_at.slice(0,10)<=date))
+    .map(sg=>sg.student_id);
+  const attendedCount=memberIds.filter(sId=>{
+    const je=DATA.journal_entries.find(je=>je.student_id===sId&&je.group_id===groupId&&je.lesson_date===date);
+    return je && (je.attendance==='present' || je.attendance==='late');
+  }).length;
+  return attendedCount>=1;
+}
+
 async function autoSyncSalaryFromJournal(tId){
   if(salarySyncing.has(tId)) return false; // қазір басқа синхрондау жүріп жатыр — қайталамаймыз
   salarySyncing.add(tId);
@@ -4335,6 +4354,7 @@ async function autoSyncSalaryFromJournal(tId){
           if(already) continue;
           const journalFilled=isLessonFullyJournaled(g.id,ds);
           if(!journalFilled) continue;
+          if(!isLessonHeld(g.id,ds)) continue; // жалғыз оқушы "жоқ" болса — сабақ өтілмеді, ақы қосылмайды
           await sb.from('salary_logs').insert({lesson_id:l.id,teacher_id:tId,date:ds,amount:earned});
           addedTotal+=earned; changed=true;
         }
@@ -4401,7 +4421,8 @@ function renderSalaryGroups(tId){
         const ds=dsRaw.replace(' 🎉','');
         const rec=DATA.salary_logs.find(sl=>sl.lesson_id===l.id&&sl.date===ds&&sl.teacher_id===tId&&sl.note!=='payout');
         const journalFilled=isLessonFullyJournaled(g.id,ds);
-        dayEntries.push({ds,isHoliday,l,earned,taught:!!rec,paid:!!(rec&&rec.payout_id),journalFilled});
+        const noShow=journalFilled && !isLessonHeld(g.id,ds); // журнал толтырылған, бірақ ешкім келмеген (не жалғыз оқушы жоқ)
+        dayEntries.push({ds,isHoliday,l,earned,taught:!!rec,paid:!!(rec&&rec.payout_id),journalFilled,noShow});
       });
     });
     dayEntries.sort((a,b)=>a.ds.localeCompare(b.ds));
@@ -4409,7 +4430,7 @@ function renderSalaryGroups(tId){
     dayEntries.forEach(e=>{
       const lockCb = readOnly||e.paid; // төленген сабақтың "Өтті" белгісін director де қайта өшіре алмайды
       html+=`<div class="sal-day">
-          <div class="sal-day-info"><b>${e.ds}</b>${e.isHoliday?' 🎉':''} — ${DAYS[Number(e.l.day)]} ${e.l.start_time}–${e.l.end_time} ${e.journalFilled?'<span class="badge badge-blue" style="margin-left:6px;font-size:10px" title="Топтың барлық оқушысы белгіленген">📔 журнал толық</span>':''}</div>
+          <div class="sal-day-info"><b>${e.ds}</b>${e.isHoliday?' 🎉':''} — ${DAYS[Number(e.l.day)]} ${e.l.start_time}–${e.l.end_time} ${e.journalFilled?'<span class="badge badge-blue" style="margin-left:6px;font-size:10px" title="Топтың барлық оқушысы белгіленген">📔 журнал толық</span>':''} ${e.noShow?'<span class="badge badge-red" style="margin-left:6px;font-size:10px" title="Ешбір оқушы келмеген — сабақ өтілмеді деп есептеледі, ақы автоматты қосылмайды">🚫 оқушы жоқ</span>':''}</div>
           <div style="display:flex;align-items:center;gap:10px">
             <div class="sal-day-amount" style="${e.taught?'':'color:var(--text3)'}">${e.taught?'+'+fmt(e.earned)+'₸':'—'}</div>
             ${e.taught?`<span class="badge ${e.paid?'badge-green':'badge-yellow'}" style="font-size:10px" title="${e.paid?'Бұл сабаққа жалақы төленген':'Бұл сабақ орындалды, бірақ жалақысы әлі берілмеген'}">${e.paid?'✅ Төленді':'⏳ Төленбеді'}</span>`:''}
