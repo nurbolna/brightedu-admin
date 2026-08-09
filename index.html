@@ -304,6 +304,45 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
 /* ===================== EMPTY & LOADING ===================== */
 .empty-state{text-align:center;padding:40px 20px;color:var(--text2);}
+
+/* ---- НУЕТ Буст прогресі ---- */
+/* Маңызды: display grid осында КЛАСС арқылы беріледі, inline style арқылы емес —
+   себебі .dir-admin/.dir-only үшін JS "el.style.display=''" деп қояды, ол inline
+   стильді өшіріп жіберер еді де, грид тік тізбекке айналып кетер еді. */
+.bp-kpi-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:20px;max-width:900px;}
+.bp-kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+.bp-kpi-label{font-size:12px;color:var(--text2);margin-bottom:4px;}
+.bp-kpi-value{font-size:22px;font-weight:700;}
+.bp-kpi-danger .bp-kpi-value{color:var(--red);}
+
+.bp-table{max-width:900px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);}
+.bp-row{display:grid;gap:10px;align-items:center;padding:11px 16px;border-top:1px solid var(--border);font-size:13px;}
+.bp-row:first-child{border-top:none;}
+.bp-row-head{background:var(--surface2);color:var(--text2);font-size:11px;text-transform:uppercase;letter-spacing:.3px;border-top:none;padding:9px 16px;}
+.bp-row-cohort{grid-template-columns:1.6fr 1fr 1.3fr 18px;cursor:pointer;transition:background .12s;}
+.bp-row-student{grid-template-columns:32px 1.6fr 1fr 18px;cursor:pointer;transition:background .12s;}
+.bp-row-detail{grid-template-columns:1.6fr 0.7fr 0.9fr 0.9fr 1.1fr;}
+.bp-row-cohort:not(.bp-row-head):hover,.bp-row-student:not(.bp-row-head):hover{background:var(--surface2);}
+.bp-chevron{color:var(--text3);font-size:18px;text-align:right;}
+.bp-bar{background:var(--surface2);border-radius:5px;height:6px;overflow:hidden;display:block;}
+.bp-bar-fill{display:block;height:100%;border-radius:5px;}
+.bp-avatar{width:28px;height:28px;border-radius:50%;background:var(--surface2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
+.bp-status-ok{color:var(--green);font-weight:600;}
+.bp-status-warn{color:var(--yellow);font-weight:600;}
+.bp-status-muted{color:var(--text3);}
+
+.bp-tabs{display:flex;gap:8px;max-width:900px;margin-bottom:14px;}
+.bp-tab{flex:1;padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all .12s;}
+.bp-tab-label{display:block;font-size:12px;color:var(--text2);}
+.bp-tab-value{display:block;font-size:19px;font-weight:700;margin-top:2px;}
+.bp-tab.active{background:var(--accent);border-color:var(--accent);}
+.bp-tab.active .bp-tab-label,.bp-tab.active .bp-tab-value{color:#fff;}
+.bp-tab.disabled{opacity:.4;cursor:not-allowed;pointer-events:none;}
+@media(max-width:640px){
+  .bp-row-cohort{grid-template-columns:1.4fr 0.8fr 1fr 18px;font-size:12px;}
+  .bp-row-student{grid-template-columns:28px 1.4fr 0.8fr 18px;font-size:12px;}
+  .bp-row-detail{grid-template-columns:1.3fr 0.5fr 0.7fr 0.7fr 0.9fr;font-size:11px;gap:6px;padding:9px 10px;}
+}
 .empty-icon{font-size:40px;margin-bottom:8px;}
 .loading{display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text2);gap:10px;}
 .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
@@ -975,7 +1014,7 @@ details[open] summary::before{content:'▾ '}
 
         <div id="bpBreadcrumb" style="display:none;font-size:13px;color:var(--text2);margin-bottom:12px"></div>
 
-        <div id="bpKpiWrap" class="dir-admin" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px"></div>
+        <div id="bpKpiWrap" class="dir-admin bp-kpi-wrap"></div>
 
         <div id="bpBody"><div class="loading"><div class="spinner"></div>Жүктелуде...</div></div>
       </div>
@@ -2106,17 +2145,21 @@ async function boostHwGrade(subId){
 // ================================================================
 // BOOST PROGRESS (директор/мұғалім үшін НУЕТ Буст прогресс-бақылау)
 // ================================================================
-// Прогресс формуласы (топтармен келісілген): lesson_progress = (пост-тест% + тақ.тест/ҮЖ(тест)% + файл/мәтін ҮЖ баға%) / 3
+// Прогресс формуласы: lesson_progress = (пост-тест% + тақ.тест/ҮЖ(тест)% + файл/мәтін ҮЖ баға%) / 3
 // Видео бөлек трек емес — boost_postvideo_results жазбасы болса, видео қаралды деп есептеледі.
-let bpView = 'cohorts';         // 'cohorts' | 'students' | 'detail'
-let bpTeacherScope = null;      // director/admin үшін null (шектеусіз), teacher үшін {cohortId: ['math','ct']}
-let bpCohorts = [];             // {id,name,studentCount,progress}
+// Барлық деректер БІР РЕТ batch түрде жүктеледі (renderBoostProgress ішінде), одан кейінгі
+// drill-down (топ ашу, оқушы ашу, таб ауыстыру) тек осы кэштен есептейді — қосымша сұраныс жоқ.
+let bpView = 'cohorts';
+let bpTeacherScope = null;      // director/admin үшін null, teacher үшін {cohortId: ['math','ct']}
+let bpCohorts = [];
 let bpCurrentCohort = null;
-let bpStudents = [];            // {id,name,progress}
+let bpStudents = [];
 let bpCurrentStudent = null;
 let bpActiveTab = 'math';
+let bpCache = null;             // batch-жүктелген барлық дерек
 
 function bpPct(score, total){ return (total > 0) ? Math.round((score / total) * 100) : null; }
+function bpKey(a,b){ return a + '|' + b; }
 
 async function renderBoostProgress(){
   bpView = 'cohorts'; bpCurrentCohort = null; bpCurrentStudent = null;
@@ -2128,7 +2171,6 @@ async function renderBoostProgress(){
   document.getElementById('bpKpiWrap').style.display = isDirectorLike ? '' : 'none';
 
   try{
-    // Мұғалім болса — тек математика/crit телефоны сәйкес топтарды анықтаймыз
     bpTeacherScope = null;
     if(!isDirectorLike){
       const phone = currentUser?.login;
@@ -2158,46 +2200,18 @@ async function renderBoostProgress(){
       return;
     }
 
-    const cohortIds = cohortsRaw.map(c => c.id);
-    const { data: enrolls } = await sbMock.from('boost_enrollments').select('user_id,cohort_id').in('cohort_id', cohortIds);
+    await bpLoadBatch(cohortsRaw);
+    bpComputeCohortList(cohortsRaw);
 
-    // Тексерілмеген ҮЖ саны — sequential сұраныс (екі деңгейлі embedded filter сенімсіз болғандықтан)
-    let pendingReview = 0;
-    if(isDirectorLike || true){
-      const { data: lsnAll } = await sbMock.from('boost_lessons').select('id').in('cohort_id', cohortIds);
-      const lsnIds = (lsnAll||[]).map(l=>l.id);
-      if(lsnIds.length){
-        const { data: hwAll } = await sbMock.from('boost_homework').select('id').in('lesson_id', lsnIds);
-        const hwIds = (hwAll||[]).map(h=>h.id);
-        if(hwIds.length){
-          const { count } = await sbMock.from('boost_homework_submissions').select('id', {count:'exact', head:true}).in('homework_id', hwIds).neq('status','graded');
-          pendingReview = count || 0;
-        }
-      }
-    }
-
-    const studentsByCohort = {};
-    (enrolls || []).forEach(e => { (studentsByCohort[e.cohort_id] ||= new Set()).add(e.user_id); });
-
-    bpCohorts = [];
-    for(const c of cohortsRaw){
-      const studentIds = Array.from(studentsByCohort[c.id] || []);
-      const progress = await bpCohortAvgProgress(c.id, studentIds);
-      bpCohorts.push({
-        id: c.id, name: c.name_kz || c.name_ru || '—',
-        studentCount: studentIds.length, progress
-      });
-    }
-
-    // KPI (тек директор/админ)
     if(isDirectorLike){
-      const totalStudents = new Set((enrolls||[]).map(e=>e.user_id)).size;
+      const totalStudents = new Set(bpCache.enrolls.map(e=>e.user_id)).size;
+      const pendingReview = bpCache.submissions.filter(s => s.status !== 'graded').length;
       const avgProgress = bpCohorts.length ? Math.round(bpCohorts.reduce((s,c)=>s+(c.progress||0),0) / bpCohorts.length) : 0;
       document.getElementById('bpKpiWrap').innerHTML = `
-        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Барлық оқушылар</div><div class="font-bold" style="font-size:22px">${totalStudents}</div></div>
-        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Белсенді топтар</div><div class="font-bold" style="font-size:22px">${bpCohorts.length}</div></div>
-        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Тексерілмеген ҮЖ</div><div class="font-bold" style="font-size:22px;color:var(--red)">${pendingReview}</div></div>
-        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Орташа прогресс</div><div class="font-bold" style="font-size:22px">${avgProgress}%</div></div>`;
+        <div class="bp-kpi-card"><div class="bp-kpi-label">Барлық оқушылар</div><div class="bp-kpi-value">${totalStudents}</div></div>
+        <div class="bp-kpi-card"><div class="bp-kpi-label">Белсенді топтар</div><div class="bp-kpi-value">${bpCohorts.length}</div></div>
+        <div class="bp-kpi-card bp-kpi-danger"><div class="bp-kpi-label">Тексерілмеген ҮЖ</div><div class="bp-kpi-value">${pendingReview}</div></div>
+        <div class="bp-kpi-card"><div class="bp-kpi-label">Орташа прогресс</div><div class="bp-kpi-value">${avgProgress}%</div></div>`;
     }
 
     bpRenderCohortsList();
@@ -2207,6 +2221,80 @@ async function renderBoostProgress(){
   }
 }
 
+// Барлық қажет деректі БІР РЕТ, batch түрде жүктейді (topalanган cohortIds шеңберінде)
+async function bpLoadBatch(cohortsRaw){
+  const cohortIds = cohortsRaw.map(c => c.id);
+
+  const { data: enrolls } = await sbMock.from('boost_enrollments').select('user_id,cohort_id,student:user_id(id,name)').in('cohort_id', cohortIds);
+  const { data: lessons } = await sbMock.from('boost_lessons').select('id,cohort_id,subject,title_kz,title_ru,order_num').in('cohort_id', cohortIds).order('order_num');
+  const lessonIds = (lessons || []).map(l => l.id);
+
+  const [{ data: hws }, { data: pv }, { data: tt }, { data: hr }] = await Promise.all([
+    lessonIds.length ? sbMock.from('boost_homework').select('id,lesson_id').in('lesson_id', lessonIds) : Promise.resolve({data:[]}),
+    lessonIds.length ? sbMock.from('boost_postvideo_results').select('lesson_id,user_id,score,total').in('lesson_id', lessonIds) : Promise.resolve({data:[]}),
+    lessonIds.length ? sbMock.from('boost_test_results').select('lesson_id,user_id,score,total').in('lesson_id', lessonIds) : Promise.resolve({data:[]}),
+    lessonIds.length ? sbMock.from('boost_homework_results').select('lesson_id,user_id,score,total').in('lesson_id', lessonIds) : Promise.resolve({data:[]})
+  ]);
+  const hwIds = (hws || []).map(h => h.id);
+  const { data: subs } = hwIds.length
+    ? await sbMock.from('boost_homework_submissions').select('homework_id,user_id,status,grade').in('homework_id', hwIds)
+    : { data: [] };
+
+  const pvMap = {}; (pv||[]).forEach(r => pvMap[bpKey(r.user_id,r.lesson_id)] = r);
+  const ttMap = {}; (tt||[]).forEach(r => ttMap[bpKey(r.user_id,r.lesson_id)] = r);
+  const hrMap = {}; (hr||[]).forEach(r => hrMap[bpKey(r.user_id,r.lesson_id)] = r);
+  const hwByLesson = {}; (hws||[]).forEach(h => hwByLesson[h.lesson_id] = h.id);
+  const subMap = {}; (subs||[]).forEach(s => subMap[bpKey(s.user_id,s.homework_id)] = s);
+
+  const enrollsByCohort = {};
+  (enrolls||[]).forEach(e => (enrollsByCohort[e.cohort_id] ||= []).push(e));
+  const lessonsByCohort = {};
+  (lessons||[]).forEach(l => (lessonsByCohort[l.cohort_id] ||= []).push(l));
+
+  bpCache = { enrolls: enrolls||[], enrollsByCohort, lessonsByCohort, pvMap, ttMap, hrMap, hwByLesson, subMap, submissions: subs||[] };
+}
+
+// Бір оқушының бір пән бойынша тақырыптық прогресі — тек кэштен, желі сұранысы жоқ
+function bpStudentSubjectDetail(cohortId, userId, subject){
+  const lessons = (bpCache.lessonsByCohort[cohortId]||[]).filter(l => l.subject === subject || l.subject === 'both');
+  if(!lessons.length) return { avg: null, lessons: [] };
+  const rows = []; let sum = 0, cnt = 0;
+  for(const l of lessons){
+    const postR = bpCache.pvMap[bpKey(userId,l.id)]; const postPct = postR ? bpPct(postR.score, postR.total) : null;
+    const topicR = subject === 'math' ? bpCache.ttMap[bpKey(userId,l.id)] : bpCache.hrMap[bpKey(userId,l.id)];
+    const topicPct = topicR ? bpPct(topicR.score, topicR.total) : null;
+    const hwId = bpCache.hwByLesson[l.id];
+    const sub = hwId ? bpCache.subMap[bpKey(userId,hwId)] : null;
+    let gradedPct = null, gradedLabel = 'Жіберілмеген';
+    if(sub){
+      if(sub.status === 'graded'){ gradedPct = sub.grade != null ? Math.round((sub.grade/10)*100) : null; gradedLabel = sub.grade+'/10'; }
+      else { gradedLabel = 'Тексеруде'; }
+    }
+    const parts = [postPct, topicPct, gradedPct].filter(v => v !== null);
+    const lp = parts.length ? Math.round(parts.reduce((a,b)=>a+b,0)/3) : null;
+    if(lp !== null){ sum += lp; cnt++; }
+    rows.push({ title: l.title_kz || l.title_ru || '—', postTest: postPct, topic: topicPct, gradedLabel });
+  }
+  return { avg: cnt ? Math.round(sum / cnt) : null, lessons: rows };
+}
+
+function bpStudentAvgProgress(cohortId, userId){
+  const m = bpStudentSubjectDetail(cohortId, userId, 'math');
+  const c = bpStudentSubjectDetail(cohortId, userId, 'ct');
+  const vals = [m.avg, c.avg].filter(v => v !== null);
+  return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0;
+}
+
+function bpComputeCohortList(cohortsRaw){
+  bpCohorts = cohortsRaw.map(c => {
+    const studentIds = (bpCache.enrollsByCohort[c.id]||[]).map(e=>e.user_id);
+    const uniqueIds = Array.from(new Set(studentIds));
+    const progress = uniqueIds.length
+      ? Math.round(uniqueIds.reduce((s,uid)=>s+bpStudentAvgProgress(c.id,uid),0) / uniqueIds.length) : 0;
+    return { id: c.id, name: c.name_kz || c.name_ru || '—', studentCount: uniqueIds.length, progress };
+  });
+}
+
 function bpProgressColor(p){ return p >= 70 ? 'var(--green)' : p >= 50 ? 'var(--yellow)' : 'var(--red)'; }
 
 function bpRenderCohortsList(){
@@ -2214,62 +2302,53 @@ function bpRenderCohortsList(){
   document.getElementById('bpBackBtn').style.display = 'none';
   document.getElementById('bpBreadcrumb').style.display = 'none';
   const rows = bpCohorts.map(c => `
-    <div onclick="bpOpenCohort('${c.id}')" style="display:grid;grid-template-columns:1.4fr 1fr 1.3fr 24px;gap:8px;padding:12px 14px;align-items:center;cursor:pointer;border-top:1px solid var(--border)">
+    <div class="bp-row bp-row-cohort" onclick="bpOpenCohort('${c.id}')">
       <span class="font-bold">${boostHwEsc(c.name)}</span>
       <span class="text-muted text-sm">${c.studentCount} оқушы</span>
-      <span style="background:var(--surface2);border-radius:6px;height:6px;overflow:hidden;display:block"><span style="display:block;height:100%;width:${c.progress}%;background:${bpProgressColor(c.progress)}"></span></span>
-      <span class="text-muted">›</span>
+      <span class="bp-bar"><span class="bp-bar-fill" style="width:${c.progress}%;background:${bpProgressColor(c.progress)}"></span></span>
+      <span class="bp-chevron">›</span>
     </div>`).join('');
-  document.getElementById('bpBody').innerHTML = `<div class="card" style="padding:0;overflow:hidden">
-    <div style="display:grid;grid-template-columns:1.4fr 1fr 1.3fr 24px;gap:8px;padding:10px 14px;background:var(--surface2);font-size:12px" class="text-muted">
-      <span>Топ</span><span>Оқушы</span><span>Прогресс</span><span></span>
-    </div>${rows}</div>`;
+  document.getElementById('bpBody').innerHTML = `<div class="bp-table">
+    <div class="bp-row bp-row-head bp-row-cohort"><span>Топ</span><span>Оқушы</span><span>Прогресс</span><span></span></div>
+    ${rows}</div>`;
 }
 
-async function bpOpenCohort(cohortId){
+function bpOpenCohort(cohortId){
   bpCurrentCohort = bpCohorts.find(c => c.id === cohortId);
   if(!bpCurrentCohort) return;
   bpView = 'students';
   document.getElementById('bpBackBtn').style.display = '';
   document.getElementById('bpBreadcrumb').style.display = '';
   document.getElementById('bpBreadcrumb').innerHTML = `Топтар / <b>${boostHwEsc(bpCurrentCohort.name)}</b>`;
-  document.getElementById('bpBody').innerHTML = '<div class="loading"><div class="spinner"></div>Жүктелуде...</div>';
 
-  const { data: enrolls } = await sbMock.from('boost_enrollments')
-    .select('user_id,student:user_id(id,name,phone)').eq('cohort_id', cohortId);
-
-  bpStudents = [];
-  for(const e of (enrolls || [])){
-    const progress = await bpCohortAvgProgress(cohortId, [e.user_id]);
-    bpStudents.push({ id: e.user_id, name: (e.student && e.student.name) || '—', progress });
-  }
-  bpStudents.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  const enrollRows = bpCache.enrollsByCohort[cohortId] || [];
+  bpStudents = enrollRows.map(e => ({
+    id: e.user_id, name: (e.student && e.student.name) || '—',
+    progress: bpStudentAvgProgress(cohortId, e.user_id)
+  })).sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
   const rows = bpStudents.map(s => {
     const initials = (s.name||'—').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-    return `<div onclick="bpOpenStudent('${s.id}')" style="display:grid;grid-template-columns:32px 1.3fr 1fr 24px;gap:10px;padding:10px 14px;align-items:center;cursor:pointer;border-top:1px solid var(--border)">
-      <div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initials}</div>
+    return `<div class="bp-row bp-row-student" onclick="bpOpenStudent('${s.id}')">
+      <div class="bp-avatar">${initials}</div>
       <span class="font-bold">${boostHwEsc(s.name)}</span>
-      <span style="color:${bpProgressColor(s.progress)}">${s.progress}%</span>
-      <span class="text-muted">›</span>
+      <span style="color:${bpProgressColor(s.progress)};font-weight:700">${s.progress}%</span>
+      <span class="bp-chevron">›</span>
     </div>`;
   }).join('') || '<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div>';
 
-  document.getElementById('bpBody').innerHTML = `<div class="card" style="padding:0;overflow:hidden">${rows}</div>`;
+  document.getElementById('bpBody').innerHTML = `<div class="bp-table">${rows}</div>`;
 }
 
-async function bpOpenStudent(userId){
+function bpOpenStudent(userId){
   bpCurrentStudent = bpStudents.find(s => s.id === userId);
   if(!bpCurrentStudent || !bpCurrentCohort) return;
   bpView = 'detail'; bpActiveTab = 'math';
   document.getElementById('bpBreadcrumb').innerHTML = `Топтар / ${boostHwEsc(bpCurrentCohort.name)} / <b>${boostHwEsc(bpCurrentStudent.name)}</b>`;
-  document.getElementById('bpBody').innerHTML = '<div class="loading"><div class="spinner"></div>Жүктелуде...</div>';
-
-  const [mathData, critData] = await Promise.all([
-    bpStudentSubjectDetail(bpCurrentCohort.id, userId, 'math'),
-    bpStudentSubjectDetail(bpCurrentCohort.id, userId, 'ct')
-  ]);
-  bpDetailCache = { math: mathData, ct: critData };
+  bpDetailCache = {
+    math: bpStudentSubjectDetail(bpCurrentCohort.id, userId, 'math'),
+    ct: bpStudentSubjectDetail(bpCurrentCohort.id, userId, 'ct')
+  };
   bpRenderDetail();
 }
 
@@ -2280,26 +2359,29 @@ function bpRenderDetail(){
   const canCrit = !bpTeacherScope || (bpTeacherScope[bpCurrentCohort.id] || []).includes('ct');
   const d = bpDetailCache[bpActiveTab === 'math' ? 'math' : 'ct'];
   const rows = (d?.lessons || []).map(l => `
-    <div style="display:grid;grid-template-columns:1.5fr 0.6fr 0.9fr 0.9fr 1.1fr;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:13px;align-items:center">
+    <div class="bp-row bp-row-detail">
       <span>${boostHwEsc(l.title)}</span>
       <span>${l.postTest !== null ? '✅' : '❌'}</span>
       <span>${l.postTest !== null ? l.postTest+'%' : '—'}</span>
       <span>${l.topic !== null ? l.topic+'%' : '—'}</span>
-      <span style="color:${l.gradedLabel==='Тексеруде'?'var(--yellow)':(l.gradedLabel==='Жіберілмеген'?'var(--text2)':'var(--green)')}">${boostHwEsc(l.gradedLabel)}</span>
+      <span class="bp-status ${l.gradedLabel==='Тексеруде'?'bp-status-warn':(l.gradedLabel==='Жіберілмеген'?'bp-status-muted':'bp-status-ok')}">${boostHwEsc(l.gradedLabel)}</span>
     </div>`).join('') || '<div class="empty-state"><div class="empty-icon">📚</div><p>Сабақтар жоқ</p></div>';
 
   const topicCol = bpActiveTab === 'math' ? 'Тақ. тест' : 'ҮЖ (тест)';
   const gradedCol = bpActiveTab === 'math' ? 'ҮЖ (файл)' : 'Тақ. мәтін';
 
   document.getElementById('bpBody').innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button onclick="bpSetTab('math')" ${!canMath?'disabled':''} class="btn ${bpActiveTab==='math'?'btn-blue':'btn-ghost'} btn-sm" style="flex:1;text-align:left">Math<div style="font-size:18px;font-weight:700">${bpDetailCache.math?.avg ?? '—'}%</div></button>
-      <button onclick="bpSetTab('ct')" ${!canCrit?'disabled':''} class="btn ${bpActiveTab==='ct'?'btn-blue':'btn-ghost'} btn-sm" style="flex:1;text-align:left">Crit<div style="font-size:18px;font-weight:700">${bpDetailCache.ct?.avg ?? '—'}%</div></button>
+    <div class="bp-tabs">
+      <div class="bp-tab ${bpActiveTab==='math'?'active':''} ${!canMath?'disabled':''}" onclick="${canMath?"bpSetTab('math')":''}">
+        <span class="bp-tab-label">Math</span><span class="bp-tab-value">${bpDetailCache.math?.avg ?? '—'}%</span>
+      </div>
+      <div class="bp-tab ${bpActiveTab==='ct'?'active':''} ${!canCrit?'disabled':''}" onclick="${canCrit?"bpSetTab('ct')":''}">
+        <span class="bp-tab-label">Crit</span><span class="bp-tab-value">${bpDetailCache.ct?.avg ?? '—'}%</span>
+      </div>
     </div>
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="display:grid;grid-template-columns:1.5fr 0.6fr 0.9fr 0.9fr 1.1fr;gap:8px;padding:10px 14px;background:var(--surface2);font-size:12px" class="text-muted">
-        <span>Тақырып</span><span>Видео</span><span>Пост-тест</span><span>${topicCol}</span><span>${gradedCol}</span>
-      </div>${rows}
+    <div class="bp-table">
+      <div class="bp-row bp-row-head bp-row-detail"><span>Тақырып</span><span>Видео</span><span>Пост-тест</span><span>${topicCol}</span><span>${gradedCol}</span></div>
+      ${rows}
     </div>`;
 }
 
@@ -2308,65 +2390,6 @@ function bpSetTab(tab){ bpActiveTab = tab; bpRenderDetail(); }
 function bpGoBack(){
   if(bpView === 'detail') bpOpenCohort(bpCurrentCohort.id);
   else if(bpView === 'students') bpRenderCohortsList();
-}
-
-// Топтың орташа прогресі: berilgen user_id тізімі бойынша (Math + Crit екеуінің орташасы)
-async function bpCohortAvgProgress(cohortId, userIds){
-  if(!userIds.length) return 0;
-  let total = 0, count = 0;
-  for(const uid of userIds){
-    const [m, c] = await Promise.all([
-      bpStudentSubjectDetail(cohortId, uid, 'math'),
-      bpStudentSubjectDetail(cohortId, uid, 'ct')
-    ]);
-    if(m.avg !== null){ total += m.avg; count++; }
-    if(c.avg !== null){ total += c.avg; count++; }
-  }
-  return count ? Math.round(total / count) : 0;
-}
-
-// Бір оқушының бір пән бойынша тақырыптық прогресі (lesson_progress = (пост-тест%+тақ.тест/ҮЖ(тест)%+файл/мәтін ҮЖ баға%)/3)
-async function bpStudentSubjectDetail(cohortId, userId, subject){
-  const { data: lessons } = await sbMock.from('boost_lessons')
-    .select('id,title_kz,title_ru,subject').eq('cohort_id', cohortId).in('subject', [subject,'both']).order('order_num');
-  if(!lessons || !lessons.length) return { avg: null, lessons: [] };
-  const lessonIds = lessons.map(l => l.id);
-
-  const [{ data: pv }, { data: tt }, { data: hr }, { data: hws }] = await Promise.all([
-    sbMock.from('boost_postvideo_results').select('lesson_id,score,total').eq('user_id', userId).in('lesson_id', lessonIds),
-    sbMock.from('boost_test_results').select('lesson_id,score,total').eq('user_id', userId).in('lesson_id', lessonIds),
-    sbMock.from('boost_homework_results').select('lesson_id,score,total').eq('user_id', userId).in('lesson_id', lessonIds),
-    sbMock.from('boost_homework').select('id,lesson_id').in('lesson_id', lessonIds)
-  ]);
-  const hwIds = (hws || []).map(h => h.id);
-  const hwByLesson = {}; (hws || []).forEach(h => hwByLesson[h.lesson_id] = h.id);
-  let subs = [];
-  if(hwIds.length){
-    const { data } = await sbMock.from('boost_homework_submissions').select('homework_id,status,grade').eq('user_id', userId).in('homework_id', hwIds);
-    subs = data || [];
-  }
-  const subByHw = {}; subs.forEach(s => subByHw[s.homework_id] = s);
-  const pvByLesson = {}; (pv||[]).forEach(r => pvByLesson[r.lesson_id] = r);
-  const ttByLesson = {}; (tt||[]).forEach(r => ttByLesson[r.lesson_id] = r);
-  const hrByLesson = {}; (hr||[]).forEach(r => hrByLesson[r.lesson_id] = r);
-
-  const rows = []; let sum = 0, cnt = 0;
-  for(const l of lessons){
-    const postR = pvByLesson[l.id]; const postPct = postR ? bpPct(postR.score, postR.total) : null;
-    const topicR = subject === 'math' ? ttByLesson[l.id] : hrByLesson[l.id];
-    const topicPct = topicR ? bpPct(topicR.score, topicR.total) : null;
-    const hwId = hwByLesson[l.id]; const sub = hwId ? subByHw[hwId] : null;
-    let gradedPct = null, gradedLabel = 'Жіберілмеген';
-    if(sub){
-      if(sub.status === 'graded'){ gradedPct = sub.grade != null ? Math.round((sub.grade/10)*100) : null; gradedLabel = sub.grade+'/10'; }
-      else { gradedLabel = 'Тексеруде'; gradedPct = null; }
-    }
-    const parts = [postPct, topicPct, gradedPct].filter(v => v !== null);
-    const lp = parts.length ? Math.round(parts.reduce((a,b)=>a+b,0)/3) : null; // /3 — үшеуі де болмаса төмен көрсетеді
-    if(lp !== null){ sum += lp; cnt++; }
-    rows.push({ title: l.title_kz || l.title_ru || '—', postTest: postPct, topic: topicPct, gradedLabel });
-  }
-  return { avg: cnt ? Math.round(sum / cnt) : null, lessons: rows };
 }
 
 // ================================================================
