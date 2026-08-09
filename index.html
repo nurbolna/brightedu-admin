@@ -1862,54 +1862,56 @@ async function renderBoostHomework(){
     const cohortIds = boostHwCohorts.map(c => c.id);
     const cohortById = {}; boostHwCohorts.forEach(c => cohortById[c.id] = c);
 
+    // Fix: бұрын 4 сұраныс (lessons→homework→submissions→enrollments) кезек-кезек
+    // (waterfall) жіберілетін, соның салдарынан бет баяу жүктелетін. Енді:
+    // 1) lessons+homework+submissions+student — FK-лар арқылы БІР nested-select сұранысы,
+    // 2) enrollments — оған тәуелсіз болғандықтан, дәл сол сәтте ПАРАЛЛЕЛЬ жіберіледі.
+    const enrollsPromise = sbMock.from('boost_enrollments')
+      .select('user_id,cohort_id,subject,student:user_id(id,name,phone)').in('cohort_id', cohortIds);
+
     const { data: lessons, error: lErr } = await sbMock.from('boost_lessons')
-      .select('id,cohort_id,subject,title_kz,title_ru').in('cohort_id', cohortIds);
+      .select('id,cohort_id,subject,title_kz,title_ru,' +
+        'boost_homework(id,title_kz,title_ru,file_url,' +
+          'boost_homework_submissions(id,user_id,files,status,grade,teacher_comment,submitted_at,graded_at,student:user_id(id,name,phone)))')
+      .in('cohort_id', cohortIds);
     if(lErr) throw lErr;
+
     const allowedLessons = (lessons || []).filter(l => {
       const c = cohortById[l.cohort_id]; if(!c) return false;
       if(l.subject === 'both') return true;
       return c.subjects.includes(l.subject);
     });
-    const lessonById = {}; allowedLessons.forEach(l => lessonById[l.id] = l);
-    const lessonIds = allowedLessons.map(l => l.id);
-    if(!lessonIds.length){
+    if(!allowedLessons.length){
       statsEl.innerHTML = ''; filtersEl.innerHTML = '';
       listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>Сабақтар табылмады</p></div>';
       return;
     }
-
-    const { data: hws, error: hErr } = await sbMock.from('boost_homework')
-      .select('id,lesson_id,title_kz,title_ru,file_url').in('lesson_id', lessonIds);
-    if(hErr) throw hErr;
-    const hwById = {}; (hws || []).forEach(h => hwById[h.id] = h);
-    const hwIds = (hws || []).map(h => h.id);
-    if(!hwIds.length){
+    const hwCount = allowedLessons.reduce((n,l) => n + (l.boost_homework?.length || 0), 0);
+    if(!hwCount){
       statsEl.innerHTML = ''; filtersEl.innerHTML = '';
       listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>Тапсырмалар табылмады</p></div>';
       return;
     }
 
-    const { data: subs, error: sErr } = await sbMock.from('boost_homework_submissions')
-      .select('id,homework_id,user_id,files,status,grade,teacher_comment,submitted_at,graded_at,student:user_id(id,name,phone)')
-      .in('homework_id', hwIds).order('submitted_at', { ascending: false });
-    if(sErr) throw sErr;
-
-    const { data: enrolls } = await sbMock.from('boost_enrollments')
-      .select('user_id,cohort_id,subject,student:user_id(id,name,phone)').in('cohort_id', cohortIds);
-
-    boostHwRows = (subs || []).map(s => {
-      const hw = hwById[s.homework_id] || {};
-      const lesson = lessonById[hw.lesson_id] || {};
-      const cohort = cohortById[lesson.cohort_id] || {};
-      return {
-        id: s.id, studentName: (s.student && s.student.name) || '—', studentId: s.user_id,
-        hwTitle: hw.title_kz || hw.title_ru || '—', lessonTitle: lesson.title_kz || lesson.title_ru || '—',
-        cohortName: cohort.name || '—', files: s.files || [], status: s.status, grade: s.grade,
-        comment: s.teacher_comment, submittedAt: s.submitted_at, gradedAt: s.graded_at
-      };
+    boostHwRows = [];
+    const submittedUserIds = new Set();
+    allowedLessons.forEach(l => {
+      const cohort = cohortById[l.cohort_id] || {};
+      (l.boost_homework || []).forEach(hw => {
+        (hw.boost_homework_submissions || []).forEach(s => {
+          submittedUserIds.add(s.user_id);
+          boostHwRows.push({
+            id: s.id, studentName: (s.student && s.student.name) || '—', studentId: s.user_id,
+            hwTitle: hw.title_kz || hw.title_ru || '—', lessonTitle: l.title_kz || l.title_ru || '—',
+            cohortName: cohort.name || '—', files: s.files || [], status: s.status, grade: s.grade,
+            comment: s.teacher_comment, submittedAt: s.submitted_at, gradedAt: s.graded_at
+          });
+        });
+      });
     });
+    boostHwRows.sort((a,b) => new Date(b.submittedAt||0) - new Date(a.submittedAt||0));
 
-    const submittedUserIds = new Set((subs || []).map(s => s.user_id));
+    const { data: enrolls } = await enrollsPromise;
     boostHwNotSubmitted = [];
     (enrolls || []).forEach(e => {
       const c = cohortById[e.cohort_id]; if(!c) return;
@@ -2225,8 +2227,11 @@ async function renderBoostProgress(){
 async function bpLoadBatch(cohortsRaw){
   const cohortIds = cohortsRaw.map(c => c.id);
 
-  const { data: enrolls } = await sbMock.from('boost_enrollments').select('user_id,cohort_id,student:user_id(id,name)').in('cohort_id', cohortIds);
-  const { data: lessons } = await sbMock.from('boost_lessons').select('id,cohort_id,subject,title_kz,title_ru,order_num').in('cohort_id', cohortIds).order('order_num');
+  // enrolls пен lessons бір-біріне тәуелсіз (екеуі де тек cohortIds-қа тәуелді) — параллель жіберіледі
+  const [{ data: enrolls }, { data: lessons }] = await Promise.all([
+    sbMock.from('boost_enrollments').select('user_id,cohort_id,student:user_id(id,name)').in('cohort_id', cohortIds),
+    sbMock.from('boost_lessons').select('id,cohort_id,subject,title_kz,title_ru,order_num').in('cohort_id', cohortIds).order('order_num')
+  ]);
   const lessonIds = (lessons || []).map(l => l.id);
 
   const [{ data: hws }, { data: pv }, { data: tt }, { data: hr }] = await Promise.all([
