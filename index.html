@@ -464,9 +464,10 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-section">Журнал</div>
         <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
         <div class="nav-item" onclick="showPage('analysis',this)">📊 Анализ</div>
+        <div class="nav-item boost-hw-only" id="navBoostHw" onclick="showPage('boostHw', this)">📝 Үй жұмысын тексеру<span class="nav-badge hidden" id="badgeBoostHw">0</span></div>
         <div class="nav-item dir-only" onclick="showPage('parent-reports',this)">📨 Ата-анаға жіберу</div>
         <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Рейтинг</div>
-        <div class="nav-section">Адамдар</div>
+        <div class="nav-section dir-admin">Адамдар</div>
         <div class="nav-item dir-admin" onclick="showPage('students',this)">👩‍🎓 Оқушылар</div>
         <div class="nav-item dir-only" onclick="showPage('teachers',this)">👨‍🏫 Мұғалімдер</div>
         <div class="nav-section">Қаржы</div>
@@ -474,7 +475,6 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-item dir-only" onclick="showPage('expenses',this)">🧾 Шығыстар</div>
         <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
         <div class="nav-item dir-only" onclick="showPage('unit-economics',this)">📈 Юнит-экономика</div>
-        <div class="nav-item boost-hw-only" id="navBoostHw" onclick="showPage('boostHw', this)">📝 Үй жұмысын тексеру</div>
         <div class="nav-item teacher-only" onclick="openMySalary()">💰 Жалақым</div>
       </nav>
       <div class="sidebar-bottom">
@@ -1730,6 +1730,37 @@ function boostHwEsc(s){
   return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function setBoostHwBadge(n){
+  const badge = document.getElementById('badgeBoostHw');
+  if(!badge) return;
+  if(n && n > 0){ badge.textContent = String(n); badge.classList.remove('hidden'); }
+  else { badge.classList.add('hidden'); }
+}
+
+// Логин сәтінде (тапсырма тізімі әлі ашылмаған кезде) бейджіге сан шығару үшін
+// жеңіл сұраныс — тексерілмеген тапсырма санын ғана санайды.
+async function refreshBoostHwBadge(){
+  if(!boostHwCohorts || !boostHwCohorts.length){ setBoostHwBadge(0); return; }
+  try{
+    const cohortIds = boostHwCohorts.map(c => c.id);
+    const cohortById = {}; boostHwCohorts.forEach(c => cohortById[c.id] = c);
+    const { data: lessons } = await sbMock.from('boost_lessons').select('id,cohort_id,subject').in('cohort_id', cohortIds);
+    const allowedLessons = (lessons || []).filter(l => {
+      const c = cohortById[l.cohort_id]; if(!c) return false;
+      if(l.subject === 'both') return true;
+      return c.subjects.includes(l.subject);
+    });
+    const lessonIds = allowedLessons.map(l => l.id);
+    if(!lessonIds.length){ setBoostHwBadge(0); return; }
+    const { data: hws } = await sbMock.from('boost_homework').select('id,lesson_id').in('lesson_id', lessonIds);
+    const hwIds = (hws || []).map(h => h.id);
+    if(!hwIds.length){ setBoostHwBadge(0); return; }
+    const { count } = await sbMock.from('boost_homework_submissions')
+      .select('id', { count: 'exact', head: true }).in('homework_id', hwIds).neq('status', 'graded');
+    setBoostHwBadge(count || 0);
+  }catch(e){ console.error('refreshBoostHwBadge', e); }
+}
+
 // Логин сәтті болғаннан кейін бір рет шақырылады (setupUI ішінен) —
 // осы мұғалімнің телефоны boost_cohorts-та тағайындалған ба, соны тексереді.
 async function initBoostHwAccess(){
@@ -1753,6 +1784,7 @@ async function initBoostHwAccess(){
       ]
     }));
     nav.style.display = 'flex';
+    refreshBoostHwBadge();
   }catch(e){ console.error('initBoostHwAccess', e); }
 }
 
@@ -1838,6 +1870,7 @@ async function renderBoostHomework(){
 function renderBoostHwStats(){
   const pending = boostHwRows.filter(r => r.status !== 'graded');
   const graded = boostHwRows.filter(r => r.status === 'graded');
+  setBoostHwBadge(pending.length);
   const weekAgo = new Date(Date.now() - 7*24*3600*1000);
   const gradedThisWeek = graded.filter(r => r.gradedAt && new Date(r.gradedAt) >= weekAgo);
   const avg = graded.length ? (graded.reduce((s,r)=>s+(Number(r.grade)||0),0) / graded.length) : 0;
