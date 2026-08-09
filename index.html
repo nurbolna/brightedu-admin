@@ -1922,12 +1922,20 @@ function boostHwOnSearch(value){
 
 const BOOST_HW_MONTHS_SHORT = ['қаң','ақп','нау','сәу','мам','мау','шіл','там','қыр','қаз','қар','жел'];
 
+// Жергілікті күнді "YYYY-MM-DD" етіп қайтарады — .toISOString() қолданбаймыз,
+// себебі ол UTC-ге айналдырып, Қазақстан уақыты (UTC+5) сияқты алдыңғы аймақтарда
+// күнді бір күнге артқа жылжытып жіберетін еді (апта дүйсенбі емес, жексенбіден
+// басталып көрінетін себебі — дәл осы еді).
+function boostHwLocalDateStr(d){
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 // Дүйсенбіден басталатын апта кілті (YYYY-MM-DD) — топтастыру үшін
 function boostHwWeekKey(iso){
   const d = new Date(iso);
   const dow = (d.getDay() + 6) % 7; // Дүйсенбі=0
   const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
-  return monday.toISOString().slice(0,10);
+  return boostHwLocalDateStr(monday);
 }
 function boostHwWeekLabel(weekKeyIso){
   const monday = new Date(weekKeyIso + 'T00:00:00');
