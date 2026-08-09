@@ -313,6 +313,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .dir-only{} /* shown by default, hidden for admin/teacher */
 .admin-hidden{} /* hidden for admin */
 .teacher-only{display:none;} /* shown only for teacher */
+.boost-hw-only{display:none;} /* shown only for a teacher linked to a brightcourses cohort as math/CT homework grader */
 
 /* ===================== RESPONSIVE ===================== */
 @media(max-width:768px){
@@ -473,6 +474,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-item dir-only" onclick="showPage('expenses',this)">🧾 Шығыстар</div>
         <div class="nav-item dir-only" onclick="showPage('finance',this)">💰 Қаржы</div>
         <div class="nav-item dir-only" onclick="showPage('unit-economics',this)">📈 Юнит-экономика</div>
+        <div class="nav-item boost-hw-only" id="navBoostHw" onclick="showPage('boostHw', this)">📝 Үй жұмысын тексеру</div>
         <div class="nav-item teacher-only" onclick="openMySalary()">💰 Жалақым</div>
       </nav>
       <div class="sidebar-bottom">
@@ -932,6 +934,14 @@ details[open] summary::before{content:'▾ '}
           </div>
           <div id="journalGridWrap"><div class="empty-state"><div class="empty-icon">📔</div><p>Группа мен айды таңдаңыз</p></div></div>
         </div>
+      </div>
+
+      <!-- ========== BOOST HOMEWORK (brightcourses) ========== -->
+      <div class="page" id="page-boostHw">
+        <div class="page-header"><div><div class="page-title">Үй жұмысын тексеру</div><div class="page-subtitle">brightcourses (NUET Boost) тапсырмалары — осы жерден тексеріледі</div></div></div>
+        <div id="boostHwStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px"></div>
+        <div id="boostHwFilters" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"></div>
+        <div id="boostHwList"><div class="loading"><div class="spinner"></div>Жүктелуде...</div></div>
       </div>
 
       <!-- ========== ANALYSIS ========== -->
@@ -1707,6 +1717,260 @@ const MOCK_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const sbMock = window.supabase.createClient(MOCK_SB_URL, MOCK_SB_KEY);
 
 // ================================================================
+// BOOST HOMEWORK (brightcourses NUET Boost — Үй жұмысын тексеру)
+// Толығымен қосымша модуль: brightadmin-нің басқа ешбір функциясын
+// өзгертпейді, тек sbMock арқылы cayvlvjvmjeabrvzttqo жобасынан оқиды/жазады.
+// ================================================================
+let boostHwCohorts = null;   // осы мұғалімге тағайындалған ағымдар [{id,name,subjects:['math','ct']}]
+let boostHwRows = [];        // жүктелген тапсырмалар тізімі
+let boostHwNotSubmitted = [];// тапсырмаған оқушылар
+let boostHwFilter = 'pending'; // 'pending' | 'notSubmitted' | 'graded' | 'all'
+
+function boostHwEsc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Логин сәтті болғаннан кейін бір рет шақырылады (setupUI ішінен) —
+// осы мұғалімнің телефоны boost_cohorts-та тағайындалған ба, соны тексереді.
+async function initBoostHwAccess(){
+  const nav = document.getElementById('navBoostHw');
+  if(!nav) return;
+  nav.style.display = 'none';
+  boostHwCohorts = null;
+  if(!currentUser || currentUser.role !== 'teacher' || !currentUser.login) return;
+  try{
+    const phone = currentUser.login;
+    const { data, error } = await sbMock.from('boost_cohorts')
+      .select('id,name_kz,name_ru,math_teacher_phone,ct_teacher_phone')
+      .or(`math_teacher_phone.eq.${phone},ct_teacher_phone.eq.${phone}`);
+    if(error || !data || !data.length) return;
+    boostHwCohorts = data.map(c => ({
+      id: c.id,
+      name: c.name_kz || c.name_ru || '—',
+      subjects: [
+        ...(c.math_teacher_phone === phone ? ['math'] : []),
+        ...(c.ct_teacher_phone === phone ? ['ct'] : [])
+      ]
+    }));
+    nav.style.display = 'flex';
+  }catch(e){ console.error('initBoostHwAccess', e); }
+}
+
+async function renderBoostHomework(){
+  const listEl = document.getElementById('boostHwList');
+  const statsEl = document.getElementById('boostHwStats');
+  const filtersEl = document.getElementById('boostHwFilters');
+  if(!boostHwCohorts || !boostHwCohorts.length){
+    statsEl.innerHTML = ''; filtersEl.innerHTML = '';
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>Сізге тағайындалған ағым табылмады</p></div>';
+    return;
+  }
+  listEl.innerHTML = '<div class="loading"><div class="spinner"></div>Жүктелуде...</div>';
+  try{
+    const cohortIds = boostHwCohorts.map(c => c.id);
+    const cohortById = {}; boostHwCohorts.forEach(c => cohortById[c.id] = c);
+
+    const { data: lessons, error: lErr } = await sbMock.from('boost_lessons')
+      .select('id,cohort_id,subject,title_kz,title_ru').in('cohort_id', cohortIds);
+    if(lErr) throw lErr;
+    const allowedLessons = (lessons || []).filter(l => {
+      const c = cohortById[l.cohort_id]; if(!c) return false;
+      if(l.subject === 'both') return true;
+      return c.subjects.includes(l.subject);
+    });
+    const lessonById = {}; allowedLessons.forEach(l => lessonById[l.id] = l);
+    const lessonIds = allowedLessons.map(l => l.id);
+    if(!lessonIds.length){
+      statsEl.innerHTML = ''; filtersEl.innerHTML = '';
+      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>Сабақтар табылмады</p></div>';
+      return;
+    }
+
+    const { data: hws, error: hErr } = await sbMock.from('boost_homework')
+      .select('id,lesson_id,title_kz,title_ru,file_url').in('lesson_id', lessonIds);
+    if(hErr) throw hErr;
+    const hwById = {}; (hws || []).forEach(h => hwById[h.id] = h);
+    const hwIds = (hws || []).map(h => h.id);
+    if(!hwIds.length){
+      statsEl.innerHTML = ''; filtersEl.innerHTML = '';
+      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>Тапсырмалар табылмады</p></div>';
+      return;
+    }
+
+    const { data: subs, error: sErr } = await sbMock.from('boost_homework_submissions')
+      .select('id,homework_id,user_id,files,status,grade,teacher_comment,submitted_at,graded_at,student:user_id(id,name,phone)')
+      .in('homework_id', hwIds).order('submitted_at', { ascending: false });
+    if(sErr) throw sErr;
+
+    const { data: enrolls } = await sbMock.from('boost_enrollments')
+      .select('user_id,cohort_id,subject,student:user_id(id,name,phone)').in('cohort_id', cohortIds);
+
+    boostHwRows = (subs || []).map(s => {
+      const hw = hwById[s.homework_id] || {};
+      const lesson = lessonById[hw.lesson_id] || {};
+      const cohort = cohortById[lesson.cohort_id] || {};
+      return {
+        id: s.id, studentName: (s.student && s.student.name) || '—', studentId: s.user_id,
+        hwTitle: hw.title_kz || hw.title_ru || '—', lessonTitle: lesson.title_kz || lesson.title_ru || '—',
+        cohortName: cohort.name || '—', files: s.files || [], status: s.status, grade: s.grade,
+        comment: s.teacher_comment, submittedAt: s.submitted_at, gradedAt: s.graded_at
+      };
+    });
+
+    const submittedUserIds = new Set((subs || []).map(s => s.user_id));
+    boostHwNotSubmitted = [];
+    (enrolls || []).forEach(e => {
+      const c = cohortById[e.cohort_id]; if(!c) return;
+      const subjOk = e.subject === 'both' || c.subjects.includes(e.subject);
+      if(!subjOk || submittedUserIds.has(e.user_id)) return;
+      boostHwNotSubmitted.push({ name: (e.student && e.student.name) || '—' });
+    });
+
+    renderBoostHwStats();
+    renderBoostHwFilters();
+    renderBoostHwListFiltered();
+  }catch(e){
+    console.error('renderBoostHomework', e);
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Жүктеу кезінде қате шықты</p></div>';
+  }
+}
+
+function renderBoostHwStats(){
+  const pending = boostHwRows.filter(r => r.status !== 'graded');
+  const graded = boostHwRows.filter(r => r.status === 'graded');
+  const weekAgo = new Date(Date.now() - 7*24*3600*1000);
+  const gradedThisWeek = graded.filter(r => r.gradedAt && new Date(r.gradedAt) >= weekAgo);
+  const avg = graded.length ? (graded.reduce((s,r)=>s+(Number(r.grade)||0),0) / graded.length) : 0;
+  document.getElementById('boostHwStats').innerHTML = `
+    <div class="card" style="padding:14px;margin-bottom:0">
+      <div class="text-muted text-sm" style="margin-bottom:6px">Тексерілмеген</div>
+      <div style="font-size:24px;font-weight:700;color:var(--yellow)">${pending.length}</div>
+    </div>
+    <div class="card" style="padding:14px;margin-bottom:0">
+      <div class="text-muted text-sm" style="margin-bottom:6px">Тапсырмаған</div>
+      <div style="font-size:24px;font-weight:700;color:var(--red)">${boostHwNotSubmitted.length}</div>
+    </div>
+    <div class="card" style="padding:14px;margin-bottom:0">
+      <div class="text-muted text-sm" style="margin-bottom:6px">Осы апта тексерілді</div>
+      <div style="font-size:24px;font-weight:700">${gradedThisWeek.length}</div>
+    </div>
+    <div class="card" style="padding:14px;margin-bottom:0">
+      <div class="text-muted text-sm" style="margin-bottom:6px">Орташа балл</div>
+      <div style="font-size:24px;font-weight:700;color:var(--green)">${graded.length ? fmtDec1(avg) : '—'}</div>
+    </div>`;
+}
+
+function renderBoostHwFilters(){
+  const pendingCount = boostHwRows.filter(r => r.status !== 'graded').length;
+  const gradedCount = boostHwRows.filter(r => r.status === 'graded').length;
+  const filters = [
+    ['pending', `Тексерілмеген · ${pendingCount}`],
+    ['notSubmitted', `Тапсырмаған · ${boostHwNotSubmitted.length}`],
+    ['graded', `Бағаланды · ${gradedCount}`],
+    ['all', 'Барлығы']
+  ];
+  document.getElementById('boostHwFilters').innerHTML = filters.map(([key,label]) =>
+    `<button class="btn ${boostHwFilter===key?'':'btn-ghost'} btn-sm" onclick="boostHwSetFilter('${key}')">${boostHwEsc(label)}</button>`
+  ).join('');
+}
+
+function boostHwSetFilter(key){ boostHwFilter = key; renderBoostHwFilters(); renderBoostHwListFiltered(); }
+
+function boostHwRelTime(iso){
+  if(!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs/60000);
+  if(mins < 60) return mins <= 1 ? 'дәл қазір' : `${mins} мин бұрын`;
+  const hours = Math.round(mins/60);
+  if(hours < 24) return `${hours} сағат бұрын`;
+  const days = Math.round(hours/24);
+  return `${days} күн бұрын`;
+}
+
+function renderBoostHwListFiltered(){
+  const listEl = document.getElementById('boostHwList');
+  if(boostHwFilter === 'notSubmitted'){
+    if(!boostHwNotSubmitted.length){
+      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Барлық оқушы тапсырды</p></div>';
+      return;
+    }
+    listEl.innerHTML = boostHwNotSubmitted.map(s => `
+      <div class="card" style="padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
+        <div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${boostHwEsc((s.name||'—')[0]||'?')}</div>
+        <div style="flex:1;font-size:13px;font-weight:600">${boostHwEsc(s.name)}</div>
+        <span style="font-size:11px;padding:3px 9px;border-radius:20px;background:rgba(248,113,113,.12);color:var(--red)">Тапсырмаған</span>
+      </div>`).join('');
+    return;
+  }
+  let rows = boostHwRows;
+  if(boostHwFilter === 'pending') rows = rows.filter(r => r.status !== 'graded');
+  if(boostHwFilter === 'graded') rows = rows.filter(r => r.status === 'graded');
+  if(!rows.length){
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>Бұл санатта тапсырма жоқ</p></div>';
+    return;
+  }
+  listEl.innerHTML = rows.map(r => {
+    const isGraded = r.status === 'graded';
+    const fileLinks = (r.files||[]).map(f => {
+      const url = typeof f === 'string' ? f : (f.url||f.file_url||'');
+      const label = typeof f === 'string' ? 'файл' : (f.name||'файл');
+      return url ? `<a href="${boostHwEsc(url)}" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);text-decoration:none;display:flex;align-items:center;gap:4px;margin-bottom:8px">📎 ${boostHwEsc(label)}</a>` : '';
+    }).join('');
+    return `
+      <div class="card" style="padding:14px 16px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${boostHwEsc((r.studentName||'—')[0]||'?')}</div>
+          <div style="flex:1;min-width:160px">
+            <div style="font-size:13px;font-weight:700">${boostHwEsc(r.studentName)}</div>
+            <div class="text-muted text-sm">${boostHwEsc(r.hwTitle)} · ${boostHwEsc(r.cohortName)}</div>
+          </div>
+          <div class="text-muted text-sm">${boostHwRelTime(r.submittedAt)}</div>
+          ${isGraded ? `<span style="font-size:13px;font-weight:700;color:var(--green)">${boostHwEsc(r.grade)}/10</span>` : `<span style="font-size:11px;padding:3px 9px;border-radius:20px;background:rgba(251,191,36,.15);color:var(--yellow)">Тексерілмеген</span>`}
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+          ${fileLinks || '<div class="text-muted text-sm" style="margin-bottom:8px">Файл жоқ</div>'}
+          ${isGraded && r.comment ? `<div class="text-sm" style="margin-bottom:8px">💬 ${boostHwEsc(r.comment)}</div>` : ''}
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="number" min="0" max="10" id="boostHwGrade-${r.id}" placeholder="Балл" value="${isGraded?boostHwEsc(r.grade):''}" style="width:80px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px" />
+            <input type="text" id="boostHwComment-${r.id}" placeholder="Пікір (міндетті емес)" value="${isGraded?boostHwEsc(r.comment||''):''}" style="flex:1;min-width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px" />
+            <button class="btn btn-sm" onclick="boostHwGrade('${r.id}')">${isGraded?'Қайта сақтау':'Бағалау'}</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function boostHwGrade(subId){
+  const row = boostHwRows.find(r => r.id === subId);
+  if(!row) return;
+  const gradeEl = document.getElementById(`boostHwGrade-${subId}`);
+  const commentEl = document.getElementById(`boostHwComment-${subId}`);
+  const grade = parseInt(gradeEl.value, 10);
+  if(isNaN(grade) || grade < 0 || grade > 10){ toast('Баллды 0–10 аралығында енгізіңіз', 'error'); return; }
+  const comment = (commentEl.value || '').trim() || null;
+  try{
+    const { error } = await sbMock.from('boost_homework_submissions')
+      .update({ grade, teacher_comment: comment, status: 'graded', graded_at: new Date().toISOString() })
+      .eq('id', subId);
+    if(error) throw error;
+    try{
+      await sbMock.from('notifications').insert({
+        user_id: row.studentId, type: 'homework_graded',
+        data: { lesson_title: row.lessonTitle, cohort_name: row.cohortName, grade, comment }
+      });
+    }catch(e){ /* хабарлама жіберілмесе де, баға сақталды — жалғастыра береміз */ }
+    toast('✅ Баға сақталды', 'success');
+    row.status = 'graded'; row.grade = grade; row.comment = comment; row.gradedAt = new Date().toISOString();
+    renderBoostHwStats();
+    renderBoostHwFilters();
+    renderBoostHwListFiltered();
+  }catch(e){
+    console.error('boostHwGrade', e);
+    toast('Қате шықты, қайталап көріңіз', 'error');
+  }
+}
+
+// ================================================================
 // AUTH
 // ================================================================
 let pendingUser = null;   // логин+пароль тексерілген, тек Telegram байланысы жоқ қолданушы
@@ -2065,6 +2329,9 @@ function setupUI(){
   document.querySelectorAll('.teacher-only').forEach(el =>
     el.style.display = r==='teacher' ? 'flex' : 'none'
   );
+  // Жаңа: brightcourses (NUET Boost) үй жұмысын тексеру рұқсатын бөлек тексереміз —
+  // тек осы мұғалімнің телефоны boost_cohorts-та тағайындалған болса ғана мәзір көрінеді.
+  if (typeof initBoostHwAccess === 'function') initBoostHwAccess();
 
   // Init dates
   const now = new Date();
@@ -2140,7 +2407,7 @@ function showPage(name, el){
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
     payments:()=>{renderPayments();switchSpSubTab(spActiveSubTab);}, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
     reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM,
-    'parent-reports':renderParentReports
+    'parent-reports':renderParentReports, boostHw:renderBoostHomework
   };
   renders[name]?.();
 }
