@@ -939,6 +939,9 @@ details[open] summary::before{content:'▾ '}
       <!-- ========== BOOST HOMEWORK (brightcourses) ========== -->
       <div class="page" id="page-boostHw">
         <div class="page-header"><div><div class="page-title">Үй жұмысын тексеру</div><div class="page-subtitle">brightcourses (NUET Boost) тапсырмалары — осы жерден тексеріледі</div></div></div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+          <input type="text" id="boostHwSearchInput" placeholder="🔍 Оқушы аты бойынша іздеу..." oninput="boostHwOnSearch(this.value)" style="width:240px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px" />
+        </div>
         <div id="boostHwStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px"></div>
         <div id="boostHwFilters" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"></div>
         <div id="boostHwList"><div class="loading"><div class="spinner"></div>Жүктелуде...</div></div>
@@ -1725,6 +1728,9 @@ let boostHwCohorts = null;   // осы мұғалімге тағайындалғ
 let boostHwRows = [];        // жүктелген тапсырмалар тізімі
 let boostHwNotSubmitted = [];// тапсырмаған оқушылар
 let boostHwFilter = 'pending'; // 'pending' | 'notSubmitted' | 'graded' | 'all'
+let boostHwSearch = '';        // оқушы аты бойынша іздеу мәтіні
+let boostHwOpenWeeks = new Set(); // "Бағаланды" табында ашық тұрған апта топтары
+let boostHwGradedWeeksShown = 5;  // "Бағаланды" табында бірден көрсетілетін апта саны
 
 function boostHwEsc(s){
   return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1909,6 +1915,35 @@ function renderBoostHwFilters(){
 
 function boostHwSetFilter(key){ boostHwFilter = key; renderBoostHwFilters(); renderBoostHwListFiltered(); }
 
+function boostHwOnSearch(value){
+  boostHwSearch = (value || '').trim().toLowerCase();
+  renderBoostHwListFiltered();
+}
+
+const BOOST_HW_MONTHS_SHORT = ['қаң','ақп','нау','сәу','мам','мау','шіл','там','қыр','қаз','қар','жел'];
+
+// Дүйсенбіден басталатын апта кілті (YYYY-MM-DD) — топтастыру үшін
+function boostHwWeekKey(iso){
+  const d = new Date(iso);
+  const dow = (d.getDay() + 6) % 7; // Дүйсенбі=0
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
+  return monday.toISOString().slice(0,10);
+}
+function boostHwWeekLabel(weekKeyIso){
+  const monday = new Date(weekKeyIso + 'T00:00:00');
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  const f = d => `${d.getDate()} ${BOOST_HW_MONTHS_SHORT[d.getMonth()]}`;
+  return `${monday.getDate()} — ${f(sunday)}`;
+}
+function boostHwToggleWeek(key){
+  if(boostHwOpenWeeks.has(key)) boostHwOpenWeeks.delete(key); else boostHwOpenWeeks.add(key);
+  renderBoostHwListFiltered();
+}
+function boostHwLoadMoreWeeks(){
+  boostHwGradedWeeksShown += 5;
+  renderBoostHwListFiltered();
+}
+
 function boostHwRelTime(iso){
   if(!iso) return '';
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -1920,14 +1955,47 @@ function boostHwRelTime(iso){
   return `${days} күн бұрын`;
 }
 
+function boostHwCardHtml(r){
+  const isGraded = r.status === 'graded';
+  const fileLinks = (r.files||[]).map(f => {
+    const url = typeof f === 'string' ? f : (f.url||f.file_url||'');
+    const label = typeof f === 'string' ? 'файл' : (f.name||'файл');
+    return url ? `<a href="${boostHwEsc(url)}" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);text-decoration:none;display:flex;align-items:center;gap:4px;margin-bottom:8px">📎 ${boostHwEsc(label)}</a>` : '';
+  }).join('');
+  return `
+    <div class="card" style="padding:14px 16px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${boostHwEsc((r.studentName||'—')[0]||'?')}</div>
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:13px;font-weight:700">${boostHwEsc(r.studentName)}</div>
+          <div class="text-muted text-sm">${boostHwEsc(r.hwTitle)} · ${boostHwEsc(r.cohortName)}</div>
+        </div>
+        <div class="text-muted text-sm">${boostHwRelTime(r.submittedAt)}</div>
+        ${isGraded ? `<span style="font-size:13px;font-weight:700;color:var(--green)">${boostHwEsc(r.grade)}/10</span>` : `<span style="font-size:11px;padding:3px 9px;border-radius:20px;background:rgba(251,191,36,.15);color:var(--yellow)">Тексерілмеген</span>`}
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        ${fileLinks || '<div class="text-muted text-sm" style="margin-bottom:8px">Файл жоқ</div>'}
+        ${isGraded && r.comment ? `<div class="text-sm" style="margin-bottom:8px">💬 ${boostHwEsc(r.comment)}</div>` : ''}
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="number" min="0" max="10" id="boostHwGrade-${r.id}" placeholder="Балл" value="${isGraded?boostHwEsc(r.grade):''}" style="width:80px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px" />
+          <input type="text" id="boostHwComment-${r.id}" placeholder="Пікір (міндетті емес)" value="${isGraded?boostHwEsc(r.comment||''):''}" style="flex:1;min-width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px" />
+          <button class="btn btn-sm" onclick="boostHwGrade('${r.id}')">${isGraded?'Қайта сақтау':'Бағалау'}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderBoostHwListFiltered(){
   const listEl = document.getElementById('boostHwList');
+  const q = boostHwSearch;
+
   if(boostHwFilter === 'notSubmitted'){
-    if(!boostHwNotSubmitted.length){
-      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Барлық оқушы тапсырды</p></div>';
+    const items = boostHwNotSubmitted.filter(s => !q || (s.name||'').toLowerCase().includes(q));
+    if(!items.length){
+      listEl.innerHTML = `<div class="empty-state"><div class="empty-icon">${q?'🔍':'✅'}</div><p>${q?'Сәйкес оқушы табылмады':'Барлық оқушы тапсырды'}</p></div>`;
       return;
     }
-    listEl.innerHTML = boostHwNotSubmitted.map(s => `
+    listEl.innerHTML = items.map(s => `
       <div class="card" style="padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
         <div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${boostHwEsc((s.name||'—')[0]||'?')}</div>
         <div style="flex:1;font-size:13px;font-weight:600">${boostHwEsc(s.name)}</div>
@@ -1935,42 +2003,51 @@ function renderBoostHwListFiltered(){
       </div>`).join('');
     return;
   }
+
   let rows = boostHwRows;
   if(boostHwFilter === 'pending') rows = rows.filter(r => r.status !== 'graded');
   if(boostHwFilter === 'graded') rows = rows.filter(r => r.status === 'graded');
+  if(q) rows = rows.filter(r => (r.studentName||'').toLowerCase().includes(q));
+
   if(!rows.length){
-    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>Бұл санатта тапсырма жоқ</p></div>';
+    listEl.innerHTML = `<div class="empty-state"><div class="empty-icon">${q?'🔍':'📝'}</div><p>${q?'Сәйкес оқушы табылмады':'Бұл санатта тапсырма жоқ'}</p></div>`;
     return;
   }
-  listEl.innerHTML = rows.map(r => {
-    const isGraded = r.status === 'graded';
-    const fileLinks = (r.files||[]).map(f => {
-      const url = typeof f === 'string' ? f : (f.url||f.file_url||'');
-      const label = typeof f === 'string' ? 'файл' : (f.name||'файл');
-      return url ? `<a href="${boostHwEsc(url)}" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);text-decoration:none;display:flex;align-items:center;gap:4px;margin-bottom:8px">📎 ${boostHwEsc(label)}</a>` : '';
+
+  // "Бағаланды" саны көп болуы мүмкін болғандықтан (мыс. 60-70), апта бойынша
+  // жиналған (collapsed) топтарға бөліп, алдымен соңғы 5 аптаны ғана көрсетеміз.
+  if(boostHwFilter === 'graded'){
+    const groups = {}; // weekKey -> rows[]
+    rows.forEach(r => {
+      const wk = boostHwWeekKey(r.submittedAt);
+      (groups[wk] = groups[wk] || []).push(r);
+    });
+    const weekKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+    const visibleKeys = weekKeys.slice(0, boostHwGradedWeeksShown);
+    const html = visibleKeys.map(wk => {
+      const items = groups[wk];
+      const avg = items.reduce((s,r)=>s+(Number(r.grade)||0),0) / items.length;
+      const isOpen = boostHwOpenWeeks.has(wk);
+      return `
+        <div class="card" style="padding:0;margin-bottom:8px;overflow:hidden">
+          <div onclick="boostHwToggleWeek('${wk}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;background:var(--surface2)">
+            <div style="font-size:13px;font-weight:700">${boostHwWeekLabel(wk)}</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="text-muted text-sm">${items.length} тапсырма · орт. ${fmtDec1(avg)}</span>
+              <span style="font-size:12px;color:var(--text2)">${isOpen?'▲':'▼'}</span>
+            </div>
+          </div>
+          ${isOpen ? `<div style="padding:10px 16px 4px">${items.map(boostHwCardHtml).join('')}</div>` : ''}
+        </div>`;
     }).join('');
-    return `
-      <div class="card" style="padding:14px 16px;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${boostHwEsc((r.studentName||'—')[0]||'?')}</div>
-          <div style="flex:1;min-width:160px">
-            <div style="font-size:13px;font-weight:700">${boostHwEsc(r.studentName)}</div>
-            <div class="text-muted text-sm">${boostHwEsc(r.hwTitle)} · ${boostHwEsc(r.cohortName)}</div>
-          </div>
-          <div class="text-muted text-sm">${boostHwRelTime(r.submittedAt)}</div>
-          ${isGraded ? `<span style="font-size:13px;font-weight:700;color:var(--green)">${boostHwEsc(r.grade)}/10</span>` : `<span style="font-size:11px;padding:3px 9px;border-radius:20px;background:rgba(251,191,36,.15);color:var(--yellow)">Тексерілмеген</span>`}
-        </div>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-          ${fileLinks || '<div class="text-muted text-sm" style="margin-bottom:8px">Файл жоқ</div>'}
-          ${isGraded && r.comment ? `<div class="text-sm" style="margin-bottom:8px">💬 ${boostHwEsc(r.comment)}</div>` : ''}
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="number" min="0" max="10" id="boostHwGrade-${r.id}" placeholder="Балл" value="${isGraded?boostHwEsc(r.grade):''}" style="width:80px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px" />
-            <input type="text" id="boostHwComment-${r.id}" placeholder="Пікір (міндетті емес)" value="${isGraded?boostHwEsc(r.comment||''):''}" style="flex:1;min-width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px" />
-            <button class="btn btn-sm" onclick="boostHwGrade('${r.id}')">${isGraded?'Қайта сақтау':'Бағалау'}</button>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
+    const moreBtn = weekKeys.length > visibleKeys.length
+      ? `<button class="btn btn-ghost btn-sm" style="width:100%" onclick="boostHwLoadMoreWeeks()">Тағы жүктеу (ескі апталар)</button>`
+      : '';
+    listEl.innerHTML = html + moreBtn;
+    return;
+  }
+
+  listEl.innerHTML = rows.map(boostHwCardHtml).join('');
 }
 
 async function boostHwGrade(subId){
