@@ -464,6 +464,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-section">Журнал</div>
         <div class="nav-item" onclick="showPage('journal',this)">📔 Журнал</div>
         <div class="nav-item" onclick="showPage('analysis',this)">📊 Анализ</div>
+        <div class="nav-item" onclick="showPage('boostProgress',this)">🚀 НУЕТ Буст прогресі</div>
         <div class="nav-item boost-hw-only" id="navBoostHw" onclick="showPage('boostHw', this)">📝 Үй жұмысын тексеру<span class="nav-badge hidden" id="badgeBoostHw">0</span></div>
         <div class="nav-item dir-only" onclick="showPage('parent-reports',this)">📨 Ата-анаға жіберу</div>
         <div class="nav-item dir-only" onclick="showPage('reports',this)">📈 Рейтинг</div>
@@ -963,6 +964,20 @@ details[open] summary::before{content:'▾ '}
           <div class="page-header" style="margin-bottom:12px"><div><div class="card-title" id="analysisDetailTitle"></div></div><button class="btn btn-ghost btn-sm" onclick="closeAnalysisDetail()">✕ Жабу</button></div>
           <div id="analysisDetailContent"></div>
         </div>
+      </div>
+
+      <!-- ========== BOOST PROGRESS (NUET Boost прогресс-бақылау) ========== -->
+      <div class="page" id="page-boostProgress">
+        <div class="page-header">
+          <div><div class="page-title">НУЕТ Буст прогресі</div><div class="page-subtitle" id="bpSubtitle">Топ пен оқушы бойынша Math/Crit прогресі</div></div>
+          <button class="btn btn-ghost btn-sm" id="bpBackBtn" style="display:none" onclick="bpGoBack()">← Артқа</button>
+        </div>
+
+        <div id="bpBreadcrumb" style="display:none;font-size:13px;color:var(--text2);margin-bottom:12px"></div>
+
+        <div id="bpKpiWrap" class="dir-admin" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px"></div>
+
+        <div id="bpBody"><div class="loading"><div class="spinner"></div>Жүктелуде...</div></div>
       </div>
 
       <!-- ========== PARENT REPORTS ========== -->
@@ -2089,6 +2104,272 @@ async function boostHwGrade(subId){
 }
 
 // ================================================================
+// BOOST PROGRESS (директор/мұғалім үшін НУЕТ Буст прогресс-бақылау)
+// ================================================================
+// Прогресс формуласы (топтармен келісілген): lesson_progress = (пост-тест% + тақ.тест/ҮЖ(тест)% + файл/мәтін ҮЖ баға%) / 3
+// Видео бөлек трек емес — boost_postvideo_results жазбасы болса, видео қаралды деп есептеледі.
+let bpView = 'cohorts';         // 'cohorts' | 'students' | 'detail'
+let bpTeacherScope = null;      // director/admin үшін null (шектеусіз), teacher үшін {cohortId: ['math','ct']}
+let bpCohorts = [];             // {id,name,studentCount,progress}
+let bpCurrentCohort = null;
+let bpStudents = [];            // {id,name,progress}
+let bpCurrentStudent = null;
+let bpActiveTab = 'math';
+
+function bpPct(score, total){ return (total > 0) ? Math.round((score / total) * 100) : null; }
+
+async function renderBoostProgress(){
+  bpView = 'cohorts'; bpCurrentCohort = null; bpCurrentStudent = null;
+  document.getElementById('bpBackBtn').style.display = 'none';
+  document.getElementById('bpBreadcrumb').style.display = 'none';
+  document.getElementById('bpBody').innerHTML = '<div class="loading"><div class="spinner"></div>Жүктелуде...</div>';
+
+  const isDirectorLike = currentUser?.role === 'director' || currentUser?.role === 'admin';
+  document.getElementById('bpKpiWrap').style.display = isDirectorLike ? '' : 'none';
+
+  try{
+    // Мұғалім болса — тек математика/crit телефоны сәйкес топтарды анықтаймыз
+    bpTeacherScope = null;
+    if(!isDirectorLike){
+      const phone = currentUser?.login;
+      const { data, error } = await sbMock.from('boost_cohorts')
+        .select('id,name_kz,name_ru,status,math_teacher_phone,ct_teacher_phone')
+        .eq('status','active')
+        .or(`math_teacher_phone.eq.${phone},ct_teacher_phone.eq.${phone}`);
+      if(error) throw error;
+      bpTeacherScope = {};
+      (data || []).forEach(c => {
+        bpTeacherScope[c.id] = [
+          ...(c.math_teacher_phone === phone ? ['math'] : []),
+          ...(c.ct_teacher_phone === phone ? ['ct'] : [])
+        ];
+      });
+    }
+
+    const cohortQuery = sbMock.from('boost_cohorts').select('id,name_kz,name_ru,status').eq('status','active');
+    const { data: cohortsRaw, error: cErr } = bpTeacherScope
+      ? await cohortQuery.in('id', Object.keys(bpTeacherScope))
+      : await cohortQuery;
+    if(cErr) throw cErr;
+
+    if(!cohortsRaw || !cohortsRaw.length){
+      document.getElementById('bpKpiWrap').innerHTML = '';
+      document.getElementById('bpBody').innerHTML = '<div class="empty-state"><div class="empty-icon">🚀</div><p>Топтар табылмады</p></div>';
+      return;
+    }
+
+    const cohortIds = cohortsRaw.map(c => c.id);
+    const { data: enrolls } = await sbMock.from('boost_enrollments').select('user_id,cohort_id').in('cohort_id', cohortIds);
+
+    // Тексерілмеген ҮЖ саны — sequential сұраныс (екі деңгейлі embedded filter сенімсіз болғандықтан)
+    let pendingReview = 0;
+    if(isDirectorLike || true){
+      const { data: lsnAll } = await sbMock.from('boost_lessons').select('id').in('cohort_id', cohortIds);
+      const lsnIds = (lsnAll||[]).map(l=>l.id);
+      if(lsnIds.length){
+        const { data: hwAll } = await sbMock.from('boost_homework').select('id').in('lesson_id', lsnIds);
+        const hwIds = (hwAll||[]).map(h=>h.id);
+        if(hwIds.length){
+          const { count } = await sbMock.from('boost_homework_submissions').select('id', {count:'exact', head:true}).in('homework_id', hwIds).neq('status','graded');
+          pendingReview = count || 0;
+        }
+      }
+    }
+
+    const studentsByCohort = {};
+    (enrolls || []).forEach(e => { (studentsByCohort[e.cohort_id] ||= new Set()).add(e.user_id); });
+
+    bpCohorts = [];
+    for(const c of cohortsRaw){
+      const studentIds = Array.from(studentsByCohort[c.id] || []);
+      const progress = await bpCohortAvgProgress(c.id, studentIds);
+      bpCohorts.push({
+        id: c.id, name: c.name_kz || c.name_ru || '—',
+        studentCount: studentIds.length, progress
+      });
+    }
+
+    // KPI (тек директор/админ)
+    if(isDirectorLike){
+      const totalStudents = new Set((enrolls||[]).map(e=>e.user_id)).size;
+      const avgProgress = bpCohorts.length ? Math.round(bpCohorts.reduce((s,c)=>s+(c.progress||0),0) / bpCohorts.length) : 0;
+      document.getElementById('bpKpiWrap').innerHTML = `
+        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Барлық оқушылар</div><div class="font-bold" style="font-size:22px">${totalStudents}</div></div>
+        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Белсенді топтар</div><div class="font-bold" style="font-size:22px">${bpCohorts.length}</div></div>
+        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Тексерілмеген ҮЖ</div><div class="font-bold" style="font-size:22px;color:var(--red)">${pendingReview}</div></div>
+        <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Орташа прогресс</div><div class="font-bold" style="font-size:22px">${avgProgress}%</div></div>`;
+    }
+
+    bpRenderCohortsList();
+  }catch(e){
+    console.error('renderBoostProgress', e);
+    document.getElementById('bpBody').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Жүктеу кезінде қате шықты</p></div>';
+  }
+}
+
+function bpProgressColor(p){ return p >= 70 ? 'var(--green)' : p >= 50 ? 'var(--yellow)' : 'var(--red)'; }
+
+function bpRenderCohortsList(){
+  bpView = 'cohorts';
+  document.getElementById('bpBackBtn').style.display = 'none';
+  document.getElementById('bpBreadcrumb').style.display = 'none';
+  const rows = bpCohorts.map(c => `
+    <div onclick="bpOpenCohort('${c.id}')" style="display:grid;grid-template-columns:1.4fr 1fr 1.3fr 24px;gap:8px;padding:12px 14px;align-items:center;cursor:pointer;border-top:1px solid var(--border)">
+      <span class="font-bold">${boostHwEsc(c.name)}</span>
+      <span class="text-muted text-sm">${c.studentCount} оқушы</span>
+      <span style="background:var(--surface2);border-radius:6px;height:6px;overflow:hidden;display:block"><span style="display:block;height:100%;width:${c.progress}%;background:${bpProgressColor(c.progress)}"></span></span>
+      <span class="text-muted">›</span>
+    </div>`).join('');
+  document.getElementById('bpBody').innerHTML = `<div class="card" style="padding:0;overflow:hidden">
+    <div style="display:grid;grid-template-columns:1.4fr 1fr 1.3fr 24px;gap:8px;padding:10px 14px;background:var(--surface2);font-size:12px" class="text-muted">
+      <span>Топ</span><span>Оқушы</span><span>Прогресс</span><span></span>
+    </div>${rows}</div>`;
+}
+
+async function bpOpenCohort(cohortId){
+  bpCurrentCohort = bpCohorts.find(c => c.id === cohortId);
+  if(!bpCurrentCohort) return;
+  bpView = 'students';
+  document.getElementById('bpBackBtn').style.display = '';
+  document.getElementById('bpBreadcrumb').style.display = '';
+  document.getElementById('bpBreadcrumb').innerHTML = `Топтар / <b>${boostHwEsc(bpCurrentCohort.name)}</b>`;
+  document.getElementById('bpBody').innerHTML = '<div class="loading"><div class="spinner"></div>Жүктелуде...</div>';
+
+  const { data: enrolls } = await sbMock.from('boost_enrollments')
+    .select('user_id,student:user_id(id,name,phone)').eq('cohort_id', cohortId);
+
+  bpStudents = [];
+  for(const e of (enrolls || [])){
+    const progress = await bpCohortAvgProgress(cohortId, [e.user_id]);
+    bpStudents.push({ id: e.user_id, name: (e.student && e.student.name) || '—', progress });
+  }
+  bpStudents.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+
+  const rows = bpStudents.map(s => {
+    const initials = (s.name||'—').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    return `<div onclick="bpOpenStudent('${s.id}')" style="display:grid;grid-template-columns:32px 1.3fr 1fr 24px;gap:10px;padding:10px 14px;align-items:center;cursor:pointer;border-top:1px solid var(--border)">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initials}</div>
+      <span class="font-bold">${boostHwEsc(s.name)}</span>
+      <span style="color:${bpProgressColor(s.progress)}">${s.progress}%</span>
+      <span class="text-muted">›</span>
+    </div>`;
+  }).join('') || '<div class="empty-state"><div class="empty-icon">👩‍🎓</div><p>Оқушылар жоқ</p></div>';
+
+  document.getElementById('bpBody').innerHTML = `<div class="card" style="padding:0;overflow:hidden">${rows}</div>`;
+}
+
+async function bpOpenStudent(userId){
+  bpCurrentStudent = bpStudents.find(s => s.id === userId);
+  if(!bpCurrentStudent || !bpCurrentCohort) return;
+  bpView = 'detail'; bpActiveTab = 'math';
+  document.getElementById('bpBreadcrumb').innerHTML = `Топтар / ${boostHwEsc(bpCurrentCohort.name)} / <b>${boostHwEsc(bpCurrentStudent.name)}</b>`;
+  document.getElementById('bpBody').innerHTML = '<div class="loading"><div class="spinner"></div>Жүктелуде...</div>';
+
+  const [mathData, critData] = await Promise.all([
+    bpStudentSubjectDetail(bpCurrentCohort.id, userId, 'math'),
+    bpStudentSubjectDetail(bpCurrentCohort.id, userId, 'ct')
+  ]);
+  bpDetailCache = { math: mathData, ct: critData };
+  bpRenderDetail();
+}
+
+let bpDetailCache = { math: null, ct: null };
+
+function bpRenderDetail(){
+  const canMath = !bpTeacherScope || (bpTeacherScope[bpCurrentCohort.id] || []).includes('math');
+  const canCrit = !bpTeacherScope || (bpTeacherScope[bpCurrentCohort.id] || []).includes('ct');
+  const d = bpDetailCache[bpActiveTab === 'math' ? 'math' : 'ct'];
+  const rows = (d?.lessons || []).map(l => `
+    <div style="display:grid;grid-template-columns:1.5fr 0.6fr 0.9fr 0.9fr 1.1fr;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:13px;align-items:center">
+      <span>${boostHwEsc(l.title)}</span>
+      <span>${l.postTest !== null ? '✅' : '❌'}</span>
+      <span>${l.postTest !== null ? l.postTest+'%' : '—'}</span>
+      <span>${l.topic !== null ? l.topic+'%' : '—'}</span>
+      <span style="color:${l.gradedLabel==='Тексеруде'?'var(--yellow)':(l.gradedLabel==='Жіберілмеген'?'var(--text2)':'var(--green)')}">${boostHwEsc(l.gradedLabel)}</span>
+    </div>`).join('') || '<div class="empty-state"><div class="empty-icon">📚</div><p>Сабақтар жоқ</p></div>';
+
+  const topicCol = bpActiveTab === 'math' ? 'Тақ. тест' : 'ҮЖ (тест)';
+  const gradedCol = bpActiveTab === 'math' ? 'ҮЖ (файл)' : 'Тақ. мәтін';
+
+  document.getElementById('bpBody').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button onclick="bpSetTab('math')" ${!canMath?'disabled':''} class="btn ${bpActiveTab==='math'?'btn-blue':'btn-ghost'} btn-sm" style="flex:1;text-align:left">Math<div style="font-size:18px;font-weight:700">${bpDetailCache.math?.avg ?? '—'}%</div></button>
+      <button onclick="bpSetTab('ct')" ${!canCrit?'disabled':''} class="btn ${bpActiveTab==='ct'?'btn-blue':'btn-ghost'} btn-sm" style="flex:1;text-align:left">Crit<div style="font-size:18px;font-weight:700">${bpDetailCache.ct?.avg ?? '—'}%</div></button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1.5fr 0.6fr 0.9fr 0.9fr 1.1fr;gap:8px;padding:10px 14px;background:var(--surface2);font-size:12px" class="text-muted">
+        <span>Тақырып</span><span>Видео</span><span>Пост-тест</span><span>${topicCol}</span><span>${gradedCol}</span>
+      </div>${rows}
+    </div>`;
+}
+
+function bpSetTab(tab){ bpActiveTab = tab; bpRenderDetail(); }
+
+function bpGoBack(){
+  if(bpView === 'detail') bpOpenCohort(bpCurrentCohort.id);
+  else if(bpView === 'students') bpRenderCohortsList();
+}
+
+// Топтың орташа прогресі: berilgen user_id тізімі бойынша (Math + Crit екеуінің орташасы)
+async function bpCohortAvgProgress(cohortId, userIds){
+  if(!userIds.length) return 0;
+  let total = 0, count = 0;
+  for(const uid of userIds){
+    const [m, c] = await Promise.all([
+      bpStudentSubjectDetail(cohortId, uid, 'math'),
+      bpStudentSubjectDetail(cohortId, uid, 'ct')
+    ]);
+    if(m.avg !== null){ total += m.avg; count++; }
+    if(c.avg !== null){ total += c.avg; count++; }
+  }
+  return count ? Math.round(total / count) : 0;
+}
+
+// Бір оқушының бір пән бойынша тақырыптық прогресі (lesson_progress = (пост-тест%+тақ.тест/ҮЖ(тест)%+файл/мәтін ҮЖ баға%)/3)
+async function bpStudentSubjectDetail(cohortId, userId, subject){
+  const { data: lessons } = await sbMock.from('boost_lessons')
+    .select('id,title_kz,title_ru,subject').eq('cohort_id', cohortId).in('subject', [subject,'both']).order('order_num');
+  if(!lessons || !lessons.length) return { avg: null, lessons: [] };
+  const lessonIds = lessons.map(l => l.id);
+
+  const [{ data: pv }, { data: tt }, { data: hr }, { data: hws }] = await Promise.all([
+    sbMock.from('boost_postvideo_results').select('lesson_id,score,total').eq('user_id', userId).in('lesson_id', lessonIds),
+    sbMock.from('boost_test_results').select('lesson_id,score,total').eq('user_id', userId).in('lesson_id', lessonIds),
+    sbMock.from('boost_homework_results').select('lesson_id,score,total').eq('user_id', userId).in('lesson_id', lessonIds),
+    sbMock.from('boost_homework').select('id,lesson_id').in('lesson_id', lessonIds)
+  ]);
+  const hwIds = (hws || []).map(h => h.id);
+  const hwByLesson = {}; (hws || []).forEach(h => hwByLesson[h.lesson_id] = h.id);
+  let subs = [];
+  if(hwIds.length){
+    const { data } = await sbMock.from('boost_homework_submissions').select('homework_id,status,grade').eq('user_id', userId).in('homework_id', hwIds);
+    subs = data || [];
+  }
+  const subByHw = {}; subs.forEach(s => subByHw[s.homework_id] = s);
+  const pvByLesson = {}; (pv||[]).forEach(r => pvByLesson[r.lesson_id] = r);
+  const ttByLesson = {}; (tt||[]).forEach(r => ttByLesson[r.lesson_id] = r);
+  const hrByLesson = {}; (hr||[]).forEach(r => hrByLesson[r.lesson_id] = r);
+
+  const rows = []; let sum = 0, cnt = 0;
+  for(const l of lessons){
+    const postR = pvByLesson[l.id]; const postPct = postR ? bpPct(postR.score, postR.total) : null;
+    const topicR = subject === 'math' ? ttByLesson[l.id] : hrByLesson[l.id];
+    const topicPct = topicR ? bpPct(topicR.score, topicR.total) : null;
+    const hwId = hwByLesson[l.id]; const sub = hwId ? subByHw[hwId] : null;
+    let gradedPct = null, gradedLabel = 'Жіберілмеген';
+    if(sub){
+      if(sub.status === 'graded'){ gradedPct = sub.grade != null ? Math.round((sub.grade/10)*100) : null; gradedLabel = sub.grade+'/10'; }
+      else { gradedLabel = 'Тексеруде'; gradedPct = null; }
+    }
+    const parts = [postPct, topicPct, gradedPct].filter(v => v !== null);
+    const lp = parts.length ? Math.round(parts.reduce((a,b)=>a+b,0)/3) : null; // /3 — үшеуі де болмаса төмен көрсетеді
+    if(lp !== null){ sum += lp; cnt++; }
+    rows.push({ title: l.title_kz || l.title_ru || '—', postTest: postPct, topic: topicPct, gradedLabel });
+  }
+  return { avg: cnt ? Math.round(sum / cnt) : null, lessons: rows };
+}
+
+// ================================================================
 // AUTH
 // ================================================================
 let pendingUser = null;   // логин+пароль тексерілген, тек Telegram байланысы жоқ қолданушы
@@ -2525,7 +2806,7 @@ function showPage(name, el){
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
     payments:()=>{renderPayments();switchSpSubTab(spActiveSubTab);}, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
     reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM,
-    'parent-reports':renderParentReports, boostHw:renderBoostHomework
+    'parent-reports':renderParentReports, boostHw:renderBoostHomework, boostProgress:renderBoostProgress
   };
   renders[name]?.();
 }
