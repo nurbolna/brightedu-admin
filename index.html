@@ -3193,8 +3193,11 @@ function updateBadges(){
   const total=overdue+pending;
   const bd=document.getElementById('badgeDash');
   const bp=document.getElementById('badgePay');
-  if(total>0){bd.textContent=total;bd.classList.remove('hidden');}else bd.classList.add('hidden');
-  if(overdue>0){bp.textContent=overdue;bp.classList.remove('hidden');}else bp.classList.add('hidden');
+  // Мұғалімге қаржылық ақпарат (төлем мерзімі өткен/күтуде) көрінбеуі керек,
+  // сондықтан Dashboard-тағы бұл значок тек директор/админ үшін көрсетіледі.
+  const isTeacher = currentUser?.role==='teacher';
+  if(!isTeacher && total>0){bd.textContent=total;bd.classList.remove('hidden');}else bd.classList.add('hidden');
+  if(!isTeacher && overdue>0){bp.textContent=overdue;bp.classList.remove('hidden');}else bp.classList.add('hidden');
 
   const bt=document.getElementById('badgeTasks');
   if(bt){
