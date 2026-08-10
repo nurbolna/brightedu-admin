@@ -1274,7 +1274,7 @@ details[open] summary::before{content:'▾ '}
     <div class="form-group"><label>Группалар (бірнешеуін таңдауға болады)</label><div id="studentGroupsChecks" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface2);display:flex;flex-direction:column;gap:8px"></div></div>
     <div class="form-group"><label>Келесі төлем күні (🎯 НУЕТ / пакеттік)</label><input type="date" id="studentNextPayDate" /></div>
     <div class="form-group"><label>Келесі төлем күні (🌍 IELTS / ай сайынғы)</label><input type="date" id="studentNextPayDateMonthly" /></div>
-    <div class="form-group"><label>Келісім сомасы — жалпы төлеуі керек (₸)</label><input type="number" id="studentContractAmount" placeholder="мыс. 590000" /></div>
+    <div class="form-group"><label>Келісім сомасы — тек 🎯 package курс үшін (мыс. НУЕТ), айлық (IELTS) курстарға қатысы жоқ (₸)</label><input type="number" id="studentContractAmount" placeholder="мыс. 590000" /></div>
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">👨‍👩‍👧 Ата-ана</div>
       <div class="form-row">
@@ -1606,7 +1606,7 @@ const TG_BOT_USERNAME = 'brightedu_staff_bot';
 let sb = null;
 let currentUser = null; // { email, role, name }
 let DATA = {
-  courses:[], teachers:[], groups:[], students:[], student_groups:[],
+  courses:[], teachers:[], groups:[], students:[], student_groups:[], student_contracts:[],
   lessons:[], payments:[],
   achievements:[], attendance:[], salary_logs:[], expenses:[],
   journal_entries:[], unit_econ_settings:[], tasks:[], directors:[], subtasks:[], leads:[], lead_disqual_reasons:[], parent_reports:[]
@@ -2898,6 +2898,7 @@ const LOAD_ALL_SPEC = [
   {key:'groups',    table:'groups',              order:{col:'created_at',asc:true}},
   {key:'students',  table:'students',            order:{col:'created_at',asc:true}},
   {key:'student_groups', table:'student_groups', order:{col:'created_at',asc:true}},
+  {key:'student_contracts', table:'student_contracts', order:{col:'created_at',asc:true}, fallback:[]},
   {key:'lessons',   table:'lessons',             order:{col:'created_at',asc:true}},
   {key:'payments',  table:'payments',            order:{col:'created_at',asc:true}},
   {key:'achievements', table:'achievements',     order:{col:'created_at',asc:true}},
@@ -3921,14 +3922,15 @@ function computeNextPayDateFieldsFromScratch(sId, excludePaymentId){
     .slice()
     .sort((a,b)=>(a.pay_date||'').localeCompare(b.pay_date||'')); // ескіден жаңаға қарай
   let pkgField=null, monField=null, pkgPaidSoFar=0;
-  const hasContract = s.contract_amount!=null && s.contract_amount!=='';
+  const hasContract = studentHasContract(sId);
+  const contractTotal = getStudentContractTotal(sId);
   remaining.forEach(p=>{
     const course=DATA.courses.find(c=>c.id===p.course_id);
     if(isMonthlyCourse(course)){
       monField=advance(monField, p.pay_date);
     } else {
       pkgPaidSoFar+=Number(p.amount||0);
-      const fullyPaid = hasContract && pkgPaidSoFar>=Number(s.contract_amount);
+      const fullyPaid = hasContract && pkgPaidSoFar>=contractTotal;
       pkgField = fullyPaid ? null : advance(pkgField, p.pay_date);
     }
   });
@@ -4615,7 +4617,11 @@ function openStudentModal(s=null){
   document.getElementById('studentNote').value=s?.note||'';
   document.getElementById('studentNextPayDate').value=s?.next_pay_date_package||'';
   document.getElementById('studentNextPayDateMonthly').value=s?.next_pay_date_monthly||'';
-  document.getElementById('studentContractAmount').value=(s?.contract_amount??'')===null?'':(s?.contract_amount??'');
+  // Келісім сомасы енді курс бойынша бөлек сақталады (student_contracts).
+  // Формада бір ғана өріс бар — оқушының қазіргі топтарындағы package
+  // курсқа (мыс. НУЕТ) сәйкес сома көрсетіледі/сақталады.
+  const pkgCourseId0 = s?.id ? (getStudentGroups(s.id).map(g=>g.course_id).find(cid=>isPackageCourse(DATA.courses.find(c=>c.id===cid)))||'') : '';
+  document.getElementById('studentContractAmount').value = pkgCourseId0!=='' ? (getContractForCourse(s.id, pkgCourseId0) ?? '') : '';
   document.getElementById('studentLeadSource').value=s?.lead_source||'';
   document.getElementById('studentSalesManager').value=s?.sales_manager||'';
   document.getElementById('studentMarketingNote').value=s?.marketing_note||'';
@@ -4635,7 +4641,7 @@ async function saveStudent(){
   const nextPkg=document.getElementById('studentNextPayDate').value||null;
   const nextMon=document.getElementById('studentNextPayDateMonthly').value||null;
   const nextGeneral=[nextPkg,nextMon].filter(Boolean).length?[nextPkg,nextMon].filter(Boolean).reduce((a,b)=>a<b?a:b):null;
-  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:nextGeneral,next_pay_date_package:nextPkg,next_pay_date_monthly:nextMon,lead_source:document.getElementById('studentLeadSource').value||null,sales_manager:document.getElementById('studentSalesManager').value||null,marketing_note:document.getElementById('studentMarketingNote').value||null,contract_amount:contractAmtRaw!==''?Number(contractAmtRaw):null};
+  const row={name,surname:document.getElementById('studentSurname').value,phone:document.getElementById('studentPhone').value,birth_date:document.getElementById('studentBirth').value||null,group_id:selectedGroupIds[0]||null,parent_name:document.getElementById('parentName').value,parent_phone:document.getElementById('parentPhone').value,note:document.getElementById('studentNote').value,next_pay_date:nextGeneral,next_pay_date_package:nextPkg,next_pay_date_monthly:nextMon,lead_source:document.getElementById('studentLeadSource').value||null,sales_manager:document.getElementById('studentSalesManager').value||null,marketing_note:document.getElementById('studentMarketingNote').value||null};
   let id=document.getElementById('studentId').value;
   if(id){
     await sb.from('students').update(row).eq('id',id);
@@ -4660,6 +4666,22 @@ async function saveStudent(){
     }
     if(toAdd.length){
       await sb.from('student_groups').insert(toAdd.map(gId=>({student_id:id,group_id:gId})));
+    }
+    // Келісім сомасы (тек package курс, мыс. НУЕТ) — student_contracts кестесіне,
+    // ЖАҢА таңдалған топтардың package курсына байлап сақталады. Айлық (monthly,
+    // мыс. IELTS) курстарға келісім сомасы қажет емес — солар осында есептелмейді.
+    const selectedCourseIds=[...new Set(selectedGroupIds.map(gId=>DATA.groups.find(g=>g.id===gId)?.course_id).filter(Boolean))];
+    const pkgCourseIds=selectedCourseIds.filter(cId=>isPackageCourse(DATA.courses.find(c=>c.id===cId)));
+    if(pkgCourseIds.length>1){
+      alert('⚠️ Ескерту: бұл оқушыда бірнеше package курс бар. Келісім сомасы тек біріншісіне («'+(DATA.courses.find(c=>c.id===pkgCourseIds[0])?.name||'')+'») сақталады.');
+    }
+    const targetCourseId=pkgCourseIds[0]||null;
+    if(targetCourseId){
+      if(contractAmtRaw!==''){
+        await sb.from('student_contracts').upsert({student_id:id, course_id:targetCourseId, amount:Number(contractAmtRaw)}, {onConflict:'student_id,course_id'});
+      } else {
+        await sb.from('student_contracts').delete().eq('student_id',id).eq('course_id',targetCourseId);
+      }
     }
   }
   closeModal('studentModal'); await loadAll(); renderStudents(); toast('✅ Сақталды!');
@@ -4831,10 +4853,11 @@ function showStudentDetail(id){
       <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Курстар</div><div class="font-bold">${cNames}</div></div>
       ${role!=='admin'?`<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келесі төлем</div><div class="font-bold">${s.next_pay_date||'—'}</div>${payStatusBadge(s.next_pay_date)}</div>`:'<div></div>'}
       ${role==='director'?(()=>{
-        const totalPaid=DATA.payments.filter(p=>p.student_id===s.id).reduce((sum,p)=>sum+Number(p.amount||0),0);
-        const hasContract=s.contract_amount!=null && s.contract_amount!=='';
-        const debt=hasContract?Number(s.contract_amount)-totalPaid:null;
-        return `<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келісім сомасы</div><div class="font-bold">${hasContract?fmt(s.contract_amount)+'₸':'Белгіленбеген'}</div></div>
+        const hasContract=studentHasContract(s.id);
+        const contractTotal=getStudentContractTotal(s.id);
+        const totalPaid=getPackagePaidTotal(s.id); // тек package (мыс. НУЕТ) курстарға тиесілі төлемдер — IELTS сияқты monthly төлемдер бұған кірмейді
+        const debt=hasContract?contractTotal-totalPaid:null;
+        return `<div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Келісім сомасы</div><div class="font-bold">${hasContract?fmt(contractTotal)+'₸':'Белгіленбеген'}</div></div>
         <div class="card" style="margin:0;padding:12px"><div class="text-muted text-sm">Қалған борыш</div><div class="font-bold" style="color:${!hasContract?'var(--text2)':(debt>0?'var(--red)':'var(--green)')}">${!hasContract?'—':fmt(Math.round(debt))+'₸'}</div></div>`;
       })():''}
     </div>
@@ -5303,6 +5326,31 @@ function renderPayments(){
 // ================================================================
 function isPackageCourse(course){ return (course?.payment_type||'package')!=='monthly'; }
 function isMonthlyCourse(course){ return course?.payment_type==='monthly'; }
+// ================================================================
+// ЖЕКЕ КЕЛІСІМ СОМАСЫ (student_contracts кестесі, курс бойынша бөлек)
+// Бұрын students.contract_amount бір ғана жалпы сан болатын, сондықтан
+// бір оқушының НУЕТ (package) пен IELTS (monthly) төлемдері араласып,
+// борыш қате есептелетін (Арманның мәселесі). Енді әр package курсқа
+// бөлек келісім сомасы сақталады, тек сол курстың нақты төлемдерімен
+// салыстырылады.
+// ================================================================
+// Оқушының package курс(тар)ы бойынша БАРЛЫҚ жазылған келісім соммаларының
+// қосындысы (қазіргі деректе әр оқушыда 1-ақ package курс бар, бірақ
+// болашақта бірнешеу болса да дұрыс қосынды шығады).
+function getStudentContractTotal(sId){
+  const packageCourseIds=new Set(DATA.courses.filter(isPackageCourse).map(c=>c.id));
+  return DATA.student_contracts.filter(sc=>sc.student_id===sId && packageCourseIds.has(sc.course_id))
+    .reduce((sum,sc)=>sum+Number(sc.amount||0),0);
+}
+function studentHasContract(sId){
+  const packageCourseIds=new Set(DATA.courses.filter(isPackageCourse).map(c=>c.id));
+  return DATA.student_contracts.some(sc=>sc.student_id===sId && packageCourseIds.has(sc.course_id));
+}
+// Нақты бір package курс үшін жазылған келісім сомасы (жоқ болса — null).
+function getContractForCourse(sId, courseId){
+  const row=DATA.student_contracts.find(sc=>sc.student_id===sId && sc.course_id===courseId);
+  return row?Number(row.amount):null;
+}
 // Оқушының пакеттік (мыс. НУЕТ) курс(тар)ы бойынша ҚАЗІРГІ (DATA.payments-тегі,
 // жаңа төлем енгізілгенге дейінгі) жалпы төленген сомасы.
 function getPackagePaidTotal(sId){
@@ -5314,16 +5362,17 @@ function getPackagePaidTotal(sId){
 // жабыла ма — соны алдын ала (DB-ге сұрамай) есептейді. loadAll() шақырылмай
 // тұрып, "жаңа төлем" сомасын қолмен қосамыз (DATA.payments әлі жаңармаған).
 function willPackageBeFullyPaid(sId, newCourseId, newAmount){
-  const s=DATA.students.find(x=>x.id===sId); if(!s) return false;
-  if(s.contract_amount==null || s.contract_amount==='') return false; // сома белгіленбесе — тексере алмаймыз
+  if(!studentHasContract(sId)) return false; // сома белгіленбесе — тексере алмаймыз
+  const contractTotal=getStudentContractTotal(sId);
   const newCourse=DATA.courses.find(c=>c.id===newCourseId);
   const newCounts = !newCourseId || isPackageCourse(newCourse); // course_id жоқ болса — бұрынғы дефолт бойынша package есептеледі
   const totalPaid=getPackagePaidTotal(sId) + (newCounts?Number(newAmount||0):0);
-  return totalPaid>=Number(s.contract_amount);
+  return totalPaid>=contractTotal;
 }
 function studentContractStatus(s, totalPaid){
-  if(s.contract_amount==null || s.contract_amount==='') return 'none';
-  const debt=Number(s.contract_amount)-totalPaid;
+  if(!studentHasContract(s.id)) return 'none';
+  const contractTotal=getStudentContractTotal(s.id);
+  const debt=contractTotal-totalPaid;
   if(debt<=0) return 'full';
   if(getPayStatus(s.next_pay_date_package)==='overdue') return 'overdue';
   return 'partial';
@@ -5376,10 +5425,11 @@ function renderNuetTab(){
     const pmts=DATA.payments.filter(p=>p.student_id===s.id && (packageCourseIds.has(p.course_id) || !p.course_id));
     const totalPaid=pmts.reduce((sum,p)=>sum+Number(p.amount||0),0);
     const totalNet=pmts.reduce((sum,p)=>sum+calcPaymentBreakdown(p.amount,p.pay_type,p.actual_commission).net,0);
-    const hasContract=s.contract_amount!=null && s.contract_amount!=='';
-    const debt=hasContract?Number(s.contract_amount)-totalPaid:null;
+    const hasContract=studentHasContract(s.id);
+    const contractTotal=getStudentContractTotal(s.id);
+    const debt=hasContract?contractTotal-totalPaid:null;
     const status=studentContractStatus(s,totalPaid);
-    return {s,sGroups,totalPaid,totalNet,hasContract,debt,status};
+    return {s,sGroups,totalPaid,totalNet,hasContract,contractTotal,debt,status};
   });
 
   let list=rows.filter(r=>{
@@ -5402,7 +5452,7 @@ function renderNuetTab(){
     const fullCnt=list.filter(r=>r.status==='full').length;
     const debtCnt=list.filter(r=>r.status==='partial'||r.status==='overdue').length;
     const pct=n=>total?Math.round(n/total*100):0;
-    const totalSold=list.reduce((sum,r)=>sum+(r.hasContract?Number(r.s.contract_amount):0),0);
+    const totalSold=list.reduce((sum,r)=>sum+(r.hasContract?r.contractTotal:0),0);
     const totalPaidAll=list.reduce((sum,r)=>sum+r.totalPaid,0);
     const totalOwed=list.reduce((sum,r)=>sum+(r.debt>0?r.debt:0),0);
     statsEl.innerHTML=
@@ -5415,14 +5465,14 @@ function renderNuetTab(){
   }
 
   tbody.innerHTML=list.map((r,i)=>{
-    const {s,sGroups,totalPaid,totalNet,hasContract,debt}=r;
+    const {s,sGroups,totalPaid,totalNet,hasContract,contractTotal,debt}=r;
     const gBadges=sGroups.length?sGroups.map(g=>`<span class="badge badge-blue">${g.name}</span>`).join(' '):'<span class="text-muted text-sm">—</span>';
     const debtCell=!hasContract?'<span class="text-muted">—</span>':(debt>0?`<span class="font-bold" style="color:var(--red)">${fmt(Math.round(debt))}₸</span>`:`<span class="font-bold" style="color:var(--green)">0₸</span>`);
     return`<tr>
       <td>${i+1}</td>
       <td><span class="font-bold" style="cursor:pointer;color:var(--accent)" onclick="showStudentDetail('${s.id}')">${s.name} ${s.surname||''}</span></td>
       <td>${gBadges}</td>
-      <td>${hasContract?fmt(s.contract_amount)+'₸':'<span class="text-muted text-sm">Белгіленбеген</span>'}</td>
+      <td>${hasContract?fmt(contractTotal)+'₸':'<span class="text-muted text-sm">Белгіленбеген</span>'}</td>
       <td class="font-bold" style="color:var(--green)">${fmt(totalPaid)}₸</td>
       <td class="text-sm text-muted" title="Комиссия/салық шегерілген">${fmt(Math.round(totalNet))}₸</td>
       <td>${debtCell}</td>
