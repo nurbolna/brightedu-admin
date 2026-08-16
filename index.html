@@ -6992,7 +6992,7 @@ async function sendKpToLeadParent(){
   if(!link){ alert('Ата-ана нөмірі де, Whatsapp та енгізілмеген'); return; }
   const code = await getOrCreateKpLink(leadId);
   if(!code){ toast('❌ КП сілтемесі жасалмады','error'); return; }
-  const kpUrl = 'https://kp.brightedu.kz/'+code;
+      const kpUrl = 'https://brightedu.kz/kp/'+code;
   const name = document.getElementById('leadName').value || '';
   const text = encodeURIComponent(`Сәлеметсіз бе! ${name?name+' үшін ':''}консультациядан кейінгі жеке ұсынысымызбен танысыңыз: ${kpUrl}`);
   window.open(link+'?text='+text,'_blank','noopener');
