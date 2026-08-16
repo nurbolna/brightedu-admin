@@ -1542,11 +1542,17 @@ details[open] summary::before{content:'▾ '}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Ата-ана аты</label><input type="text" id="leadParentName" /></div>
-      <div class="form-group"><label>Ата-ана нөмірі
-        <a href="#" onclick="event.preventDefault();openWaFromInput('leadParentPhone')" style="color:var(--green);font-weight:600;text-decoration:none;margin-left:6px">💬 Ашу</a>
-        <a href="#" onclick="event.preventDefault();sendKpToLeadParent()" style="color:var(--blue);font-weight:600;text-decoration:none;margin-left:6px" title="Консультациядан кейінгі жеке ұсынысты (КП) WhatsApp арқылы жібереді">🎯 КП жіберу</a>
-        <a href="#" onclick="event.preventDefault();refreshKpLink(document.getElementById('leadId').value)" style="color:var(--text2);font-weight:600;text-decoration:none;margin-left:6px" title="Бұрын жіберілген КП сілтемесінің 48 сағаттық мерзімін қайта бастайды">⏱ Мерзімін жаңарту</a>
-      </label><input type="text" id="leadParentPhone" /></div>
+      <div class="form-group">
+        <label style="display:flex;justify-content:space-between;align-items:center">
+          <span>Ата-ана нөмірі</span>
+          <span style="display:flex;gap:6px">
+            <button type="button" title="WhatsApp ашу" aria-label="WhatsApp ашу" onclick="openWaFromInput('leadParentPhone')" style="width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;border-radius:8px;border:1px solid #1DA05133;background:#1DA05114;cursor:pointer">💬</button>
+            <button type="button" title="Консультациядан кейінгі КП сілтемесін WhatsApp арқылы жібереді" aria-label="КП жіберу" onclick="sendKpToLeadParent()" style="width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;border-radius:8px;border:1px solid #3B82C433;background:#3B82C414;cursor:pointer">🎯</button>
+            <button type="button" title="Бұрын жіберілген КП сілтемесінің 48 сағаттық мерзімін қайта бастайды" aria-label="КП мерзімін жаңарту" onclick="refreshKpLink(document.getElementById('leadId').value)" style="width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer">⏱</button>
+          </span>
+        </label>
+        <input type="text" id="leadParentPhone" />
+      </div>
     </div>
     <div class="form-group"><label>Причина отказа</label><input type="text" id="leadRejectReason" placeholder="Отказ болса — себебі" /></div>
     <div class="form-group"><label>Ескертпе</label><textarea id="leadNote" rows="2"></textarea></div>
