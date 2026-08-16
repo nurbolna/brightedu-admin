@@ -1542,7 +1542,11 @@ details[open] summary::before{content:'▾ '}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Ата-ана аты</label><input type="text" id="leadParentName" /></div>
-      <div class="form-group"><label>Ата-ана нөмірі <a href="#" onclick="event.preventDefault();openWaFromInput('leadParentPhone')" style="color:var(--green);font-weight:600;text-decoration:none;margin-left:6px">💬 Ашу</a></label><input type="text" id="leadParentPhone" /></div>
+      <div class="form-group"><label>Ата-ана нөмірі
+        <a href="#" onclick="event.preventDefault();openWaFromInput('leadParentPhone')" style="color:var(--green);font-weight:600;text-decoration:none;margin-left:6px">💬 Ашу</a>
+        <a href="#" onclick="event.preventDefault();sendKpToLeadParent()" style="color:var(--blue);font-weight:600;text-decoration:none;margin-left:6px" title="Консультациядан кейінгі жеке ұсынысты (КП) WhatsApp арқылы жібереді">🎯 КП жіберу</a>
+        <a href="#" onclick="event.preventDefault();refreshKpLink(document.getElementById('leadId').value)" style="color:var(--text2);font-weight:600;text-decoration:none;margin-left:6px" title="Бұрын жіберілген КП сілтемесінің 48 сағаттық мерзімін қайта бастайды">⏱ Мерзімін жаңарту</a>
+      </label><input type="text" id="leadParentPhone" /></div>
     </div>
     <div class="form-group"><label>Причина отказа</label><input type="text" id="leadRejectReason" placeholder="Отказ болса — себебі" /></div>
     <div class="form-group"><label>Ескертпе</label><textarea id="leadNote" rows="2"></textarea></div>
@@ -6958,35 +6962,41 @@ async function copyParentLink(studentId){
 }
 
 // ===================== КП (консультациядан кейінгі ұсыныс) сілтемесі =====================
-// Ата-ана порталынан (parent_links) бөлек кесте — қауіпсіздік үшін: КП сілтемесі
-// сыртқа шығып кетсе де, ата-ана есеп бетіне (/p/) жол ашылмайды.
+// ЛИДТЕРГЕ арналған (leads кестесі) — жаңа, тегін консультациядан өткен, әлі төлем
+// жасамаған адамдарға жіберіледі. Ата-ана порталынан (parent_links, ақылы оқушыларға
+// арналған) бөлек кесте — қауіпсіздік үшін де, мақсаты бөлек болғаны үшін де.
 // Сілтеме жасалған сәттен 48 сағаттан кейін kp.brightedu.kz/<код> өз бетінше
 // жарамсыз болады (тексеру КП бетінің жағында, created_at бойынша).
-async function getOrCreateKpLink(studentId){
-  const {data:existing} = await sb.from('kp_links').select('short_code').eq('student_id',studentId).maybeSingle();
+async function getOrCreateKpLink(leadId){
+  const {data:existing} = await sb.from('kp_links').select('short_code').eq('lead_id',leadId).maybeSingle();
   if(existing) return existing.short_code;
   const code = Array.from({length:8},()=>'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random()*56)]).join('');
-  const {error} = await sb.from('kp_links').insert({student_id:studentId, short_code:code});
+  const {error} = await sb.from('kp_links').insert({lead_id:leadId, short_code:code});
   if(error){ console.error('kp_links insert error:', error); return null; }
   return code;
 }
 
-async function copyKpLink(studentId){
-  const code = await getOrCreateKpLink(studentId);
+// Лид карточкасында (leadModal) "Ата-ана нөмірі" өрісінің қасындағы "🎯 КП жіберу"
+// сілтемесі шақырады. Лидтің КП кодын жасайды/табады, WhatsApp-ты дайын хабарламамен ашады.
+async function sendKpToLeadParent(){
+  const leadId = document.getElementById('leadId').value;
+  if(!leadId){ alert('Алдымен лидті сақтаңыз, сосын КП жіберіңіз'); return; }
+  const phone = document.getElementById('leadParentPhone').value || document.getElementById('leadWhatsapp').value;
+  const link = waLink(phone);
+  if(!link){ alert('Ата-ана нөмірі де, Whatsapp та енгізілмеген'); return; }
+  const code = await getOrCreateKpLink(leadId);
   if(!code){ toast('❌ КП сілтемесі жасалмады','error'); return; }
-  const url = 'https://kp.brightedu.kz/'+code;
-  try{
-    await navigator.clipboard.writeText(url);
-    toast('🎯 КП сілтемесі көшірілді! (48 сағат жарамды)','success');
-  }catch(e){
-    prompt('КП сілтемесін көшіріңіз:', url);
-  }
+  const kpUrl = 'https://kp.brightedu.kz/'+code;
+  const name = document.getElementById('leadName').value || '';
+  const text = encodeURIComponent(`Сәлеметсіз бе! ${name?name+' үшін ':''}консультациядан кейінгі жеке ұсынысымызбен танысыңыз: ${kpUrl}`);
+  window.open(link+'?text='+text,'_blank','noopener');
+  toast('🎯 КП сілтемесі жасалды, WhatsApp ашылды (48 сағат жарамды)','success');
 }
 
 // Мерзімін жаңарту — 48 сағатты қайта бастайды (created_at-ты қазіргі уақытқа қалпына келтіреді).
-// Менеджер бұрын жіберген сілтеме "мерзімі өтті" болып қалса, осыны басып қайта жібере алады.
-async function refreshKpLink(studentId){
-  const {error} = await sb.from('kp_links').update({created_at:new Date().toISOString()}).eq('student_id',studentId);
+// Бұрын жіберілген сілтеме "мерзімі өтті" болып қалса, осыны шақырып қайта жіберуге болады.
+async function refreshKpLink(leadId){
+  const {error} = await sb.from('kp_links').update({created_at:new Date().toISOString()}).eq('lead_id',leadId);
   if(error){ toast('❌ Мерзім жаңартылмады','error'); return; }
   toast('⏱ Мерзім 48 сағатқа жаңартылды!','success');
 }
@@ -7072,8 +7082,6 @@ function renderParentReportsCurrent(){
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             ${waHref?`<a class="btn btn-ghost btn-sm" href="${waHref}" target="_blank" rel="noopener">💬 WhatsApp ашу</a>`:`<span class="text-sm text-muted">Ата-ана телефоны көрсетілмеген</span>`}
             <button class="btn btn-ghost btn-sm" onclick="copyParentLink('${s.id}')">🔗 Сілтеме көшіру</button>
-            <button class="btn btn-ghost btn-sm" onclick="copyKpLink('${s.id}')">🎯 КП сілтемесін көшіру</button>
-            <button class="btn btn-ghost btn-sm" onclick="refreshKpLink('${s.id}')" title="КП сілтемесінің 48 сағаттық мерзімін қайта бастайды">⏱ КП мерзімін жаңарту</button>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             ${btn('sent','✅ Жіберілді','btn-green')}
