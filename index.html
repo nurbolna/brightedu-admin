@@ -7873,6 +7873,21 @@ document.addEventListener('DOMContentLoaded', () => {
 .qual-reset{background:transparent;color:var(--text3);padding:4px 6px;font-size:13px}
 .qual-capi{font-size:11px;margin-left:2px;cursor:help}
 
+/* ---- Медиа ---- */
+.wa-media img,.wa-media video{max-width:260px;max-height:280px;border-radius:10px;display:block;cursor:pointer}
+.wa-media audio{width:250px;height:38px;display:block}
+.wa-file{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;
+  background:rgba(127,127,127,.15);text-decoration:none;color:inherit;max-width:250px}
+.wa-file b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wa-file span{font-size:11px;opacity:.7}
+.wa-cap{margin-top:5px}
+.wa-att{border:none;background:transparent;cursor:pointer;font-size:19px;padding:6px;
+  border-radius:8px;color:var(--text2)}
+.wa-att:hover{background:var(--surface2)}
+.wa-att.rec{color:#fff;background:var(--red);animation:wapulse 1s infinite}
+@keyframes wapulse{50%{opacity:.55}}
+.wa-upl{font-size:12px;color:var(--text2);padding:0 12px 8px}
+
 /* ---- Инбокс ---- */
 .wa-wrap{display:grid;grid-template-columns:330px 1fr;gap:14px;height:calc(100vh - 190px);min-height:460px}
 .wa-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
@@ -7957,6 +7972,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.toDateString() === y.toDateString()) return 'Кеше';
     return d.toLocaleDateString('kk-KZ', { day: 'numeric', month: 'long' });
   }
+  // ---------- медиа көпіршігі ----------
+  function mediaHtml(m) {
+    if (!m.media_url) {
+      // әлі жүктеліп жатыр немесе жүктелмеген
+      return m.media_id ? '<div class="wa-cap" style="opacity:.6">⏳ жүктелуде…</div>' : '';
+    }
+    var u = m.media_url, mime = m.media_mime || '', t = m.msg_type || '';
+    if (t === 'image' || t === 'sticker' || mime.indexOf('image/') === 0)
+      return '<div class="wa-media"><img src="' + u + '" onclick="window.open(\'' + u + '\')"></div>';
+    if (t === 'video' || mime.indexOf('video/') === 0)
+      return '<div class="wa-media"><video src="' + u + '" controls></video></div>';
+    if (t === 'audio' || mime.indexOf('audio/') === 0)
+      return '<div class="wa-media"><audio src="' + u + '" controls preload="metadata"></audio></div>';
+    var kb = m.media_size ? Math.round(m.media_size / 1024) + ' КБ' : '';
+    return '<a class="wa-file" href="' + u + '" target="_blank" rel="noopener">📄' +
+           '<span style="flex:1;min-width:0"><b style="display:block">' +
+           esc(m.media_filename || 'Файл') + '</b><span>' + kb + '</span></span></a>';
+  }
+
   function relTime(iso) {
     if (!iso) return '';
     var m = Math.floor((Date.now() - new Date(iso)) / 60000);
@@ -8204,7 +8238,14 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (m.status === 'delivered') meta += ' ✓';
         else if (m.status === 'failed') meta += ' ⚠️';
       }
-      return out + '<div class="wa-msg ' + cls + '">' + esc(m.body || '') +
+      var mh = mediaHtml(m);
+      var caption = m.body || '';
+      // медиа болса — жазуы астында, кішірек
+      var inner = mh
+        ? mh + (caption && !/^[📷🎥🎤🎵📄🩷]/.test(caption)
+                ? '<div class="wa-cap">' + esc(caption) + '</div>' : '')
+        : esc(caption);
+      return out + '<div class="wa-msg ' + cls + '">' + inner +
         '<div class="wa-meta">' + meta + '</div></div>';
     }).join('');
 
@@ -8227,7 +8268,14 @@ document.addEventListener('DOMContentLoaded', () => {
       (closed
         ? '<div class="wa-warn">⏳ Клиент 24 сағаттан бұрын жазған — WhatsApp ережесі бойынша ' +
           'еркін мәтін жіберуге болмайды. Тек бекітілген шаблон арқылы.</div>'
-        : '<div class="wa-composer">' +
+        : '<div id="waUpl" class="wa-upl"></div>' +
+          '<div class="wa-composer">' +
+            '<input type="file" id="waFile" style="display:none" ' +
+              'accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" ' +
+              'onchange="waPickFile(this)">' +
+            '<button class="wa-att" title="Файл тіркеу" ' +
+              'onclick="document.getElementById(\'waFile\').click()">📎</button>' +
+            '<button class="wa-att" id="waRecBtn" title="Дауыс жазу" onclick="waRec()">🎤</button>' +
             '<textarea id="waInput" placeholder="Жауап жазыңыз… (Enter — жіберу)" ' +
               'onkeydown="waKey(event)"></textarea>' +
             '<button class="btn btn-green" id="waSendBtn" onclick="sendWaReply()">➤</button>' +
@@ -8239,6 +8287,116 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.waKey = function (ev) {
     if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); sendWaReply(); }
+  };
+
+  // ---------- файлды Storage-ке жүктеп, WhatsApp-қа жіберу ----------
+  function waKind(mime, name) {
+    if (!mime) mime = '';
+    if (mime.indexOf('image/') === 0) return 'image';
+    if (mime.indexOf('video/') === 0) return 'video';
+    if (mime.indexOf('audio/') === 0) return 'audio';
+    return 'document';
+  }
+
+  function waStatus(txt) {
+    var el = document.getElementById('waUpl');
+    if (el) el.textContent = txt || '';
+  }
+
+  async function waUploadAndSend(file, kind) {
+    if (!waActiveId) return;
+    if (file.size > 25 * 1024 * 1024) {
+      toast('❌ Файл тым үлкен (25 МБ шек)', 'error'); return;
+    }
+    waStatus('⏳ Жүктелуде… ' + Math.round(file.size / 1024) + ' КБ');
+    try {
+      var ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+      var path = 'out/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+
+      var up = await sb.storage.from('wa-media')
+        .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+      if (up.error) throw new Error(up.error.message);
+
+      var pub = sb.storage.from('wa-media').getPublicUrl(path);
+      var link = pub.data.publicUrl;
+
+      waStatus('⏳ WhatsApp-қа жіберілуде…');
+      var res = await fetch(FN + 'wa-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-crm-secret': CRM_SECRET },
+        body: JSON.stringify({
+          lead_id: waActiveId,
+          kind: kind || waKind(file.type, file.name),
+          link: link,
+          filename: file.name,
+          mime: file.type,
+          caption: (document.getElementById('waInput') || {}).value || '',
+          sent_by: (currentUser && currentUser.name) || 'менеджер'
+        })
+      });
+      var out = await res.json();
+      if (!res.ok) throw new Error(out.message || out.error || ('HTTP ' + res.status));
+
+      var inp = document.getElementById('waInput');
+      if (inp) inp.value = '';
+      waStatus('');
+      await openWaChat(waActiveId);
+    } catch (e) {
+      waStatus('');
+      toast('❌ Жіберілмеді: ' + e.message, 'error');
+    }
+  }
+
+  window.waPickFile = function (input) {
+    var f = input.files && input.files[0];
+    input.value = '';
+    if (f) waUploadAndSend(f);
+  };
+
+  // ---------- микрофоннан дауыс жазу ----------
+  var waRecorder = null, waChunks = [];
+
+  window.waRec = async function () {
+    var btn = document.getElementById('waRecBtn');
+
+    if (waRecorder && waRecorder.state === 'recording') {
+      waRecorder.stop();
+      return;
+    }
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      toast('❌ Бұл браузер дауыс жазуды қолдамайды', 'error'); return;
+    }
+    try {
+      var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // WhatsApp қабылдайтын формат: ogg/opus немесе mp4/aac
+      var mime = ['audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+        .filter(function (t) { return MediaRecorder.isTypeSupported(t); })[0];
+
+      waChunks = [];
+      waRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      waRecorder.ondataavailable = function (e) { if (e.data.size) waChunks.push(e.data); };
+      waRecorder.onstop = function () {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        if (btn) { btn.classList.remove('rec'); btn.textContent = '🎤'; }
+        var type = waRecorder.mimeType || 'audio/webm';
+        var blob = new Blob(waChunks, { type: type });
+        if (blob.size < 1000) { toast('Жазба тым қысқа'); return; }
+
+        // WhatsApp webm-ді қабылдамайды — ондай жағдайда файл ретінде жіберіледі
+        var okForVoice = /ogg|mp4|mpeg|aac|amr/.test(type);
+        var ext = okForVoice ? (type.indexOf('ogg') > -1 ? 'ogg' : 'm4a') : 'webm';
+        var file = new File([blob], 'дауыс-' + Date.now() + '.' + ext, { type: type });
+        if (!okForVoice) {
+          toast('⚠️ Браузер ogg/mp4 жаза алмады — файл ретінде жіберіледі');
+        }
+        waUploadAndSend(file, okForVoice ? 'audio' : 'document');
+      };
+      waRecorder.start();
+      if (btn) { btn.classList.add('rec'); btn.textContent = '⏹'; }
+      waStatus('🔴 Жазылуда… тоқтату үшін қайта басыңыз');
+    } catch (e) {
+      toast('❌ Микрофонға рұқсат жоқ: ' + e.message, 'error');
+    }
   };
 
   window.sendWaReply = async function () {
