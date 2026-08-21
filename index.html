@@ -498,6 +498,7 @@ details[open] summary::before{content:'▾ '}
         <div class="nav-section dir-only">Жоспарлау</div>
         <div class="nav-item dir-only" onclick="showPage('tasks',this)">📋 Жоспарлау<span class="nav-badge hidden" id="badgeTasks">0</span></div>
         <div class="nav-item dir-only" onclick="showPage('crm',this)">🎯 CRM<span class="nav-badge hidden" id="badgeCRM">0</span></div>
+        <div class="nav-item dir-only" onclick="showPage('wa',this)">💬 WhatsApp<span class="nav-badge hidden" id="badgeWA">0</span></div>
         <div class="nav-section">Оқу</div>
         <div class="nav-item" onclick="showPage('study',this)">📚 Оқу процесі</div>
         <div class="nav-section">Журнал</div>
@@ -1098,6 +1099,8 @@ details[open] summary::before{content:'▾ '}
             <option value="paid ads">paid ads</option>
             <option value="google_forms">google_forms</option>
             <option value="bright_test">bright_test (mock сайт)</option>
+            <option value="instagram">instagram (жарнама)</option>
+            <option value="whatsapp_organic">whatsapp_organic</option>
           </select>
           <select id="crmFilterExpert" onchange="renderCRM()">
             <option value="">Эксперт — барлығы</option>
@@ -1113,6 +1116,35 @@ details[open] summary::before{content:'▾ '}
           <div class="table-wrap"><table><thead><tr><th>#</th><th>Аты</th><th>Whatsapp</th><th>Қала</th><th>Traffic</th><th>Status</th><th>Квал</th><th>Эксперт</th><th>Выручка</th><th>Күні</th><th>Әрекет</th></tr></thead><tbody id="crmTable"></tbody></table></div>
         </div>
         <div id="crmBoardView" class="crm-board" style="display:none"></div>
+      </div>
+
+      <!-- ========== WHATSAPP INBOX ========== -->
+      <div class="page dir-only" id="page-wa">
+        <div class="page-header">
+          <div>
+            <div class="page-title">WhatsApp</div>
+            <div class="page-subtitle">Жарнамадан келген диалогтар</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <select id="waFilter" onchange="renderWaList()">
+              <option value="all">Барлығы</option>
+              <option value="unread">Оқылмағандар</option>
+              <option value="new">Бағаланбағандар</option>
+              <option value="instagram">Жарнамадан</option>
+            </select>
+            <button class="btn btn-ghost" onclick="loadWaInbox(true)">🔄 Жаңарту</button>
+          </div>
+        </div>
+
+        <div class="wa-wrap">
+          <div class="wa-list" id="waList"></div>
+          <div class="wa-chat" id="waChat">
+            <div class="wa-empty">
+              <div style="font-size:44px">💬</div>
+              <p>Сол жақтан диалог таңдаңыз</p>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div><!-- /main -->
@@ -1516,6 +1548,8 @@ details[open] summary::before{content:'▾ '}
           <option value="paid ads">paid ads</option>
           <option value="google_forms">google_forms</option>
           <option value="bright_test">bright_test (mock сайт)</option>
+            <option value="instagram">instagram (жарнама)</option>
+            <option value="whatsapp_organic">whatsapp_organic</option>
         </select>
       </div>
     </div>
@@ -2844,7 +2878,8 @@ function showPage(name, el){
     students:renderStudents, teachers:renderTeachers, finance:()=>{renderFinance();renderFinancePayments();},
     payments:()=>{renderPayments();switchSpSubTab(spActiveSubTab);}, expenses:()=>{renderExpensesPage();renderExpenseSalaryTab();}, journal:renderJournal, analysis:renderAnalysis,
     reports:renderReports, 'unit-economics':renderUnitEconomics, tasks:renderTasks, crm:renderCRM,
-    'parent-reports':renderParentReports, boostHw:renderBoostHomework, boostProgress:renderBoostProgress
+    'parent-reports':renderParentReports, boostHw:renderBoostHomework, boostProgress:renderBoostProgress,
+    wa:renderWaInbox
   };
   renders[name]?.();
 }
@@ -5693,7 +5728,7 @@ function renderCrmTable(list){
       <td>${l.city||'—'}</td>
       <td>${l.traffic?`<span class="badge badge-blue">${l.traffic}</span>`:'—'}</td>
       <td><span class="badge badge-${crmStatusColor(l.status)}">${l.status||'—'}</span></td>
-      <td>${l.qual?`<span class="badge badge-${l.qual==='Квал'?'green':'red'}">${l.qual}</span>`:'—'}</td>
+      <td>${qualCell(l)}</td>
       <td>${l.expert||'—'}</td>
       <td class="font-bold" style="color:var(--green)">${l.revenue?fmt(l.revenue)+'₸':'—'}</td>
       <td class="text-muted text-sm">${(l.created_at||'').slice(0,10)}</td>
@@ -5716,6 +5751,7 @@ function renderCrmBoard(list){
             ${l.expert?`<div class="crm-card-row">👤 ${l.expert}</div>`:''}
             ${l.revenue?`<div class="crm-card-row crm-card-revenue">${fmt(l.revenue)}₸</div>`:''}
             ${l.consultation_at?`<div class="crm-card-row">📅 ${l.consultation_at.slice(0,16).replace('T',' ')}</div>`:''}
+            <div class="crm-card-row">${qualCell(l)}</div>
           </div>`).join('') || '<div class="text-muted text-sm" style="padding:8px 2px">Бос</div>'}
       </div>
     </div>`;
@@ -6992,7 +7028,7 @@ async function sendKpToLeadParent(){
   if(!link){ alert('Ата-ана нөмірі де, Whatsapp та енгізілмеген'); return; }
   const code = await getOrCreateKpLink(leadId);
   if(!code){ toast('❌ КП сілтемесі жасалмады','error'); return; }
-      const kpUrl = 'https://brightedu.kz/kp/'+code;
+  const kpUrl = 'https://kp.brightedu.kz/'+code;
   const name = document.getElementById('leadName').value || '';
   const text = encodeURIComponent(`Сәлеметсіз бе! ${name?name+' үшін ':''}консультациядан кейінгі жеке ұсынысымызбен танысыңыз: ${kpUrl}`);
   window.open(link+'?text='+text,'_blank','noopener');
@@ -7819,6 +7855,426 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
   </div>
 </div>
+
+<!-- ==========================================================================
+     WhatsApp инбокс + Квал/Неквал батырмалары
+     Bright Education басқару жүйесіне қосымша модуль.
+     Бұрынғы ешбір функцияны өзгертпейді.
+     ========================================================================== -->
+<style>
+/* ---- Квал батырмалары (CRM кестесінде де, инбоксте де) ---- */
+.qual-btns{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.qual-btn{border:none;cursor:pointer;border-radius:8px;padding:4px 9px;font-size:12px;
+  font-weight:700;font-family:inherit;line-height:1.4;transition:opacity .15s}
+.qual-btn:hover{opacity:.8}
+.qual-btn:disabled{opacity:.45;cursor:wait}
+.qual-yes{background:var(--green);color:#fff}
+.qual-no{background:var(--red);color:#fff}
+.qual-reset{background:transparent;color:var(--text3);padding:4px 6px;font-size:13px}
+.qual-capi{font-size:11px;margin-left:2px;cursor:help}
+
+/* ---- Инбокс ---- */
+.wa-wrap{display:grid;grid-template-columns:330px 1fr;gap:14px;height:calc(100vh - 190px);min-height:460px}
+.wa-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  overflow-y:auto}
+.wa-item{padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.wa-item:hover{background:var(--surface2)}
+.wa-item.active{background:rgba(79,142,247,0.10);border-left:3px solid var(--accent);padding-left:11px}
+.wa-item-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.wa-item-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa-item-time{font-size:11px;color:var(--text3);white-space:nowrap}
+.wa-item-prev{font-size:12px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa-item-tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.wa-unread{background:var(--green);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700}
+
+.wa-chat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  display:flex;flex-direction:column;overflow:hidden}
+.wa-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;color:var(--text3)}
+.wa-head{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.wa-head-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.wa-head-name{font-weight:800;font-size:15px}
+.wa-head-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.wa-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.wa-chip{background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:3px 9px;font-size:11px;color:var(--text2)}
+.wa-chip b{color:var(--text)}
+
+.wa-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
+.wa-msg{max-width:74%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.45;
+  white-space:pre-wrap;word-break:break-word}
+.wa-in{align-self:flex-start;background:var(--surface2);border-bottom-left-radius:4px}
+.wa-out{align-self:flex-end;background:#1f6f4a;color:#fff;border-bottom-right-radius:4px}
+.wa-out.wa-bot{background:#2f4a7a}
+.wa-meta{font-size:10px;opacity:.65;margin-top:4px;text-align:right}
+.wa-day{align-self:center;font-size:11px;color:var(--text3);background:var(--surface2);
+  padding:3px 12px;border-radius:10px;margin:6px 0}
+
+.wa-composer{border-top:1px solid var(--border);padding:10px;display:flex;gap:8px;align-items:flex-end}
+.wa-composer textarea{flex:1;resize:none;min-height:40px;max-height:130px;padding:10px 12px;
+  border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);
+  font-family:inherit;font-size:13px}
+.wa-warn{padding:10px 14px;background:rgba(251,146,60,.12);color:var(--orange);
+  font-size:12px;border-top:1px solid var(--border)}
+
+@media(max-width:900px){
+  .wa-wrap{grid-template-columns:1fr;height:auto}
+  .wa-list{max-height:280px}
+  .wa-chat{min-height:440px}
+}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  // ===================== БАПТАУЛАР =====================
+  var CRM_SECRET = '917b30c9358df30b343506987d3e831c7f6b0268e095ba89';   // Supabase secret-пен бірдей болуы керек
+  var FN = SB_URL + '/functions/v1/';
+  // =====================================================
+
+  var waLeads = [];        // WhatsApp диалогы бар лидтер
+  var waMsgs = [];         // ашық тұрған диалогтың хабарламалары
+  var waActiveId = null;
+  var waSubscribed = false;
+
+  // ---------- көмекшілер ----------
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function hhmm(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function dayLabel(iso) {
+    var d = new Date(iso), t = new Date();
+    var same = d.toDateString() === t.toDateString();
+    if (same) return 'Бүгін';
+    var y = new Date(t.getTime() - 864e5);
+    if (d.toDateString() === y.toDateString()) return 'Кеше';
+    return d.toLocaleDateString('kk-KZ', { day: 'numeric', month: 'long' });
+  }
+  function relTime(iso) {
+    if (!iso) return '';
+    var m = Math.floor((Date.now() - new Date(iso)) / 60000);
+    if (m < 1) return 'қазір';
+    if (m < 60) return m + ' мин';
+    if (m < 1440) return Math.floor(m / 60) + ' сағ';
+    return Math.floor(m / 1440) + ' күн';
+  }
+
+  // ==========================================================
+  // Квал / Неквал
+  // ==========================================================
+  window.qualCell = function (l) {
+    if (l.qual === 'Квал' || l.qual === 'Неквал') {
+      var isQ = l.qual === 'Квал', capi = '';
+      if (isQ) {
+        capi = l.capi_qual_sent_at
+          ? '<span class="qual-capi" title="Facebook-ке жіберілді">📤</span>'
+          : (l.capi_last_error
+            ? '<span class="qual-capi" title="Facebook қатесі: ' +
+              esc(String(l.capi_last_error).slice(0, 200)) + '">⚠️</span>'
+            : '<span class="qual-capi" title="Facebook-ке әлі жіберілмеді">⏳</span>');
+      }
+      return '<span class="badge badge-' + (isQ ? 'green' : 'red') + '">' + l.qual + '</span>' + capi +
+        ' <button class="qual-btn qual-reset" title="Бағалауды алып тастау" ' +
+        'onclick="event.stopPropagation();setQual(\'' + l.id + '\',\'\')">↺</button>';
+    }
+    return '<div class="qual-btns">' +
+      '<button class="qual-btn qual-yes" onclick="event.stopPropagation();setQual(\'' + l.id + '\',\'Квал\')">✅ Квал</button>' +
+      '<button class="qual-btn qual-no" onclick="event.stopPropagation();setQual(\'' + l.id + '\',\'Неквал\')">❌ Неквал</button>' +
+      '</div>';
+  };
+
+  window.setQual = async function (leadId, qual) {
+    var lead = DATA.leads.find(function (x) { return x.id === leadId; });
+    if (!lead) return;
+    document.querySelectorAll('.qual-btn').forEach(function (b) { b.disabled = true; });
+
+    var prev = lead.qual;
+    lead.qual = qual;
+    refreshQualViews();
+
+    try {
+      var res = await fetch(FN + 'capi-qualify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-crm-secret': CRM_SECRET },
+        body: JSON.stringify({ lead_id: leadId, qual: qual, revenue: lead.revenue || 0 })
+      });
+      var out = await res.json();
+      if (!res.ok) throw new Error(out.error || ('HTTP ' + res.status));
+
+      if (qual === 'Квал') {
+        lead.capi_qual_sent_at = (out.capi === 'sent' || out.capi === 'already_sent')
+          ? new Date().toISOString() : null;
+        lead.capi_last_error = out.capi === 'failed' ? JSON.stringify(out.meta_response) : null;
+        toast(out.capi === 'sent' ? '✅ Квал · Facebook-ке жіберілді 📤'
+          : out.capi === 'already_sent' ? '✅ Квал · бұрын жіберілген'
+          : '⚠️ Квал сақталды, бірақ Facebook-ке жетпеді', out.capi === 'failed' ? 'error' : 'success');
+      } else if (qual === '') {
+        lead.capi_qual_sent_at = null; toast('↺ Бағалау алынды');
+      } else {
+        toast('❌ Неквал деп белгіленді');
+      }
+    } catch (e) {
+      lead.qual = prev;
+      toast('❌ Сақталмады: ' + e.message, 'error');
+    } finally {
+      refreshQualViews();
+      document.querySelectorAll('.qual-btn').forEach(function (b) { b.disabled = false; });
+    }
+  };
+
+  function refreshQualViews() {
+    if (document.getElementById('page-crm')?.classList.contains('active')) renderCRM();
+    if (document.getElementById('page-wa')?.classList.contains('active')) {
+      renderWaList(); if (waActiveId) renderWaChat();
+    }
+  }
+
+  // ==========================================================
+  // Инбокс: деректерді жүктеу
+  // ==========================================================
+  window.loadWaInbox = async function (showToast) {
+    try {
+      var r = await sb.from('leads').select('*')
+        .not('wa_id', 'is', null)
+        .order('last_message_at', { ascending: false })
+        .limit(300);
+      if (r.error) throw r.error;
+      waLeads = r.data || [];
+
+      // DATA.leads-ті де жаңартамыз — CRM табы сол массивпен жұмыс істейді
+      waLeads.forEach(function (l) {
+        var i = DATA.leads.findIndex(function (x) { return x.id === l.id; });
+        if (i > -1) DATA.leads[i] = l; else DATA.leads.unshift(l);
+      });
+
+      renderWaList();
+      updateWaBadge();
+      if (showToast) toast('🔄 Жаңартылды');
+      subscribeWa();
+    } catch (e) {
+      toast('❌ Инбокс жүктелмеді: ' + e.message, 'error');
+    }
+  };
+
+  function updateWaBadge() {
+    var n = waLeads.reduce(function (s, l) { return s + (l.unread_count || 0); }, 0);
+    var b = document.getElementById('badgeWA');
+    if (b) { b.textContent = n; b.classList.toggle('hidden', n === 0); }
+  }
+
+  /** Realtime — жаңа хабарлама келгенде инбокс өзі жаңарады */
+  function subscribeWa() {
+    if (waSubscribed) return;
+    waSubscribed = true;
+    try {
+      sb.channel('wa-inbox')
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'wa_messages' },
+          function (p) {
+            var m = p.new;
+            if (waActiveId && m.lead_id === waActiveId) {
+              if (!waMsgs.some(function (x) { return x.id === m.id; })) {
+                waMsgs.push(m); renderWaChat();
+              }
+            }
+            loadWaLeadRow(m.lead_id);
+          })
+        .subscribe();
+    } catch (e) { console.warn('realtime қосылмады', e); }
+  }
+
+  async function loadWaLeadRow(leadId) {
+    var r = await sb.from('leads').select('*').eq('id', leadId).maybeSingle();
+    if (r.error || !r.data) return;
+    var i = waLeads.findIndex(function (x) { return x.id === leadId; });
+    if (i > -1) waLeads[i] = r.data; else waLeads.unshift(r.data);
+    var j = DATA.leads.findIndex(function (x) { return x.id === leadId; });
+    if (j > -1) DATA.leads[j] = r.data; else DATA.leads.unshift(r.data);
+    waLeads.sort(function (a, b) {
+      return String(b.last_message_at || '').localeCompare(String(a.last_message_at || ''));
+    });
+    renderWaList(); updateWaBadge();
+  }
+
+  window.renderWaInbox = function () {
+    if (waLeads.length === 0) loadWaInbox(); else { renderWaList(); subscribeWa(); }
+  };
+
+  // ==========================================================
+  // Инбокс: диалог тізімі
+  // ==========================================================
+  window.renderWaList = function () {
+    var f = document.getElementById('waFilter')?.value || 'all';
+    var list = waLeads.filter(function (l) {
+      if (f === 'unread') return (l.unread_count || 0) > 0;
+      if (f === 'new') return !l.qual;
+      if (f === 'instagram') return !!l.ctwa_clid;
+      return true;
+    });
+
+    var el = document.getElementById('waList');
+    if (!el) return;
+    if (list.length === 0) {
+      el.innerHTML = '<div class="empty-state" style="padding:32px 12px">' +
+        '<div class="empty-icon">💬</div><p>Диалог жоқ</p></div>';
+      return;
+    }
+
+    el.innerHTML = list.map(function (l) {
+      var tags = '';
+      if (l.ctwa_clid) tags += '<span class="badge badge-blue">📣 жарнама</span>';
+      if (l.grade) tags += '<span class="badge badge-gray">' + esc(l.grade) + '</span>';
+      (l.auto_flags || []).forEach(function (fl) {
+        tags += '<span class="badge badge-orange">⚠️ ' + esc(fl) + '</span>';
+      });
+      if (l.qual) tags += '<span class="badge badge-' + (l.qual === 'Квал' ? 'green' : 'red') + '">' + l.qual + '</span>';
+
+      return '<div class="wa-item' + (l.id === waActiveId ? ' active' : '') + '" onclick="openWaChat(\'' + l.id + '\')">' +
+        '<div class="wa-item-top">' +
+          '<span class="wa-item-name">' + esc(l.name || l.wa_profile_name || l.whatsapp) + '</span>' +
+          '<span class="wa-item-time">' + relTime(l.last_message_at) + '</span>' +
+        '</div>' +
+        '<div class="wa-item-prev">' + esc(l.whatsapp || '') + '</div>' +
+        '<div class="wa-item-tags">' + tags +
+          ((l.unread_count || 0) > 0 ? '<span class="wa-unread">' + l.unread_count + '</span>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  };
+
+  // ==========================================================
+  // Инбокс: диалогты ашу
+  // ==========================================================
+  window.openWaChat = async function (leadId) {
+    waActiveId = leadId;
+    renderWaList();
+    document.getElementById('waChat').innerHTML =
+      '<div class="wa-empty"><p>Жүктелуде…</p></div>';
+
+    var r = await sb.from('wa_messages').select('*')
+      .eq('lead_id', leadId).order('created_at').limit(300);
+    if (r.error) { toast('❌ ' + r.error.message, 'error'); return; }
+    waMsgs = r.data || [];
+    renderWaChat();
+
+    // Оқылды деп белгілейміз
+    var lead = waLeads.find(function (x) { return x.id === leadId; });
+    if (lead && (lead.unread_count || 0) > 0) {
+      lead.unread_count = 0;
+      await sb.from('leads').update({ unread_count: 0 }).eq('id', leadId);
+      renderWaList(); updateWaBadge();
+    }
+  };
+
+  window.renderWaChat = function () {
+    var l = waLeads.find(function (x) { return x.id === waActiveId; });
+    if (!l) return;
+
+    var chips = [];
+    if (l.grade) chips.push('<span class="wa-chip">Сынып: <b>' + esc(l.grade) + '</b></span>');
+    if (l.city) chips.push('<span class="wa-chip">Қала: <b>' + esc(l.city) + '</b></span>');
+    if (l.target_exam) chips.push('<span class="wa-chip">Мақсат: <b>' + esc(l.target_exam) + '</b></span>');
+    if (l.ad_headline) chips.push('<span class="wa-chip">Жарнама: <b>' + esc(l.ad_headline) + '</b></span>');
+    if (l.ctwa_clid) chips.push('<span class="wa-chip">📣 <b>CTWA</b></span>');
+    (l.auto_flags || []).forEach(function (f) {
+      chips.push('<span class="wa-chip" style="border-color:var(--orange);color:var(--orange)">⚠️ ' + esc(f) + '</span>');
+    });
+
+    // 24 сағаттық терезе
+    var hrs = l.last_inbound_at ? (Date.now() - new Date(l.last_inbound_at)) / 3600000 : 999;
+    var closed = hrs > 24;
+
+    var lastDay = '';
+    var msgHtml = waMsgs.map(function (m) {
+      var out = '';
+      var d = dayLabel(m.wa_timestamp || m.created_at);
+      if (d !== lastDay) { lastDay = d; out += '<div class="wa-day">' + d + '</div>'; }
+      var cls = m.direction === 'in' ? 'wa-in' : ('wa-out' + (m.sent_by === 'bot' ? ' wa-bot' : ''));
+      var meta = hhmm(m.wa_timestamp || m.created_at);
+      if (m.direction === 'out') {
+        meta = (m.sent_by === 'bot' ? '🤖 бот · ' : (esc(m.sent_by || '') + ' · ')) + meta;
+        if (m.status === 'read') meta += ' ✓✓';
+        else if (m.status === 'delivered') meta += ' ✓';
+        else if (m.status === 'failed') meta += ' ⚠️';
+      }
+      return out + '<div class="wa-msg ' + cls + '">' + esc(m.body || '') +
+        '<div class="wa-meta">' + meta + '</div></div>';
+    }).join('');
+
+    document.getElementById('waChat').innerHTML =
+      '<div class="wa-head">' +
+        '<div class="wa-head-row">' +
+          '<div>' +
+            '<div class="wa-head-name">' + esc(l.name || l.wa_profile_name || '—') + '</div>' +
+            '<div class="wa-head-sub">' + esc(l.whatsapp || '') +
+              (l.traffic ? ' · ' + esc(l.traffic) : '') + '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;align-items:center">' +
+            qualCell(l) +
+            '<button class="btn btn-ghost btn-sm" onclick="openLeadModal(\'' + l.id + '\')">✏️ Карточка</button>' +
+          '</div>' +
+        '</div>' +
+        (chips.length ? '<div class="wa-chips">' + chips.join('') + '</div>' : '') +
+      '</div>' +
+      '<div class="wa-msgs" id="waMsgs">' + (msgHtml || '<div class="wa-day">Хабарлама жоқ</div>') + '</div>' +
+      (closed
+        ? '<div class="wa-warn">⏳ Клиент 24 сағаттан бұрын жазған — WhatsApp ережесі бойынша ' +
+          'еркін мәтін жіберуге болмайды. Тек бекітілген шаблон арқылы.</div>'
+        : '<div class="wa-composer">' +
+            '<textarea id="waInput" placeholder="Жауап жазыңыз… (Enter — жіберу)" ' +
+              'onkeydown="waKey(event)"></textarea>' +
+            '<button class="btn btn-green" id="waSendBtn" onclick="sendWaReply()">➤</button>' +
+          '</div>');
+
+    var box = document.getElementById('waMsgs');
+    if (box) box.scrollTop = box.scrollHeight;
+  };
+
+  window.waKey = function (ev) {
+    if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); sendWaReply(); }
+  };
+
+  window.sendWaReply = async function () {
+    var input = document.getElementById('waInput');
+    var btn = document.getElementById('waSendBtn');
+    if (!input || !waActiveId) return;
+    var text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    btn.disabled = true;
+    try {
+      var res = await fetch(FN + 'wa-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-crm-secret': CRM_SECRET },
+        body: JSON.stringify({
+          lead_id: waActiveId,
+          text: text,
+          sent_by: (currentUser && currentUser.name) || 'менеджер'
+        })
+      });
+      var out = await res.json();
+      if (!res.ok) {
+        input.value = text;                       // мәтінді қайтарамыз
+        throw new Error(out.message || out.error || ('HTTP ' + res.status));
+      }
+      await openWaChat(waActiveId);
+    } catch (e) {
+      toast('❌ Жіберілмеді: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      document.getElementById('waInput')?.focus();
+    }
+  };
+})();
+</script>
 
 </body>
 </html>
