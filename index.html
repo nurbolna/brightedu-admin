@@ -1144,6 +1144,7 @@ details[open] summary::before{content:'▾ '}
               <p>Сол жақтан диалог таңдаңыз</p>
             </div>
           </div>
+          <div class="wa-card" id="waCard"></div>
         </div>
       </div>
 
@@ -7889,7 +7890,47 @@ document.addEventListener('DOMContentLoaded', () => {
 .wa-upl{font-size:12px;color:var(--text2);padding:0 12px 8px}
 
 /* ---- Инбокс ---- */
-.wa-wrap{display:grid;grid-template-columns:330px 1fr;gap:14px;height:calc(100vh - 190px);min-height:460px}
+.wa-wrap{display:grid;grid-template-columns:300px minmax(0,1fr) 310px;gap:12px;
+  height:calc(100vh - 190px);min-height:460px}
+@media (max-width:1400px){.wa-wrap{grid-template-columns:260px minmax(0,1fr) 280px}}
+@media (max-width:1150px){.wa-wrap{grid-template-columns:240px minmax(0,1fr)}
+  .wa-card{display:none}}
+
+/* ---- Лид карточкасы (оң баған) ---- */
+.wa-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  overflow-y:auto;padding:0}
+.wa-card:empty{display:none}
+@media (max-width:1150px){.wa-card:empty{display:none}}
+.wc-sec{padding:11px 13px;border-bottom:1px solid var(--border)}
+.wc-sec:last-child{border-bottom:none}
+.wc-t{font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--text3);
+  text-transform:uppercase;margin-bottom:8px}
+.wc-name{font-weight:800;font-size:15px;line-height:1.25}
+.wc-row{display:flex;align-items:center;gap:6px;margin-top:6px}
+.wc-phone{font-size:13px;color:var(--text2);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wc-app{border:1px solid var(--border);background:var(--surface2);border-radius:7px;
+  cursor:pointer;font-size:14px;padding:3px 7px;line-height:1.4;text-decoration:none;color:inherit}
+.wc-app:hover{border-color:var(--green)}
+.wc-f{margin-bottom:8px}
+.wc-f:last-child{margin-bottom:0}
+.wc-l{display:block;font-size:11px;color:var(--text3);margin-bottom:3px}
+.wc-card-in,.wa-card select,.wa-card textarea{width:100%;box-sizing:border-box;
+  background:var(--surface2);color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:6px 8px;font-size:12.5px;font-family:inherit}
+.wa-card textarea{resize:vertical;min-height:62px;line-height:1.45}
+.wc-card-in:focus,.wa-card select:focus,.wa-card textarea:focus{outline:none;border-color:var(--accent)}
+.wc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wc-tag{display:inline-block;background:var(--surface2);border:1px solid var(--border);
+  border-radius:7px;padding:2px 7px;font-size:11px;margin:0 4px 4px 0}
+.wc-btn{width:100%;margin-top:6px}
+.wc-more{font-size:11.5px;color:var(--text2);cursor:pointer;user-select:none}
+.wc-more[open] summary{margin-bottom:6px}
+.wc-more pre{font-size:10.5px;color:var(--text3);white-space:pre-wrap;word-break:break-all;margin:0}
+.wa-timer{font-size:11px;padding:2px 8px;border-radius:8px;white-space:nowrap}
+.wa-timer.ok{background:rgba(52,168,110,.14);color:var(--green)}
+.wa-timer.soon{background:rgba(251,146,60,.16);color:var(--orange)}
+.wa-timer.shut{background:rgba(239,68,68,.14);color:var(--red)}
 .wa-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   overflow-y:auto}
 .wa-item{padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
@@ -7972,6 +8013,189 @@ document.addEventListener('DOMContentLoaded', () => {
     if (d.toDateString() === y.toDateString()) return 'Кеше';
     return d.toLocaleDateString('kk-KZ', { day: 'numeric', month: 'long' });
   }
+  // ==========================================================
+  // Лид карточкасы (оң баған)
+  // ==========================================================
+
+  /** Ноутбуктегі WhatsApp қосымшасын тікелей ашатын сілтеме */
+  function waAppLink(phone) {
+    var d = String(phone || '').replace(/\D/g, '');
+    if (!d) return '';
+    if (d.length === 10) d = '7' + d;
+    if (d.length === 11 && d.charAt(0) === '8') d = '7' + d.slice(1);
+    return 'whatsapp://send?phone=' + d;
+  }
+
+  /** timestamptz → <input type="datetime-local"> мәні */
+  function dtLocal(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+           'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  /** Бір өрісті сақтау */
+  window.waCardSet = async function (field, value, kind) {
+    var l = waLeads.find(function (x) { return x.id === waActiveId; });
+    if (!l) return;
+
+    var v = value;
+    if (v === '' || v == null) v = null;
+    else if (kind === 'dt') v = new Date(v).toISOString();
+    else if (kind === 'num') v = Number(v);
+
+    if (l[field] === v) return;              // өзгермеген — жазбаймыз
+    l[field] = v;
+    var j = DATA.leads.findIndex(function (x) { return x.id === l.id; });
+    if (j > -1) DATA.leads[j][field] = v;
+
+    var payload = {}; payload[field] = v;
+    var r = await sb.from('leads').update(payload).eq('id', l.id);
+    if (r.error) { toast('❌ ' + r.error.message, 'error'); return; }
+
+    renderWaCard(); renderWaList();
+    if (document.getElementById('page-crm')?.classList.contains('active')) renderCRM();
+  };
+
+  /** Ботты басынан қайта қосу */
+  window.waRestartBot = async function () {
+    var l = waLeads.find(function (x) { return x.id === waActiveId; });
+    if (!l) return;
+    if (!confirm('Бот осы клиентпен ӘҢГІМЕНІ БАСЫНАН бастайды: тіл сұрап, ' +
+                 '3 сұрағын қайта қояды. Жалғастырамыз ба?')) return;
+    l.bot_stage = null;
+    var r = await sb.from('leads').update({ bot_stage: null }).eq('id', l.id);
+    if (r.error) { toast('❌ ' + r.error.message, 'error'); return; }
+    toast('🤖 Бот қайта қосылды — келесі хабарламада амандасады');
+    renderWaCard();
+  };
+
+  window.renderWaCard = function () {
+    var el = document.getElementById('waCard');
+    if (!el) return;
+    var l = waLeads.find(function (x) { return x.id === waActiveId; });
+    if (!l) { el.innerHTML = ''; return; }
+
+    var opt = function (v, cur) {
+      return '<option value="' + esc(v) + '"' + (cur === v ? ' selected' : '') + '>' +
+             esc(v) + '</option>';
+    };
+    var field = function (label, name, value, type, kind) {
+      return '<div class="wc-f"><label class="wc-l">' + label + '</label>' +
+        '<input class="wc-card-in" type="' + (type || 'text') + '" value="' + esc(value || '') + '" ' +
+        'onchange="waCardSet(\'' + name + '\', this.value' +
+        (kind ? ", '" + kind + "'" : '') + ')"></div>';
+    };
+
+    // ---- статус тізімі
+    var statuses = (typeof CRM_STATUSES !== 'undefined' ? CRM_STATUSES : []).map(function (x) {
+      return opt(x.name, l.status);
+    }).join('');
+
+    // ---- ақша өрістері тек соңғы кезеңдерде
+    var moneyStages = ['ПРОБНЫЙ ПЕРИОД', 'УСПЕШНО РЕАЛИЗОВАНО', 'ДОЖИМ'];
+    var money = moneyStages.indexOf(l.status) > -1
+      ? '<div class="wc-sec"><div class="wc-t">Ақша</div><div class="wc-grid">' +
+          field('Сомасы', 'revenue', l.revenue, 'number', 'num') +
+          field('Алдын ала төлем', 'prepayment_amount', l.prepayment_amount, 'number', 'num') +
+        '</div></div>'
+      : '';
+
+    // ---- дереккөз
+    var src = [];
+    if (l.ctwa_clid) src.push('<span class="wc-tag">📣 Instagram жарнамасы</span>');
+    else if (l.traffic) src.push('<span class="wc-tag">' + esc(l.traffic) + '</span>');
+    if (l.ad_headline) src.push('<span class="wc-tag">' + esc(l.ad_headline) + '</span>');
+    if (l.capi_lead_sent_at) src.push('<span class="wc-tag">📤 Facebook-ке жіберілді</span>');
+    if (l.capi_last_error) src.push('<span class="wc-tag" style="border-color:var(--red);color:var(--red)">⚠️ CAPI қатесі</span>');
+    (l.auto_flags || []).forEach(function (f) {
+      src.push('<span class="wc-tag" style="border-color:var(--orange);color:var(--orange)">⚠️ ' + esc(f) + '</span>');
+    });
+
+    var tech = [
+      'wa_id: ' + (l.wa_id || '—'),
+      'бот кезеңі: ' + (l.bot_stage || '—'),
+      'құрылды: ' + (l.created_at ? new Date(l.created_at).toLocaleString('ru-RU') : '—'),
+      'utm_source: ' + (l.utm_source || '—'),
+      'utm_campaign: ' + (l.utm_campaign || '—'),
+      'ad_id: ' + (l.ad_id || '—'),
+    ].join('\n');
+
+    var appLink = waAppLink(l.whatsapp || l.wa_id);
+    var parentLink = waAppLink(l.parent_phone);
+
+    el.innerHTML =
+      // ---- тақырып
+      '<div class="wc-sec">' +
+        '<div class="wc-name">' + esc(l.name || l.wa_profile_name || '—') + '</div>' +
+        '<div class="wc-row">' +
+          '<span class="wc-phone">' + esc(l.whatsapp || '—') + '</span>' +
+          (l.lang ? '<span class="wc-tag" style="margin:0">' +
+            (l.lang === 'ru' ? '🇷🇺 рус' : '🇰🇿 қаз') + '</span>' : '') +
+          (appLink ? '<a class="wc-app" href="' + appLink + '" title="Ноутбуктегі WhatsApp">📱</a>' : '') +
+        '</div>' +
+      '</div>' +
+
+      // ---- статус + бағалау
+      '<div class="wc-sec">' +
+        '<div class="wc-f"><label class="wc-l">Статус</label>' +
+          '<select onchange="waCardSet(\'status\', this.value)">' + statuses + '</select></div>' +
+        '<div style="display:flex;gap:6px">' + qualCell(l) + '</div>' +
+      '</div>' +
+
+      // ---- келесі қадам
+      '<div class="wc-sec"><div class="wc-t">Келесі қадам</div>' +
+        field('📅 Консультация', 'consultation_at', dtLocal(l.consultation_at), 'datetime-local', 'dt') +
+        field('🔁 Қайта хабарласу', 'reschedule_date', l.reschedule_date, 'date') +
+        field('👤 Жауапты', 'expert', l.expert) +
+      '</div>' +
+
+      // ---- бот жинағаны
+      '<div class="wc-sec"><div class="wc-t">Бот жинағаны</div>' +
+        '<div class="wc-grid">' +
+          field('Мақсат', 'target_exam', l.target_exam) +
+          field('Сынып', 'grade', l.grade) +
+          field('Ағылшын', 'english_level', l.english_level) +
+          field('IELTS балы', 'ielts_score', l.ielts_score, 'number', 'num') +
+          field('Мектеп', 'school', l.school) +
+          field('Қала', 'city', l.city) +
+        '</div>' +
+      '</div>' +
+
+      // ---- ата-ана
+      '<div class="wc-sec"><div class="wc-t">Ата-ана</div>' +
+        field('Аты', 'parent_name', l.parent_name) +
+        '<div class="wc-f"><label class="wc-l">Телефоны</label>' +
+          '<div style="display:flex;gap:6px">' +
+            '<input class="wc-card-in" value="' + esc(l.parent_phone || '') + '" ' +
+              'onchange="waCardSet(\'parent_phone\', this.value)">' +
+            (parentLink ? '<a class="wc-app" href="' + parentLink + '">📱</a>' : '') +
+          '</div></div>' +
+      '</div>' +
+
+      money +
+
+      // ---- ескертпе
+      '<div class="wc-sec"><div class="wc-t">Ескертпе</div>' +
+        '<textarea onchange="waCardSet(\'note\', this.value)" ' +
+          'placeholder="Қоңырау қорытындысы, келісімдер…">' + esc(l.note || '') + '</textarea>' +
+      '</div>' +
+
+      // ---- дереккөз
+      '<div class="wc-sec"><div class="wc-t">Дереккөз</div>' +
+        (src.join('') || '<span class="wc-tag">—</span>') +
+        '<details class="wc-more"><summary>Техникалық</summary><pre>' + esc(tech) + '</pre></details>' +
+      '</div>' +
+
+      // ---- әрекеттер
+      '<div class="wc-sec">' +
+        '<button class="btn btn-ghost btn-sm wc-btn" onclick="waRestartBot()">🤖 Ботты қайта қосу</button>' +
+        '<button class="btn btn-ghost btn-sm wc-btn" onclick="openLeadModal(\'' + l.id + '\')">✏️ Толық карточка</button>' +
+      '</div>';
+  };
+
   // ---------- медиа көпіршігі ----------
   function mediaHtml(m) {
     if (!m.media_url) {
@@ -8066,7 +8290,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function refreshQualViews() {
     if (document.getElementById('page-crm')?.classList.contains('active')) renderCRM();
     if (document.getElementById('page-wa')?.classList.contains('active')) {
-      renderWaList(); if (waActiveId) renderWaChat();
+      renderWaList(); if (waActiveId) { renderWaChat(); renderWaCard(); }
     }
   }
 
@@ -8197,6 +8421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (r.error) { toast('❌ ' + r.error.message, 'error'); return; }
     waMsgs = r.data || [];
     renderWaChat();
+    renderWaCard();
 
     // Оқылды деп белгілейміз
     var lead = waLeads.find(function (x) { return x.id === leadId; });
@@ -8206,6 +8431,16 @@ document.addEventListener('DOMContentLoaded', () => {
       renderWaList(); updateWaBadge();
     }
   };
+
+  /** 24 сағаттық терезе: қанша қалды */
+  function waTimerHtml(hrs, closed) {
+    if (closed) return '<span class="wa-timer shut">⏱ терезе жабық</span>';
+    var left = Math.max(0, 24 - hrs);
+    var cls = left < 4 ? 'soon' : 'ok';
+    var txt = left >= 1 ? Math.floor(left) + ' сағ қалды'
+                        : Math.max(1, Math.round(left * 60)) + ' мин қалды';
+    return '<span class="wa-timer ' + cls + '">⏱ ' + txt + '</span>';
+  }
 
   window.renderWaChat = function () {
     var l = waLeads.find(function (x) { return x.id === waActiveId; });
@@ -8258,8 +8493,8 @@ document.addEventListener('DOMContentLoaded', () => {
               (l.traffic ? ' · ' + esc(l.traffic) : '') + '</div>' +
           '</div>' +
           '<div style="display:flex;gap:6px;align-items:center">' +
+            waTimerHtml(hrs, closed) +
             qualCell(l) +
-            '<button class="btn btn-ghost btn-sm" onclick="openLeadModal(\'' + l.id + '\')">✏️ Карточка</button>' +
           '</div>' +
         '</div>' +
         (chips.length ? '<div class="wa-chips">' + chips.join('') + '</div>' : '') +
