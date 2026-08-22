@@ -1623,6 +1623,14 @@ details[open] summary::before{content:'▾ '}
         <div class="form-group"><label>IELTS score</label>
           <input type="number" step="0.5" min="1" max="9" id="leadIeltsScore" placeholder="мыс. 6.5" oninput="applyIeltsToLevel()" />
         </div>
+        <div class="form-group"><label>Мақсат (емтихан)</label>
+          <select id="leadTargetExam">
+            <option value="">Таңдау</option>
+            <option value="NUET">NUET</option>
+            <option value="IELTS">IELTS</option>
+            <option value="Екеуі де">Екеуі де</option>
+          </select>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Консультация күні мен уақыты</label><input type="datetime-local" id="leadConsultationAt" /></div>
@@ -5812,6 +5820,21 @@ function crmCardClick(ev, leadId){
   openLeadModal(leadId);
 }
 
+// Бот жинайтын мәндер (мыс. «11 (12) сынып», «B1») модалдағы тізімде жоқ.
+// Оларды жай ғана орнатсақ, <select> бос болып қалады да, сақтағанда өшіп кетеді.
+// Сондықтан мән тізімде жоқ болса — уақытша опция ретінде қосамыз.
+function setSelectTolerant(id, value){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const v = value || '';
+  if(v && !Array.from(el.options).some(o=>o.value===v)){
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v + ' (боттан)';
+    el.appendChild(o);
+  }
+  el.value = v;
+}
+
 function populateDisqualReasonSelect(selected){
   const sel = document.getElementById('leadDisqualReason');
   sel.innerHTML = '<option value="">—</option>' + DATA.lead_disqual_reasons.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
@@ -5858,8 +5881,9 @@ function openLeadModal(id){
     document.getElementById('leadNote').value=l.note||'';
     document.getElementById('leadPrepayment').value=l.prepayment_amount||'';
     document.getElementById('leadSchool').value=l.school||'';
-    document.getElementById('leadGrade').value=l.grade||'';
-    document.getElementById('leadEnglishLevel').value=l.english_level||'';
+    setSelectTolerant('leadGrade', l.grade);
+    setSelectTolerant('leadEnglishLevel', l.english_level);
+    setSelectTolerant('leadTargetExam', l.target_exam);
     document.getElementById('leadIeltsScore').value=l.ielts_score||'';
     document.getElementById('leadConsultationAt').value=l.consultation_at ? l.consultation_at.slice(0,16) : '';
     document.getElementById('leadRescheduleDate').value=l.reschedule_date||'';
@@ -5883,6 +5907,7 @@ function openLeadModal(id){
     document.getElementById('leadSchool').value='';
     document.getElementById('leadGrade').value='';
     document.getElementById('leadEnglishLevel').value='';
+    document.getElementById('leadTargetExam').value='';
     document.getElementById('leadIeltsScore').value='';
     document.getElementById('leadConsultationAt').value='';
     document.getElementById('leadRescheduleDate').value='';
@@ -5912,6 +5937,7 @@ async function saveLead(){
     school: document.getElementById('leadSchool').value.trim() || null,
     grade: document.getElementById('leadGrade').value || null,
     english_level: document.getElementById('leadEnglishLevel').value || null,
+    target_exam: document.getElementById('leadTargetExam').value || null,
     ielts_score: document.getElementById('leadIeltsScore').value ? Number(document.getElementById('leadIeltsScore').value) : null,
     consultation_at: document.getElementById('leadConsultationAt').value || null,
     reschedule_date: document.getElementById('leadRescheduleDate').value || null
@@ -5946,6 +5972,7 @@ async function deleteLead(id){
     if(error) throw error;
   }catch(e){ return alert('❌ Өшірілмеді! Қате: '+e.message); }
   DATA.leads = DATA.leads.filter(l=>l.id!==id);
+  if(typeof removeWaLead==='function') removeWaLead(id);   // WhatsApp инбоксынан да
   renderCRM(); toast('🗑️ Өшірілді');
 }
 function deleteLeadFromModal(){
@@ -8431,6 +8458,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (i > -1) DATA.leads[i] = l; else DATA.leads.unshift(l);
       });
 
+      // Базада жоқ (өшірілген) WhatsApp лидтері DATA.leads-те елес болып қалмасын.
+      // 300 шегіне жетпеген жағдайда ғана — әйтпесе жарамды лидті түсіріп алуымыз мүмкін.
+      if (waLeads.length < 300) {
+        var fresh = {};
+        waLeads.forEach(function (l) { fresh[l.id] = 1; });
+        DATA.leads = DATA.leads.filter(function (x) { return !x.wa_id || fresh[x.id]; });
+      }
+
       renderWaList();
       updateWaBadge();
       if (showToast) toast('🔄 Жаңартылды');
@@ -8463,13 +8498,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             loadWaLeadRow(m.lead_id);
           })
+        .on('postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'leads' },
+          function (p) { if (p.old && p.old.id) removeWaLead(p.old.id); })
         .subscribe();
     } catch (e) { console.warn('realtime қосылмады', e); }
   }
 
+  /** Лид өшірілген/жоғалған — барлық жерден алып тастаймыз */
+  function removeWaLead(leadId) {
+    var before = waLeads.length;
+    waLeads = waLeads.filter(function (x) { return x.id !== leadId; });
+    DATA.leads = DATA.leads.filter(function (x) { return x.id !== leadId; });
+
+    if (waActiveId === leadId) {
+      waActiveId = null; waMsgs = [];
+      var c = document.getElementById('waChat');
+      if (c) c.innerHTML = '<div class="wa-empty"><div style="font-size:44px">🗑️</div>' +
+        '<p>Бұл лид өшірілді</p></div>';
+      var cd = document.getElementById('waCard');
+      if (cd) cd.innerHTML = '';
+    }
+    if (before !== waLeads.length) { renderWaList(); updateWaBadge(); }
+    if (document.getElementById('page-crm')?.classList.contains('active')) renderCRM();
+  }
+  window.removeWaLead = removeWaLead;
+
   async function loadWaLeadRow(leadId) {
     var r = await sb.from('leads').select('*').eq('id', leadId).maybeSingle();
-    if (r.error || !r.data) return;
+    if (r.error) return;
+    if (!r.data) { removeWaLead(leadId); return; }   // өшірілген — тізімде қалдырмаймыз
     var i = waLeads.findIndex(function (x) { return x.id === leadId; });
     if (i > -1) waLeads[i] = r.data; else waLeads.unshift(r.data);
     var j = DATA.leads.findIndex(function (x) { return x.id === leadId; });
@@ -8513,6 +8571,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================================
   window.renderWaList = function () {
     var f = document.getElementById('waFilter')?.value || 'all';
+    // Қорғаныс: бір лид екі рет тұрып қалмасын
+    var seen = {};
+    waLeads = waLeads.filter(function (l) {
+      if (seen[l.id]) return false; seen[l.id] = 1; return true;
+    });
     var list = waLeads.filter(function (l) {
       if (f === 'unread') return (l.unread_count || 0) > 0;
       if (f === 'new') return !l.qual;
