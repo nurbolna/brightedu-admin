@@ -2825,10 +2825,30 @@ function startApp(){
     populateStudentGroupFilter();
     populateStudentCourseFilter();
     restoreLastPage();
-    loadAll(); // фондық жаңарту — бетті екінші рет ауыстырмаймыз
+    // Фондық жаңарту. Бетті АУЫСТЫРМАЙМЫЗ, бірақ деректер келген соң
+    // ағымдағы бетті қайта САЛАМЫЗ — әйтпесе кэш бос не ескі болса, экран
+    // бос күйінде қатып қалады (CRM кестесі мен WhatsApp тізімі бос болатын).
+    loadAll().then(rerenderCurrentPage);
   } else {
     loadAll().then(restoreLastPage);
   }
+}
+
+/**
+ * Ағымдағы ашық тұрған бетті қайта салады.
+ * showPage()-ті қайта шақырамыз: рендер функцияларының картасы соның ішінде
+ * жасалады, сондықтан бұл жерде оларға тікелей сілтеме жасауға болмайды —
+ * бір бөлігі (renderWaInbox сияқты) кейінірек, екінші скрипт блогында
+ * window-ға тағайындалады.
+ */
+function rerenderCurrentPage(){
+  try{
+    const id = document.querySelector('.page.active')?.id;
+    if(!id) return;
+    const name = id.replace(/^page-/, '');
+    const nav = document.querySelector(`[onclick^="showPage('${name}'"]`);
+    showPage(name, nav);
+  }catch(e){ console.error('бетті қайта салу қатесі:', e); }
 }
 
 // Беттi жаңартқанда (F5) пайдаланушыны басты бетке емес, тұрған бөлімінде
