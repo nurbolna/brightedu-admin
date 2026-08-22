@@ -2836,11 +2836,15 @@ function startApp(){
 function restoreLastPage(){
   try{
     // Telegram эскалациясындағы «💻 CRM-де ашу» батырмасы:
-    // …/#lead=<uuid> → бірден сол лидтің WhatsApp чатын ашамыз
-    const m = /[#&]lead=([0-9a-f-]{36})/i.exec(location.hash || '');
+    //   …/?lead=<uuid>  немесе  …/#lead=<uuid>
+    // → бірден сол лидтің WhatsApp чатын ашамыз.
+    // Екеуін де қабылдаймыз: Telegram-ның ішкі браузері «#» фрагментін
+    // кейде кесіп тастайды, ал «?» параметрі әрқашан жетеді. Ескі
+    // хабарламалардағы «#» сілтемелері де істей берсін.
+    const m = /[?#&]lead=([0-9a-f-]{36})/i.exec(location.search + location.hash);
     if(m && typeof openWaFromCrm === 'function'){
-      history.replaceState(null, '', location.pathname + location.search);
-      openWaFromCrm(m[1]);
+      history.replaceState(null, '', location.pathname);
+      openWaFromCrm(m[1].toLowerCase());   // базадағы id кіші әріппен
       return;
     }
     // Менеджерге дашборд бос көрінеді — оны бірден CRM-ге апарамыз
