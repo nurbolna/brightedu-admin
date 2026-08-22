@@ -1149,6 +1149,7 @@ details[open] summary::before{content:'▾ '}
               <option value="new">Бағаланбағандар</option>
               <option value="instagram">Жарнамадан</option>
             </select>
+            <button class="btn btn-ghost dir-only" onclick="openKbModal()">🧠 Білім базасы</button>
             <button class="btn btn-ghost" onclick="loadWaInbox(true)">🔄 Жаңарту</button>
           </div>
         </div>
@@ -1218,6 +1219,23 @@ details[open] summary::before{content:'▾ '}
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('subtaskModal')">Бас тарту</button>
       <button class="btn btn-blue" onclick="saveSubtask()">Қосу</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI БІЛІМ БАЗАСЫ -->
+<div class="modal-overlay" id="kbModal">
+  <div class="modal modal-lg">
+    <div class="modal-title">🧠 AI білім базасы</div>
+    <p style="font-size:12px;color:var(--text2);line-height:1.5;margin:-8px 0 16px">
+      WhatsApp боты клиенттің сұрағына <b>тек осы мәтіндегі</b> ақпаратпен жауап береді.
+      Мұнда жоқ нәрсені ойдан шығармайды — «менеджер нақтылап айтады» деп жауап береді де,
+      Telegram тобына хабар жібереді. Сақтаған соң 1 минут ішінде күшіне енеді.
+    </p>
+    <div id="kbModalBody"><div class="empty-state">Жүктелуде…</div></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('kbModal')">Жабу</button>
+      <button class="btn btn-blue" onclick="saveKb()">💾 Сақтау</button>
     </div>
   </div>
 </div>
@@ -1577,6 +1595,13 @@ details[open] summary::before{content:'▾ '}
     </div>
     <div class="form-group">
       <label><input type="checkbox" id="staffActive" checked /> Белсенді (панельге кіре алады)</label>
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="staffTakesLeads" checked /> Лид алады</label>
+      <div class="text-muted text-sm" style="margin-top:3px">
+        Жаңа лидтер автоматты түрде осы адамға да бөлінеді. Директор сатумен
+        айналыспаса — белгіні алып тастаңыз.
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('staffModal')">Бас тарту</button>
@@ -2810,6 +2835,14 @@ function startApp(){
 // қалдыру үшін — соңғы ашылған бетті localStorage-тен оқып, соны белсендіреді.
 function restoreLastPage(){
   try{
+    // Telegram эскалациясындағы «💻 CRM-де ашу» батырмасы:
+    // …/#lead=<uuid> → бірден сол лидтің WhatsApp чатын ашамыз
+    const m = /[#&]lead=([0-9a-f-]{36})/i.exec(location.hash || '');
+    if(m && typeof openWaFromCrm === 'function'){
+      history.replaceState(null, '', location.pathname + location.search);
+      openWaFromCrm(m[1]);
+      return;
+    }
     // Менеджерге дашборд бос көрінеді — оны бірден CRM-ге апарамыз
     if(currentUser && currentUser.role==='manager'){
       const crmNav = document.querySelector("[onclick^=\"showPage('crm'\"]");
@@ -3047,7 +3080,7 @@ const LOAD_ALL_SPEC = [
   {key:'leads',     table:'leads',               order:{col:'created_at',asc:false}, fallback:'keep'},
   {key:'lead_disqual_reasons', table:'lead_disqual_reasons', order:{col:'name',asc:true}, fallback:'keep'},
   {key:'directors', table:'staff_accounts',      order:null, fallback:[], select:'login,name', eq:{col:'role',val:'director'}},
-  {key:'staff',     table:'staff_accounts',      order:{col:'name',asc:true}, fallback:[], select:'id,login,name,role,phone,telegram_chat_id,active'},
+  {key:'staff',     table:'staff_accounts',      order:{col:'name',asc:true}, fallback:[], select:'id,login,name,role,phone,telegram_chat_id,active,takes_leads'},
   {key:'parent_reports', table:'parent_reports', order:{col:'created_at',asc:false}, fallback:[]},
 ];
 
@@ -5868,10 +5901,13 @@ function leadTaskBadge(leadId){
 // ================================================================
 const STAFF_ROLE_LABEL = { director:'Директор', manager:'Менеджер', admin:'Администратор' };
 
-/** Лид тағайындауға жарайтындар: белсенді директор + менеджер */
+/**
+ * Лид тағайындауға жарайтындар: белсенді ЖӘНЕ «лид алады» деп белгіленгендер.
+ * Рөл маңызды емес — директор сатумен айналысуы да, айналыспауы да мүмкін.
+ */
 function salesStaffNames(){
   return (DATA.staff||[])
-    .filter(x => x.active !== false && (x.role==='director' || x.role==='manager'))
+    .filter(x => x.active !== false && x.takes_leads !== false)
     .map(x => x.name).filter(Boolean);
 }
 
@@ -5887,13 +5923,15 @@ function renderStaff(){
   }
   wrap.innerHTML = `<div class="card"><div class="table-wrap"><table class="table">
     <thead><tr><th>Аты</th><th>Логин</th><th>Рөл</th><th>Телефон</th>
-      <th>Telegram</th><th>Күйі</th><th>Әрекет</th></tr></thead>
+      <th>Telegram</th><th title="Жаңа лидтер автоматты бөліне ме">Лид алады</th>
+      <th>Күйі</th><th>Әрекет</th></tr></thead>
     <tbody>${list.map(u=>`<tr${u.active===false?' style="opacity:.5"':''}>
       <td class="font-bold">${u.name||'—'}</td>
       <td>${u.login||'—'}</td>
       <td><span class="badge badge-${u.role==='director'?'purple':'blue'}">${STAFF_ROLE_LABEL[u.role]||u.role||'—'}</span></td>
       <td>${u.phone||'—'}</td>
       <td>${u.telegram_chat_id?'✅':'<span class="text-muted">— қосылмаған</span>'}</td>
+      <td>${u.takes_leads===false?'<span class="text-muted">—</span>':'<span class="badge badge-blue">✅ иә</span>'}</td>
       <td>${u.active===false?'<span class="badge badge-gray">Белсенді емес</span>':'<span class="badge badge-green">Белсенді</span>'}</td>
       <td>
         <div class="crm-actions">
@@ -5919,6 +5957,7 @@ function openStaffModal(id){
     document.getElementById('staffPass').value='';
     document.getElementById('staffRole').value='manager';
     document.getElementById('staffActive').checked=true;
+    document.getElementById('staffTakesLeads').checked=true;   // менеджер — лид алады
   }else{
     const u=(DATA.staff||[]).find(x=>x.id===id); if(!u) return;
     document.getElementById('staffName').value=u.name||'';
@@ -5927,6 +5966,7 @@ function openStaffModal(id){
     document.getElementById('staffPass').value='';
     document.getElementById('staffRole').value=u.role||'manager';
     document.getElementById('staffActive').checked=u.active!==false;
+    document.getElementById('staffTakesLeads').checked=u.takes_leads!==false;
   }
   openModal('staffModal');
 }
@@ -5948,7 +5988,8 @@ async function saveStaff(){
   const payload = {
     name, login, role,
     phone: document.getElementById('staffPhone').value.trim() || null,
-    active: document.getElementById('staffActive').checked
+    active: document.getElementById('staffActive').checked,
+    takes_leads: document.getElementById('staffTakesLeads').checked
   };
   if(pass) payload.pass = pass;
 
@@ -8246,8 +8287,10 @@ document.addEventListener('DOMContentLoaded', () => {
 .wa-wrap{display:grid;grid-template-columns:300px minmax(0,1fr) 310px;gap:12px;
   height:calc(100vh - 190px);min-height:460px}
 @media (max-width:1400px){.wa-wrap{grid-template-columns:260px minmax(0,1fr) 280px}}
+/* Тар экранда карточканы ЖАСЫРМАЙМЫЗ — чаттың астына толық енге түсіреміз.
+   Телефоннан да статус қоюға, Квал/Неквал басуға болсын. */
 @media (max-width:1150px){.wa-wrap{grid-template-columns:240px minmax(0,1fr)}
-  .wa-card{display:none}}
+  .wa-card{grid-column:1/-1;max-height:none}}
 
 /* ---- Лид карточкасы (оң баған) ---- */
 .wa-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
@@ -9008,6 +9051,52 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================================
+  // AI білім базасы (kb_docs) — өңдеу терезесі
+  // ==========================================================
+  var kbDocs = [];
+
+  window.openKbModal = async function () {
+    openModal('kbModal');
+    var body = document.getElementById('kbModalBody');
+    body.innerHTML = '<div class="empty-state">Жүктелуде…</div>';
+
+    var r = await sb.from('kb_docs').select('*').order('ord');
+    if (r.error) {
+      body.innerHTML = '<div class="empty-state">Жүктелмеді: ' + esc(r.error.message) + '</div>';
+      return;
+    }
+    kbDocs = r.data || [];
+    if (!kbDocs.length) { body.innerHTML = '<div class="empty-state">Білім базасы бос</div>'; return; }
+
+    body.innerHTML = kbDocs.map(function (d, i) {
+      return '<div class="form-group">' +
+        '<label>' + esc(d.title) +
+          ' <span style="opacity:.55;font-weight:400">(' + esc(d.slug) + ')</span></label>' +
+        '<textarea id="kbTa' + i + '" rows="14" spellcheck="false" ' +
+          'style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55">' +
+          esc(d.content) + '</textarea>' +
+        '</div>';
+    }).join('');
+  };
+
+  window.saveKb = async function () {
+    var saved = 0;
+    for (var i = 0; i < kbDocs.length; i++) {
+      var ta = document.getElementById('kbTa' + i);
+      if (!ta || ta.value === kbDocs[i].content) continue;
+      var r = await sb.from('kb_docs').update({
+        content: ta.value,
+        updated_by: (currentUser && currentUser.name) || 'панель'
+      }).eq('id', kbDocs[i].id);
+      if (r.error) { toast('Сақталмады: ' + r.error.message, 'error'); return; }
+      kbDocs[i].content = ta.value;
+      saved++;
+    }
+    toast(saved ? (saved + ' бөлім сақталды ✅') : 'Өзгеріс жоқ');
+    closeModal('kbModal');
+  };
+
+  // ==========================================================
   // Инбокс: диалог тізімі
   // ==========================================================
   window.renderWaList = function () {
@@ -9039,6 +9128,11 @@ document.addEventListener('DOMContentLoaded', () => {
       (l.auto_flags || []).forEach(function (fl) {
         tags += '<span class="badge badge-orange">⚠️ ' + esc(fl) + '</span>';
       });
+      // Бот жауап бере алмай, менеджерге эскалация кеткен. Чат ашылғанда
+      // unread_count нөлденеді де, белгі өзінен-өзі жоғалады.
+      if (l.ai_escalated_at && (l.unread_count || 0) > 0) {
+        tags += '<span class="badge badge-red">🙋 менеджер керек</span>';
+      }
       if (l.qual) tags += '<span class="badge badge-' + (l.qual === 'Квал' ? 'green' : 'red') + '">' + l.qual + '</span>';
 
       return '<div class="wa-item' + (l.id === waActiveId ? ' active' : '') + '" onclick="openWaChat(\'' + l.id + '\')">' +
@@ -9114,10 +9208,14 @@ document.addEventListener('DOMContentLoaded', () => {
       var out = '';
       var d = dayLabel(m.wa_timestamp || m.created_at);
       if (d !== lastDay) { lastDay = d; out += '<div class="wa-day">' + d + '</div>'; }
-      var cls = m.direction === 'in' ? 'wa-in' : ('wa-out' + (m.sent_by === 'bot' ? ' wa-bot' : ''));
+      var auto = (m.sent_by === 'bot' || m.sent_by === 'ai');
+      var cls = m.direction === 'in' ? 'wa-in' : ('wa-out' + (auto ? ' wa-bot' : ''));
       var meta = hhmm(m.wa_timestamp || m.created_at);
       if (m.direction === 'out') {
-        meta = (m.sent_by === 'bot' ? '🤖 бот · ' : (esc(m.sent_by || '') + ' · ')) + meta;
+        var who = m.sent_by === 'bot' ? '🤖 бот'
+                : m.sent_by === 'ai'  ? '🤖 AI'
+                : esc(m.sent_by || '');
+        meta = who + ' · ' + meta;
         if (m.status === 'read') meta += ' ✓✓';
         else if (m.status === 'delivered') meta += ' ✓';
         else if (m.status === 'failed') meta += ' ⚠️';
