@@ -6127,6 +6127,8 @@ async function saveLead(){
     grade: document.getElementById('leadGrade').value || null,
     english_level: document.getElementById('leadEnglishLevel').value || null,
     target_exam: document.getElementById('leadTargetExam').value || null,
+    updated_by: (typeof actorName==='function' ? actorName()
+                 : ((currentUser&&currentUser.name)||'менеджер')),
     ielts_score: document.getElementById('leadIeltsScore').value ? Number(document.getElementById('leadIeltsScore').value) : null,
     consultation_at: document.getElementById('leadConsultationAt').value || null,
     reschedule_date: document.getElementById('leadRescheduleDate').value || null
@@ -8147,6 +8149,10 @@ document.addEventListener('DOMContentLoaded', () => {
 .wc-more{font-size:11.5px;color:var(--text2);cursor:pointer;user-select:none}
 .wc-more[open] summary{margin-bottom:6px}
 .wc-more pre{font-size:10.5px;color:var(--text3);white-space:pre-wrap;word-break:break-all;margin:0}
+.wc-ev{font-size:11.5px;line-height:1.45;padding:6px 0;border-bottom:1px dashed var(--border)}
+.wc-ev:last-child{border-bottom:none}
+.wc-ev b{color:var(--text)}
+.wc-ev s{opacity:.55}
 /* ---- Бақылау индикаторлары ---- */
 .wc-alert{display:block;font-size:11.5px;padding:5px 8px;border-radius:8px;margin-top:7px;line-height:1.35}
 .wc-alert.gray{background:var(--surface2);color:var(--text2)}
@@ -8307,6 +8313,12 @@ document.addEventListener('DOMContentLoaded', () => {
            'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
+  /** Өзгерісті кім жасады — тарих триггері осыны оқиды */
+  function actorName(){
+    return (currentUser && (currentUser.name || currentUser.login)) || 'менеджер';
+  }
+  window.actorName = actorName;
+
   /** Бір өрісті сақтау */
   window.waCardSet = async function (field, value, kind) {
     var l = waLeads.find(function (x) { return x.id === waActiveId; });
@@ -8323,9 +8335,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (j > -1) DATA.leads[j][field] = v;
 
     var payload = {}; payload[field] = v;
+    payload.updated_by = actorName();
     var r = await sb.from('leads').update(payload).eq('id', l.id);
     if (r.error) { toast('❌ ' + r.error.message, 'error'); return; }
 
+    await loadWaEvents(l.id);
     renderWaCard(); renderWaList();
     if (document.getElementById('page-crm')?.classList.contains('active')) renderCRM();
   };
@@ -8337,11 +8351,64 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm('Бот осы клиентпен ӘҢГІМЕНІ БАСЫНАН бастайды: тіл сұрап, ' +
                  '3 сұрағын қайта қояды. Жалғастырамыз ба?')) return;
     l.bot_stage = null;
-    var r = await sb.from('leads').update({ bot_stage: null }).eq('id', l.id);
+    var r = await sb.from('leads')
+      .update({ bot_stage: null, updated_by: actorName() }).eq('id', l.id);
     if (r.error) { toast('❌ ' + r.error.message, 'error'); return; }
     toast('🤖 Бот қайта қосылды — келесі хабарламада амандасады');
     renderWaCard();
   };
+
+  // ---------- Өзгерістер тарихы ----------
+  var waEvents = [];
+
+  var EVENT_FIELD_LABEL = {
+    status:'Статус', qual:'Бағалау', disqual_reason:'Неквал себебі',
+    expert:'Жауапты', consultation_at:'Консультация', reschedule_date:'Қайта хабарласу',
+    revenue:'Сома', prepayment_amount:'Алдын ала төлем', name:'Аты',
+    whatsapp:'WhatsApp', city:'Қала', school:'Мектеп', grade:'Сынып',
+    target_exam:'Мақсат', english_level:'Ағылшын', ielts_score:'IELTS балы',
+    parent_name:'Ата-ана', parent_phone:'Ата-ана тел.', note:'Ескертпе',
+    traffic:'Дереккөз', reject_reason:'Бас тарту себебі'
+  };
+
+  async function loadWaEvents(leadId) {
+    waEvents = [];
+    var r = await sb.from('lead_events').select('*')
+      .eq('lead_id', leadId).order('at', { ascending: false }).limit(20);
+    if (!r.error) waEvents = r.data || [];
+  }
+
+  function shortVal(v) {
+    if (v == null || v === '') return '—';
+    var t = String(v);
+    // ISO уақытты қысқартамыз
+    if (/^\d{4}-\d{2}-\d{2}T/.test(t)) {
+      var d = new Date(t);
+      if (!isNaN(d)) return d.toLocaleString('ru-RU',
+        { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    }
+    return t.length > 38 ? t.slice(0, 38) + '…' : t;
+  }
+
+  function waHistoryHtml() {
+    if (!waEvents.length) return '';
+    var rows = waEvents.map(function (e) {
+      var when = new Date(e.at).toLocaleString('ru-RU',
+        { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      var who = esc(e.actor || 'жүйе');
+      if (e.kind === 'created') {
+        return '<div class="wc-ev"><b>' + when + '</b> · ' + who +
+               '<br>🆕 Лид құрылды</div>';
+      }
+      var label = EVENT_FIELD_LABEL[e.field] || e.field;
+      return '<div class="wc-ev"><b>' + when + '</b> · ' + who +
+        '<br>' + esc(label) + ': <s>' + esc(shortVal(e.old_value)) + '</s> → <b>' +
+        esc(shortVal(e.new_value)) + '</b></div>';
+    }).join('');
+    return '<div class="wc-sec"><div class="wc-t">🕘 Тарих</div>' +
+      '<details class="wc-more"><summary>Соңғы ' + waEvents.length + ' өзгеріс</summary>' +
+      rows + '</details></div>';
+  }
 
   window.renderWaCard = function () {
     var el = document.getElementById('waCard');
@@ -8470,6 +8537,8 @@ document.addEventListener('DOMContentLoaded', () => {
         '<details class="wc-more"><summary>Техникалық</summary><pre>' + esc(tech) + '</pre></details>' +
       '</div>' +
 
+      waHistoryHtml() +
+
       // ---- әрекеттер
       '<div class="wc-sec">' +
         '<button class="btn btn-ghost btn-sm wc-btn" onclick="waRestartBot()">🤖 Ботты қайта қосу</button>' +
@@ -8587,11 +8656,13 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshQualViews();
 
     try {
-      if (qual !== prev || (lead.disqual_reason || null) !== (prevReason || null)) {
-        var du = await sb.from('leads')
-          .update({ disqual_reason: lead.disqual_reason }).eq('id', leadId);
-        if (du.error) throw new Error(du.error.message);
-      }
+      // updated_by-ды capi-qualify шақырудан БҰРЫН жазамыз: ол бағанда мән
+      // сақталып тұрады да, сервер qual-ды жаңартқанда триггер сол актерді оқиды.
+      var du = await sb.from('leads').update({
+        disqual_reason: lead.disqual_reason,
+        updated_by: actorName()
+      }).eq('id', leadId);
+      if (du.error) throw new Error(du.error.message);
       var res = await fetch(FN + 'capi-qualify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-crm-secret': CRM_SECRET },
@@ -8816,6 +8887,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (r.error) { toast('❌ ' + r.error.message, 'error'); return; }
     waMsgs = r.data || [];
     renderWaChat();
+    renderWaCard();
+    await loadWaEvents(leadId);
     renderWaCard();
 
     // Оқылды деп белгілейміз
