@@ -2807,11 +2807,57 @@ function logout(){
   showLoginStep('login');
 }
 
+/**
+ * Telegram эскалациясындағы «💻 CRM-де ашу» батырмасы:
+ *   …/?lead=<uuid>&lang=kk   немесе   …/#lead=<uuid>
+ * Екі пішінді де қабылдаймыз: Telegram-ның ішкі браузері «#» фрагментін
+ * кейде кесіп тастайды, ал «?» параметрі әрқашан жетеді. Ескі
+ * хабарламалардағы «#» сілтемелері де істей берсін.
+ * Оқығаннан кейін мекенжайды тазалаймыз — бетті жаңартқанда қайталанбасын.
+ */
+function takeDeepLink(){
+  const q = location.search + location.hash;
+  const m = /[?#&]lead=([0-9a-f-]{36})/i.exec(q);
+  if(!m) return null;
+  history.replaceState(null, '', location.pathname);
+  return {
+    id: m[1].toLowerCase(),                      // базадағы id кіші әріппен
+    lang: /[?#&]lang=ru\b/i.test(q) ? 'ru' : 'kk',
+  };
+}
+
+/** Сілтемемен келген чатты ашып, жауап өрісіне дайын мәтін қоямыз */
+async function openLeadFromLink(link){
+  if(typeof openWaFromCrm !== 'function') return;
+  await openWaFromCrm(link.id);
+
+  const box = document.getElementById('waInput');
+  if(!box || box.value) return;                  // қолмен жазып қойған болса — тимейміз
+
+  let name = '';
+  try{
+    const l = (DATA.leads || []).find(x => x.id === link.id);
+    name = (l && (l.name || l.wa_profile_name)) || '';
+  }catch(e){}
+
+  box.value = link.lang === 'ru'
+    ? `Здравствуйте${name ? ', ' + name : ''}! Я менеджер Bright Education. ` +
+      `Мы получили ваш вопрос — сейчас всё подробно расскажу 🙌`
+    : `Сәлеметсіз бе${name ? ', ' + name : ''}! Bright Education менеджерімін. ` +
+      `Сұрағыңызды көрдік — қазір толық жауап беремін 🙌`;
+  box.focus();
+}
+
 function startApp(){
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   setupUI();
   loadTaskFilters();
+
+  // Сілтемедегі лидті БІРДЕН ашпаймыз: loadAll() аяқталғанша waLeads бос
+  // болуы мүмкін де, «Бұл лид ботқа әлі жазбаған» деп қате шығады.
+  // Сондықтан деректер толық келгенде барып ашамыз.
+  const deepLink = takeDeepLink();
 
   // Fix: кэштелген деректер бар болса, оны бірден рендерлеп көрсетеміз —
   // пайдаланушы бос/қатқан экранды көрмейді. Сосын loadAll() фонда
@@ -2824,13 +2870,13 @@ function startApp(){
     populateAnalysisGroups();
     populateStudentGroupFilter();
     populateStudentCourseFilter();
-    restoreLastPage();
+    if(!deepLink) restoreLastPage();
     // Фондық жаңарту. Бетті АУЫСТЫРМАЙМЫЗ, бірақ деректер келген соң
     // ағымдағы бетті қайта САЛАМЫЗ — әйтпесе кэш бос не ескі болса, экран
     // бос күйінде қатып қалады (CRM кестесі мен WhatsApp тізімі бос болатын).
-    loadAll().then(rerenderCurrentPage);
+    loadAll().then(() => deepLink ? openLeadFromLink(deepLink) : rerenderCurrentPage());
   } else {
-    loadAll().then(restoreLastPage);
+    loadAll().then(() => deepLink ? openLeadFromLink(deepLink) : restoreLastPage());
   }
 }
 
@@ -2855,18 +2901,6 @@ function rerenderCurrentPage(){
 // қалдыру үшін — соңғы ашылған бетті localStorage-тен оқып, соны белсендіреді.
 function restoreLastPage(){
   try{
-    // Telegram эскалациясындағы «💻 CRM-де ашу» батырмасы:
-    //   …/?lead=<uuid>  немесе  …/#lead=<uuid>
-    // → бірден сол лидтің WhatsApp чатын ашамыз.
-    // Екеуін де қабылдаймыз: Telegram-ның ішкі браузері «#» фрагментін
-    // кейде кесіп тастайды, ал «?» параметрі әрқашан жетеді. Ескі
-    // хабарламалардағы «#» сілтемелері де істей берсін.
-    const m = /[?#&]lead=([0-9a-f-]{36})/i.exec(location.search + location.hash);
-    if(m && typeof openWaFromCrm === 'function'){
-      history.replaceState(null, '', location.pathname);
-      openWaFromCrm(m[1].toLowerCase());   // базадағы id кіші әріппен
-      return;
-    }
     // Менеджерге дашборд бос көрінеді — оны бірден CRM-ге апарамыз
     if(currentUser && currentUser.role==='manager'){
       const crmNav = document.querySelector("[onclick^=\"showPage('crm'\"]");
