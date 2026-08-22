@@ -573,7 +573,7 @@ details[open] summary::before{content:'▾ '}
       <!-- ========== TASKS / PLANNING (директорларға арналған) ========== -->
       <div class="page dir-only" id="page-tasks">
         <div class="page-header">
-          <div><div class="page-title">Жоспарлау</div><div class="page-subtitle">Директорлар арасындағы тапсырмалар</div></div>
+          <div><div class="page-title">Жоспарлау</div><div class="page-subtitle">Лидтермен жұмыс — қоңырау, консультация, дожим</div></div>
           <button class="btn btn-blue" onclick="openTaskModal()">+ Тапсырма қосу</button>
         </div>
 
@@ -1116,6 +1116,12 @@ details[open] summary::before{content:'▾ '}
           <select id="crmFilterExpert" onchange="renderCRM()">
             <option value="">Эксперт — барлығы</option>
           </select>
+          <select id="crmFilterTask" onchange="renderCRM()">
+            <option value="">Тапсырма — барлығы</option>
+            <option value="none">⚪ Тапсырмасы жоқтар</option>
+            <option value="overdue">⏰ Мерзімі өткендер</option>
+            <option value="today">🔔 Бүгінгілер</option>
+          </select>
           <select id="crmFilterQual" onchange="renderCRM()">
             <option value="">Квал — барлығы</option>
             <option value="Квал">Квал</option>
@@ -1124,7 +1130,7 @@ details[open] summary::before{content:'▾ '}
         </div>
 
         <div id="crmTableView">
-          <div class="table-wrap"><table><thead><tr><th>#</th><th>Аты</th><th>Whatsapp</th><th>Қала</th><th>Traffic</th><th>Status</th><th>Квал</th><th>Эксперт</th><th>Выручка</th><th>Күні</th><th>Әрекет</th></tr></thead><tbody id="crmTable"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>Аты</th><th>Whatsapp</th><th>Қала</th><th>Traffic</th><th>Status</th><th>Квал</th><th title="Ашық тапсырма">📋</th><th>Эксперт</th><th>Выручка</th><th>Күні</th><th>Әрекет</th></tr></thead><tbody id="crmTable"></tbody></table></div>
         </div>
         <div id="crmBoardView" class="crm-board" style="display:none"></div>
       </div>
@@ -1169,6 +1175,10 @@ details[open] summary::before{content:'▾ '}
 <div class="modal-overlay" id="taskModal">
   <div class="modal">
     <div class="modal-title" id="taskModalTitle">📋 Тапсырма</div>
+    <div class="form-group"><label>Қай лид бойынша? *</label>
+      <select id="taskLead"><option value="">— Лид таңдаңыз —</option></select>
+      <div id="taskLeadFixed" class="text-muted text-sm" style="display:none;margin-top:4px"></div>
+    </div>
     <div class="form-group"><label>Атауы</label><input type="text" id="taskTitle" autocomplete="off" name="task-title-field" /></div>
     <div class="form-group"><label>Сипаттамасы</label><textarea id="taskDesc" rows="3" autocomplete="off"></textarea></div>
     <div class="form-row">
@@ -3481,6 +3491,18 @@ function taskDueInfo(due_date){
   return { text:`${diff} күн қалды — ${due_date}`, color:'var(--text2)' };
 }
 
+/** Тапсырма жолындағы лид белгісі — басса, сол лидтің чаты ашылады */
+function taskLeadChip(t){
+  if(!t.lead_id) return '';
+  const l = (DATA.leads||[]).find(x=>x.id===t.lead_id);
+  if(!l) return '';
+  const nm = (l.name||l.whatsapp||'—');
+  const canChat = !!l.wa_id;
+  return `<span class="task-lead" title="${canChat?'Чатты ашу':'Бұл лид ботқа жазбаған'}"
+    ${canChat?`onclick="event.stopPropagation();openWaFromCrm('${l.id}')"`:''}
+    style="${canChat?'cursor:pointer':'opacity:.6'}">👤 ${nm}</span>`;
+}
+
 function renderTasks(){
   renderTaskFilters();
   const wrap = document.getElementById('tasksList');
@@ -3556,6 +3578,7 @@ function renderTasks(){
     <div class="task-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
       ${expandBtn}
       ${checkboxHtml}
+      ${taskLeadChip(t)}
       <div style="flex:1;min-width:0;cursor:${canOpenModal?'pointer':'default'}" onclick="${canOpenModal?`openTaskModal('${t.id}')`:''}">
         <div style="font-size:14px;font-weight:600;margin-bottom:3px;${isDoneItem?'text-decoration:line-through;color:var(--text2)':''}">${t.title}</div>
         <div style="font-size:12px;color:var(--text2)">${metaLine}</div>
@@ -3578,9 +3601,26 @@ function populateTaskAssigneeSelect(){
     DATA.directors.map(d=>`<option value="${d.login}">👤 ${d.name}</option>`).join('');
 }
 
-function openTaskModal(id){
+/** Тапсырма модалындағы лид тізімі — соңғы белсенділік бойынша */
+function populateTaskLeadSelect(selected){
+  const sel = document.getElementById('taskLead');
+  if(!sel) return;
+  const list = (DATA.leads||[]).slice().sort((a,b)=>
+    String(b.last_message_at||b.created_at||'').localeCompare(String(a.last_message_at||a.created_at||'')));
+  sel.innerHTML = '<option value="">— Лид таңдаңыз —</option>' + list.map(l=>
+    `<option value="${l.id}">${(l.name||'—')}${l.whatsapp?' · '+l.whatsapp:''}</option>`).join('');
+  sel.value = selected || '';
+}
+
+/** Лид карточкасынан тапсырма қосу — лид алдын ала таңдаулы әрі өзгермейді */
+function openTaskModalForLead(leadId){
+  openTaskModal(null, leadId);
+}
+
+function openTaskModal(id, fixedLeadId){
   editingTaskId = id || null;
   populateTaskAssigneeSelect();
+  populateTaskLeadSelect(fixedLeadId || '');
   document.getElementById('taskModalTitle').textContent = id ? '📋 Тапсырманы өңдеу' : '📋 Жаңа тапсырма';
   if(id){
     const t = DATA.tasks.find(x=>x.id===id);
@@ -3591,6 +3631,7 @@ function openTaskModal(id){
     document.getElementById('taskPriority').value = t.priority || 'medium';
     document.getElementById('taskStatus').value = t.status || 'todo';
     document.getElementById('taskDue').value = t.due_date || '';
+    populateTaskLeadSelect(t.lead_id || '');
   } else {
     document.getElementById('taskTitle').value = '';
     document.getElementById('taskDesc').value = '';
@@ -3599,13 +3640,30 @@ function openTaskModal(id){
     document.getElementById('taskStatus').value = 'todo';
     document.getElementById('taskDue').value = '';
   }
+
+  // Лид карточкасынан ашылса — лид бекітілген, ауыстырылмайды
+  const leadSel = document.getElementById('taskLead');
+  const fixedBox = document.getElementById('taskLeadFixed');
+  if(fixedLeadId){
+    const l = (DATA.leads||[]).find(x=>x.id===fixedLeadId);
+    leadSel.style.display = 'none';
+    fixedBox.style.display = '';
+    fixedBox.textContent = '👤 ' + ((l&&l.name)||'—') + ((l&&l.whatsapp)?' · '+l.whatsapp:'');
+  }else{
+    leadSel.style.display = '';
+    fixedBox.style.display = 'none';
+  }
+
   openModal('taskModal');
 }
 
 async function saveTask(){
   const title = document.getElementById('taskTitle').value.trim();
   if(!title){ toast('Атауын енгізіңіз', 'error'); return; }
+  const leadId = document.getElementById('taskLead').value;
+  if(!leadId){ toast('Қай лид бойынша екенін таңдаңыз', 'error'); return; }
   const payload = {
+    lead_id: leadId,
     title,
     description: document.getElementById('taskDesc').value.trim(),
     assigned_to: document.getElementById('taskAssignee').value,
@@ -3621,6 +3679,8 @@ async function saveTask(){
   closeModal('taskModal');
   await reloadTasks();
   renderTasks();
+  if(typeof renderWaCard==='function') renderWaCard();
+  if(document.getElementById('page-crm')?.classList.contains('active')) renderCRM();
   toast('Сақталды');
 }
 
@@ -3639,7 +3699,9 @@ async function markTaskDone(id){
   }
   await reloadTasks();
   renderTasks();
-  toast('✅ Дайын деп белгіленді — бүгін тізімде қалады, ертең мұрағатқа өтеді');
+  if(typeof renderWaCard==='function') renderWaCard();
+  if(document.getElementById('page-crm')?.classList.contains('active')) renderCRM();
+  toast('✅ Дайын деп белгіленді');
 }
 
 async function toggleTaskStatus(id){
@@ -5738,6 +5800,41 @@ function exportPaymentsCSV(){
 }
 
 // ================================================================
+// ЛИД ТАПСЫРМАЛАРЫ — ортақ көмекшілер
+// ================================================================
+
+/** Лидтің ашық тапсырмалары (мерзімі бойынша) */
+function leadOpenTasks(leadId){
+  return (DATA.tasks||[])
+    .filter(t => t.lead_id === leadId && t.status !== 'done')
+    .sort((a,b)=> String(a.due_date||'9999-12-31').localeCompare(String(b.due_date||'9999-12-31')));
+}
+
+/** Лидтің тапсырма күйі: none | overdue | today | ok */
+function leadTaskState(leadId){
+  const open = leadOpenTasks(leadId);
+  if(!open.length) return 'none';
+  const today = localDateStr(new Date());
+  const withDue = open.filter(t=>t.due_date);
+  if(withDue.some(t=>t.due_date < today))   return 'overdue';
+  if(withDue.some(t=>t.due_date === today)) return 'today';
+  return 'ok';
+}
+
+/** CRM кестесіндегі белгі */
+function leadTaskBadge(leadId){
+  const st = leadTaskState(leadId);
+  const map = {
+    none:    ['⚪','Ашық тапсырма жоқ','var(--text3)'],
+    overdue: ['⏰','Мерзімі өткен тапсырма бар','var(--red)'],
+    today:   ['🔔','Бүгінгі тапсырма','var(--orange)'],
+    ok:      ['✅','Тапсырма бар','var(--green)']
+  };
+  const [icon,title,color] = map[st];
+  return `<span class="crm-task" title="${title}" style="color:${color}">${icon}</span>`;
+}
+
+// ================================================================
 // ҚЫЗМЕТКЕРЛЕР (staff_accounts)
 // ================================================================
 const STAFF_ROLE_LABEL = { director:'Директор', manager:'Менеджер', admin:'Администратор' };
@@ -5900,11 +5997,13 @@ function getFilteredLeads(){
   const traffic = document.getElementById('crmFilterTraffic')?.value||'';
   const expert = document.getElementById('crmFilterExpert')?.value||'';
   const qual = document.getElementById('crmFilterQual')?.value||'';
+  const taskF = document.getElementById('crmFilterTask')?.value||'';
   return [...DATA.leads].filter(l=>{
     if(q && !(((l.name||'')+' '+(l.whatsapp||'')).toLowerCase().includes(q))) return false;
     if(traffic && l.traffic!==traffic) return false;
     if(expert && l.expert!==expert) return false;
     if(qual && l.qual!==qual) return false;
+    if(taskF && leadTaskState(l.id)!==taskF) return false;
     return true;
   }).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
 }
@@ -5927,6 +6026,7 @@ function renderCrmTable(list){
       <td>${l.traffic?`<span class="badge badge-blue">${l.traffic}</span>`:'—'}</td>
       <td><span class="badge badge-${crmStatusColor(l.status)}">${l.status||'—'}</span></td>
       <td>${qualCell(l)}</td>
+      <td style="text-align:center;font-size:15px">${leadTaskBadge(l.id)}</td>
       <td>${l.expert||'—'}</td>
       <td class="font-bold" style="color:var(--green)">${l.revenue?fmt(l.revenue)+'₸':'—'}</td>
       <td class="text-muted text-sm">${(l.created_at||'').slice(0,10)}</td>
@@ -5937,7 +6037,7 @@ function renderCrmTable(list){
           <button class="btn btn-red btn-sm" onclick="deleteLead('${l.id}')">🗑️</button>
         </div>
       </td>
-    </tr>`).join('') || '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🎯</div><p>Лидтер жоқ</p></div></td></tr>';
+    </tr>`).join('') || '<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">🎯</div><p>Лидтер жоқ</p></div></td></tr>';
 }
 
 function renderCrmBoard(list){
@@ -5953,7 +6053,7 @@ function renderCrmBoard(list){
             ${l.revenue?`<div class="crm-card-row crm-card-revenue">${fmt(l.revenue)}₸</div>`:''}
             ${l.consultation_at?`<div class="crm-card-row">📅 ${l.consultation_at.slice(0,16).replace('T',' ')}</div>`:''}
             <div class="crm-card-row">${qualCell(l)}</div>
-            <div class="crm-card-row">${crmWaBtns(l)}</div>
+            <div class="crm-card-row">${crmWaBtns(l)} ${leadTaskBadge(l.id)}</div>
           </div>`).join('') || '<div class="text-muted text-sm" style="padding:8px 2px">Бос</div>'}
       </div>
     </div>`;
@@ -8160,6 +8260,13 @@ document.addEventListener('DOMContentLoaded', () => {
 .wc-alert.bad{background:rgba(239,68,68,.13);color:var(--red)}
 .crm-act{display:inline-flex;gap:3px;align-items:center}
 .crm-actions{display:flex;gap:4px;align-items:center;flex-wrap:nowrap}
+.task-lead{flex-shrink:0;font-size:11.5px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;padding:3px 8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task-lead:hover{border-color:var(--accent)}
+.crm-task{font-size:13px;cursor:default}
+.wc-task{font-size:12px;padding:7px 8px;border-radius:8px;background:var(--surface2);margin-bottom:6px;line-height:1.4}
+.wc-task .d{font-size:11px;color:var(--text2);margin-top:2px}
+.wc-task.over .d{color:var(--red)}
 .crm-actions .btn{padding:3px 7px;line-height:1.5}
 .crm-wa{border:1px solid var(--border);background:var(--surface2);border-radius:7px;
   cursor:pointer;font-size:14px;padding:3px 7px;line-height:1.5;text-decoration:none;
@@ -8410,6 +8517,34 @@ document.addEventListener('DOMContentLoaded', () => {
       rows + '</details></div>';
   }
 
+  /** Карточкадағы «Тапсырмалар» блогы */
+  function waTasksHtml(l) {
+    var open = (typeof leadOpenTasks === 'function') ? leadOpenTasks(l.id) : [];
+    var today = localDateStr(new Date());
+
+    var rows = open.map(function (t) {
+      var over = t.due_date && t.due_date < today;
+      var due = t.due_date
+        ? (over ? '⏰ ' : (t.due_date === today ? '🔔 ' : '📅 ')) +
+          new Date(t.due_date).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' }) +
+          (over ? ' — мерзімі өтті' : (t.due_date === today ? ' — бүгін' : ''))
+        : 'мерзімсіз';
+      var who = t.assigned_to && t.assigned_to !== 'all' ? ' · ' + esc(t.assigned_to) : '';
+      return '<div class="wc-task' + (over ? ' over' : '') + '">' +
+        '<label style="display:flex;gap:7px;align-items:flex-start;cursor:pointer">' +
+          '<input type="checkbox" onclick="markTaskDone(\'' + t.id + '\')" ' +
+            'style="margin-top:2px;flex-shrink:0">' +
+          '<span>' + esc(t.title) + '<div class="d">' + due + who + '</div></span>' +
+        '</label></div>';
+    }).join('');
+
+    return '<div class="wc-sec"><div class="wc-t">📋 Тапсырмалар</div>' +
+      (rows || '<span class="wc-alert warn">⚠️ Ашық тапсырма жоқ</span>') +
+      '<button class="btn btn-ghost btn-sm wc-btn" ' +
+        'onclick="openTaskModalForLead(\'' + l.id + '\')">➕ Тапсырма қосу</button>' +
+      '</div>';
+  }
+
   window.renderWaCard = function () {
     var el = document.getElementById('waCard');
     if (!el) return;
@@ -8499,6 +8634,8 @@ document.addEventListener('DOMContentLoaded', () => {
           '<select onchange="waCardSet(\'expert\', this.value)">' + experts + '</select></div>' +
         waNextStepHtml(l) +
       '</div>' +
+
+      waTasksHtml(l) +
 
       // ---- бот жинағаны
       '<div class="wc-sec"><div class="wc-t">Бот жинағаны</div>' +
