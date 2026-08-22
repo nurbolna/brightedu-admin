@@ -5734,8 +5734,11 @@ function renderCrmTable(list){
       <td class="font-bold" style="color:var(--green)">${l.revenue?fmt(l.revenue)+'₸':'—'}</td>
       <td class="text-muted text-sm">${(l.created_at||'').slice(0,10)}</td>
       <td>
-        <button class="btn btn-ghost btn-sm" onclick="openLeadModal('${l.id}')">✏️</button>
-        <button class="btn btn-red btn-sm" onclick="deleteLead('${l.id}')">🗑️</button>
+        <div class="crm-actions">
+          ${crmWaBtns(l)}
+          <button class="btn btn-ghost btn-sm" onclick="openLeadModal('${l.id}')">✏️</button>
+          <button class="btn btn-red btn-sm" onclick="deleteLead('${l.id}')">🗑️</button>
+        </div>
       </td>
     </tr>`).join('') || '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🎯</div><p>Лидтер жоқ</p></div></td></tr>';
 }
@@ -5753,6 +5756,7 @@ function renderCrmBoard(list){
             ${l.revenue?`<div class="crm-card-row crm-card-revenue">${fmt(l.revenue)}₸</div>`:''}
             ${l.consultation_at?`<div class="crm-card-row">📅 ${l.consultation_at.slice(0,16).replace('T',' ')}</div>`:''}
             <div class="crm-card-row">${qualCell(l)}</div>
+            <div class="crm-card-row">${crmWaBtns(l)}</div>
           </div>`).join('') || '<div class="text-muted text-sm" style="padding:8px 2px">Бос</div>'}
       </div>
     </div>`;
@@ -7927,6 +7931,19 @@ document.addEventListener('DOMContentLoaded', () => {
 .wc-more{font-size:11.5px;color:var(--text2);cursor:pointer;user-select:none}
 .wc-more[open] summary{margin-bottom:6px}
 .wc-more pre{font-size:10.5px;color:var(--text3);white-space:pre-wrap;word-break:break-all;margin:0}
+/* ---- Бақылау индикаторлары ---- */
+.wc-alert{display:block;font-size:11.5px;padding:5px 8px;border-radius:8px;margin-top:7px;line-height:1.35}
+.wc-alert.gray{background:var(--surface2);color:var(--text2)}
+.wc-alert.warn{background:rgba(251,146,60,.14);color:var(--orange)}
+.wc-alert.bad{background:rgba(239,68,68,.13);color:var(--red)}
+.crm-act{display:inline-flex;gap:3px;align-items:center}
+.crm-actions{display:flex;gap:4px;align-items:center;flex-wrap:nowrap}
+.crm-actions .btn{padding:3px 7px;line-height:1.5}
+.crm-wa{border:1px solid var(--border);background:var(--surface2);border-radius:7px;
+  cursor:pointer;font-size:14px;padding:3px 7px;line-height:1.5;text-decoration:none;
+  color:inherit;display:inline-block}
+.crm-wa:hover{border-color:var(--green)}
+.crm-wa.off{opacity:.32;cursor:not-allowed;pointer-events:none}
 .wa-timer{font-size:11px;padding:2px 8px;border-radius:8px;white-space:nowrap}
 .wa-timer.ok{background:rgba(52,168,110,.14);color:var(--green)}
 .wa-timer.soon{background:rgba(251,146,60,.16);color:var(--orange)}
@@ -8026,6 +8043,44 @@ document.addEventListener('DOMContentLoaded', () => {
     return 'whatsapp://send?phone=' + d;
   }
 
+  // Аяқталған кезеңдер — бұларда «қозғалыссыз» деп ескертудің мәні жоқ
+  var WA_DONE_STATUSES = ['УСПЕШНО РЕАЛИЗОВАНО', 'ИГНОР', 'ЗНР', 'ПРОБНЫЙ ПЕРИОД'];
+
+  function daysSince(iso) {
+    if (!iso) return null;
+    var d = (Date.now() - new Date(iso)) / 86400000;
+    return isNaN(d) ? null : d;
+  }
+
+  /** «Бұл статуста N күн» */
+  function waStaleHtml(l) {
+    if (WA_DONE_STATUSES.indexOf(l.status) > -1) return '';
+    var d = daysSince(l.status_changed_at);
+    if (d == null || d < 1) return '';
+    var n = Math.floor(d);
+    var cls = d >= 7 ? 'bad' : (d >= 3 ? 'warn' : 'gray');
+    var icon = d >= 7 ? '🔴' : (d >= 3 ? '🟠' : '🕓');
+    return '<span class="wc-alert ' + cls + '">' + icon +
+      ' Бұл статуста ' + n + ' күн' + (d >= 3 ? ' — қозғалыс жоқ' : '') + '</span>';
+  }
+
+  /** Келесі қадам белгіленген бе / мерзімі өтті ме */
+  function waNextStepHtml(l) {
+    if (WA_DONE_STATUSES.indexOf(l.status) > -1) return '';
+    var now = Date.now();
+    var cons = l.consultation_at ? new Date(l.consultation_at).getTime() : null;
+    var resc = l.reschedule_date ? new Date(l.reschedule_date + 'T23:59').getTime() : null;
+
+    if (cons && cons > now) return '';           // алдағы консультация бар
+    if (resc && resc > now) return '';           // алдағы қайта хабарласу бар
+
+    if (cons && cons <= now)
+      return '<span class="wc-alert bad">⚠️ Консультация уақыты өтіп кетті</span>';
+    if (resc && resc <= now)
+      return '<span class="wc-alert bad">⚠️ Қайта хабарласу күні өтіп кетті</span>';
+    return '<span class="wc-alert warn">⚠️ Келесі қадам белгіленбеген</span>';
+  }
+
   /** timestamptz → <input type="datetime-local"> мәні */
   function dtLocal(iso) {
     if (!iso) return '';
@@ -8094,6 +8149,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return opt(x.name, l.status);
     }).join('');
 
+    // ---- жауапты (директорлар тізімінен, толық модалдағыдай)
+    var experts = '<option value="">— Таңдау —</option>' +
+      (DATA.directors || []).map(function (d) { return d.name; }).filter(Boolean)
+        .map(function (n) { return opt(n, l.expert); }).join('');
+
     // ---- ақша өрістері тек соңғы кезеңдерде
     var moneyStages = ['ПРОБНЫЙ ПЕРИОД', 'УСПЕШНО РЕАЛИЗОВАНО', 'ДОЖИМ'];
     var money = moneyStages.indexOf(l.status) > -1
@@ -8143,13 +8203,18 @@ document.addEventListener('DOMContentLoaded', () => {
         '<div class="wc-f"><label class="wc-l">Статус</label>' +
           '<select onchange="waCardSet(\'status\', this.value)">' + statuses + '</select></div>' +
         '<div style="display:flex;gap:6px">' + qualCell(l) + '</div>' +
+        (l.qual === 'Неквал' && l.disqual_reason
+          ? '<span class="wc-alert gray">Себебі: ' + esc(l.disqual_reason) + '</span>' : '') +
+        waStaleHtml(l) +
       '</div>' +
 
       // ---- келесі қадам
       '<div class="wc-sec"><div class="wc-t">Келесі қадам</div>' +
         field('📅 Консультация', 'consultation_at', dtLocal(l.consultation_at), 'datetime-local', 'dt') +
         field('🔁 Қайта хабарласу', 'reschedule_date', l.reschedule_date, 'date') +
-        field('👤 Жауапты', 'expert', l.expert) +
+        '<div class="wc-f"><label class="wc-l">👤 Жауапты</label>' +
+          '<select onchange="waCardSet(\'expert\', this.value)">' + experts + '</select></div>' +
+        waNextStepHtml(l) +
       '</div>' +
 
       // ---- бот жинағаны
@@ -8248,16 +8313,69 @@ document.addEventListener('DOMContentLoaded', () => {
       '</div>';
   };
 
-  window.setQual = async function (leadId, qual) {
+  /** Неквал басылғанда себебін сұрайтын терезе */
+  window.openDisqualPicker = function (leadId) {
+    var lead = DATA.leads.find(function (x) { return x.id === leadId; });
+    if (!lead) return;
+
+    var m = document.getElementById('disqualModal');
+    if (!m) {
+      m = document.createElement('div');
+      m.id = 'disqualModal'; m.className = 'modal-overlay';
+      document.body.appendChild(m);
+    }
+    var opts = (DATA.lead_disqual_reasons || []).map(function (r) {
+      return '<option value="' + esc(r.name) + '"' +
+             (lead.disqual_reason === r.name ? ' selected' : '') + '>' + esc(r.name) + '</option>';
+    }).join('');
+
+    m.innerHTML =
+      '<div class="modal" style="max-width:420px">' +
+        '<div class="modal-title">❌ Неквал себебі</div>' +
+        '<p class="text-muted text-sm" style="margin:2px 0 14px">' +
+          esc(lead.name || lead.whatsapp || '') + ' — неге сәйкес келмеді?</p>' +
+        '<select id="dqReason" style="width:100%">' + opts + '</select>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">' +
+          '<button class="btn btn-ghost" onclick="closeModal(\'disqualModal\')">Бас тарту</button>' +
+          '<button class="btn btn-red" onclick="confirmDisqual(\'' + leadId + '\')">' +
+            'Неквал деп белгілеу</button>' +
+        '</div>' +
+      '</div>';
+    openModal('disqualModal');
+  };
+
+  window.confirmDisqual = async function (leadId) {
+    var sel = document.getElementById('dqReason');
+    var reason = sel ? sel.value : '';
+    if (!reason) { toast('Себебін таңдаңыз', 'error'); return; }
+    closeModal('disqualModal');
+    await applyQual(leadId, 'Неквал', reason);
+  };
+
+  window.setQual = function (leadId, qual) {
+    // Неквал — себебі міндетті (amoCRM-дегі «причина отказа» сияқты)
+    if (qual === 'Неквал') return openDisqualPicker(leadId);
+    return applyQual(leadId, qual, null);
+  };
+
+  window.applyQual = async function (leadId, qual, reason) {
     var lead = DATA.leads.find(function (x) { return x.id === leadId; });
     if (!lead) return;
     document.querySelectorAll('.qual-btn').forEach(function (b) { b.disabled = true; });
 
     var prev = lead.qual;
+    var prevReason = lead.disqual_reason;
     lead.qual = qual;
+    if (qual === 'Неквал') lead.disqual_reason = reason || null;
+    else if (qual === '') lead.disqual_reason = null;
     refreshQualViews();
 
     try {
+      if (qual !== prev || (lead.disqual_reason || null) !== (prevReason || null)) {
+        var du = await sb.from('leads')
+          .update({ disqual_reason: lead.disqual_reason }).eq('id', leadId);
+        if (du.error) throw new Error(du.error.message);
+      }
       var res = await fetch(FN + 'capi-qualify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-crm-secret': CRM_SECRET },
@@ -8276,10 +8394,11 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (qual === '') {
         lead.capi_qual_sent_at = null; toast('↺ Бағалау алынды');
       } else {
-        toast('❌ Неквал деп белгіленді');
+        toast('❌ Неквал: ' + (reason || '—'));
       }
     } catch (e) {
       lead.qual = prev;
+      lead.disqual_reason = prevReason;
       toast('❌ Сақталмады: ' + e.message, 'error');
     } finally {
       refreshQualViews();
@@ -8360,6 +8479,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     renderWaList(); updateWaBadge();
   }
+
+  /** CRM-нен ішкі бот чатын ашу */
+  window.openWaFromCrm = async function (leadId) {
+    var nav = document.querySelector('.nav-item[onclick*="\'wa\'"]');
+    showPage('wa', nav);
+    if (!waLeads.length) await loadWaInbox();
+    var found = waLeads.some(function (x) { return x.id === leadId; });
+    if (!found) { toast('Бұл лид ботқа әлі жазбаған', 'error'); return; }
+    await openWaChat(leadId);
+  };
+
+  /** CRM жолындағы 💬 / 📱 батырмалары */
+  window.crmWaBtns = function (l) {
+    var app = waAppLink(l.whatsapp || l.wa_id);
+    return '<span class="crm-act">' +
+      '<button class="crm-wa' + (l.wa_id ? '' : ' off') + '" ' +
+        'title="' + (l.wa_id ? 'Панельдегі бот чаты' : 'Бұл лид ботқа жазбаған') + '" ' +
+        'onclick="event.stopPropagation();openWaFromCrm(\'' + l.id + '\')">💬</button>' +
+      (app
+        ? '<a class="crm-wa" href="' + app + '" title="Ноутбуктегі WhatsApp" ' +
+          'onclick="event.stopPropagation()">📱</a>'
+        : '<span class="crm-wa off">📱</span>') +
+      '</span>';
+  };
 
   window.renderWaInbox = function () {
     if (waLeads.length === 0) loadWaInbox(); else { renderWaList(); subscribeWa(); }
